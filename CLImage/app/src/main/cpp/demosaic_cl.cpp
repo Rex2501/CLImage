@@ -15,6 +15,8 @@
 
 #include "demosaic.hpp"
 
+#include <iomanip>
+
 #include "gls_cl.hpp"
 #include "gls_cl_image.hpp"
 
@@ -304,7 +306,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
                                     float,        // chromaBoost
                                     float,        // gradientBoost
                                     cl::Image2D   // outputImage
-                                    >(program, "denoiseImage");
+                                    >(program, "denoiseImagePatch");
 
     cl_float3 cl_var_a = { var_a[0], var_a[1], var_a[2] };
     cl_float3 cl_var_b = { var_b[0], var_b[1], var_b[2] };
@@ -462,7 +464,7 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
         kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
                inputImage.getImage2D(), radius, outputImage->getImage2D());
     } else {
-        const int kernelSize = (int) (2 * ceil(2.5 * radius) + 1);
+        const int kernelSize = (int) (2 * ceil(2 * radius) + 1);
 
         std::vector<float> weights(kernelSize*kernelSize);
         for (int y = -kernelSize / 2, i = 0; y <= kernelSize / 2; y++) {
@@ -472,8 +474,9 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
         }
         std::cout << "Gaussian Kernel weights (" << weights.size() << "): " << std::endl;
         for (const auto& w : weights) {
-            std::cout << w << std::endl;
+            std::cout << std::setprecision(4) << std::scientific << w << ", ";
         }
+        std::cout << std::endl;
 
         const int outWidth = kernelSize / 2 + 1;
         const int weightsCount = outWidth * outWidth;

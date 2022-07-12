@@ -185,7 +185,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
     std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
     float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
     // Default Good
     float lmult[5] = { 0.25, 2, 0.5, 0.25, 0.125 };

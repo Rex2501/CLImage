@@ -79,19 +79,12 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     NoiseModel* noiseModel = &demosaicParameters->noiseModel;
 
-    // TODO: Make this a function of the actual noise level
-    const bool high_noise_image = demosaicParameters->noiseLevel > 0.6;
-
     LOG_INFO(TAG) << "NoiseLevel: " << demosaicParameters->noiseLevel << std::endl;
 
     allocateTextures(_glsContext, rawImage.width, rawImage.height);
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
         allocateLtmMaskImage(_glsContext, rawImage.width, rawImage.height);
-    }
-
-    if (high_noise_image) {
-        allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
     }
 
 #ifdef PRINT_EXECUTION_TIME
@@ -108,6 +101,12 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
     demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
+    const bool high_noise_image = (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
+
+    if (high_noise_image) {
+        allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
+    }
+
     if (high_noise_image) {
         std::cout << "denoiseRawRGBAImage" << std::endl;
 
@@ -115,17 +114,17 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
         despeckleRawRGBAImage(_glsContext, *rgbaRawImage, denoisedRgbaRawImage.get());
 
-        denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf, rgbaRawImage.get());
+        // denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf, rgbaRawImage.get());
 
         // applyKernel(_glsContext, "medianFilterImage3x3x4", *rgbaRawImage, denoisedRgbaRawImage.get());
 
-        rawRGBAToBayer(_glsContext, *rgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
+        rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
-    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, noiseModel->rawNlf[1]);
+    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, (noiseModel->rawNlf[1] + noiseModel->rawNlf[3]) / 4);
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
-                       (noiseModel->rawNlf[0] + noiseModel->rawNlf[2]) / 2, rotate_180);
+                       (noiseModel->rawNlf[1] + noiseModel->rawNlf[3]) / 2, rotate_180);
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());
@@ -153,11 +152,6 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                                                      clLinearRGBImageB.get(),
                                                      demosaicParameters->rgb_cam, gmb_position, rotate_180,
                                                      &(noiseModel->pyramidNlf));
-
-//    if (high_noise_image) {
-//        gaussianBlurImage(_glsContext, *clDenoisedImage, 0.5, clLinearRGBImageA.get());
-//        clDenoisedImage = clLinearRGBImageA.get();
-//    }
 
     std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
 
