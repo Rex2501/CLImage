@@ -15,7 +15,7 @@
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
-#define IPHONE_LENS_SHADING false
+#define IPHONE_LENS_SHADING true
 
 enum BayerPattern {
     grbg = 0,
@@ -83,21 +83,6 @@ constant ConvolutionParameters boxFilter5x5[9] = {
     { 0.0400, {  2.0000,  2.0000 } },
 };
 
-constant half gaussianBlur5x5[5][5] = {
-    { 1.8316e-02, 8.2085e-02, 1.3534e-01, 8.2085e-02, 1.8316e-02 },
-    { 8.2085e-02, 3.6788e-01, 6.0653e-01, 3.6788e-01, 8.2085e-02 },
-    { 1.3534e-01, 6.0653e-01, 1.0000e+00, 6.0653e-01, 1.3534e-01 },
-    { 8.2085e-02, 3.6788e-01, 6.0653e-01, 3.6788e-01, 8.2085e-02 },
-    { 1.8316e-02, 8.2085e-02, 1.3534e-01, 8.2085e-02, 1.8316e-02 }
-};
-
-constant half gaussianBlur3x3[3][3] = {
-    { 1/16.0h, 1/8.0h, 1/16.0h },
-    { 1/8.0h,  1/4.0h, 1/8.0h  },
-    { 1/16.0h, 1/8.0h, 1/16.0h }
-};
-
-
 // Work on one Quad (2x2) at a time
 kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scaledRawImage,
                          int bayerPattern, float4 vScaleMul, float blackLevel) {
@@ -144,15 +129,15 @@ float2 sobel(read_only image2d_t inputImage, int x, int y) {
     return value / sqrt(4.5);
 }
 
-float2 gaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
-    // Average Sobel Filter on a 3x3 raw patch
+float2 filteredSobel(read_only image2d_t inputImage, int x, int y, float sigma) {
+    // Average Sobel Filter on a 5x5 raw patch
     float2 sum = 0;
-    for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-            sum += gaussianBlur3x3[j + 1][i + 1] * abs(sobel(inputImage, x + i, y + j));
+    for (int j = -2; j <= 2; j++) {
+        for (int i = -2; i <= 2; i++) {
+            sum += abs(sobel(inputImage, x + i, y + j));
         }
     }
-    return sum;
+    return sum / 25;
 }
 
 float2 channelCorrelation(read_only image2d_t rawImage, int x, int y) {
@@ -215,7 +200,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Estimate gradient intensity and direction
         float g_ave = (g_left + g_right + g_up + g_down) / 4;
         float rawStdDev = sqrt(rawVariance * g_ave);
-        float2 gradient = gaussFilteredSobel3x3(rawImage, x, y);
+        float2 gradient = filteredSobel(rawImage, x, y, rawStdDev);
 
         // Hamilton-Adams second order Laplacian Interpolation
         float2 g_lf = { (g_left + g_right) / 2, (g_up + g_down) / 2 };
@@ -761,6 +746,14 @@ kernel void transformImage(read_only image2d_t inputImage, write_only image2d_t 
     write_imagef(outputImage, imageCoordinates, (float4) (outputPixel, 0.0));
 }
 
+constant half gaussianBlur5x5[5][5] = {
+    { 1.8316e-02, 8.2085e-02, 1.3534e-01, 8.2085e-02, 1.8316e-02 },
+    { 8.2085e-02, 3.6788e-01, 6.0653e-01, 3.6788e-01, 8.2085e-02 },
+    { 1.3534e-01, 6.0653e-01, 1.0000e+00, 6.0653e-01, 1.3534e-01 },
+    { 8.2085e-02, 3.6788e-01, 6.0653e-01, 3.6788e-01, 8.2085e-02 },
+    { 1.8316e-02, 8.2085e-02, 1.3534e-01, 8.2085e-02, 1.8316e-02 }
+};
+
 inline half3 __attribute__((overloadable)) myconvert_half3(float3 val) {
     return (half3) (val.x, val.y, val.z);
 }
@@ -791,8 +784,8 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
     // Desarurate chroma where denoising is weak
-//    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1; //  - 0.05 * (1 - chromaDenoise * chromaDenoise);
+    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
+    half desaturate = 1 - 0.05 * (1 - chromaDenoise * chromaDenoise);
 
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
 }
@@ -832,11 +825,8 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     half patch[9];
     loadPatch(inputImage, imageCoordinates, patch);
 
-    float2 gradient = gaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
-    half angle = atan2(gradient.y, gradient.x);
-    half magnitude = length(gradient);
-//    half edge = smoothstep(1, 4, 32 * magnitude / sigma.x);
-//    half radius = mix(0.25h, 1, edge);
+    half edge = smoothstep(1, 4, 32 * length(sobel(inputImage, imageCoordinates.x, imageCoordinates.y)) / sigma.x);
+    half radius = mix(0.25h, 1, edge);
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -847,11 +837,9 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
             half lumaDiff = diffPatch(inputImage, imageCoordinates + (int2)(x, y), patch) / sigma.x;
             half2 chromaDiff = (inputSampleYCC.yz - inputYCC.yz) / sigma.yz;
 
-            // half w = (half) tunnel(x, y, angle, mix(0.25h, 4, smoothstep(1, 4, 2 * magnitude / sigma.x)));
-            half w = (half) mix(tunnel(x, y, angle, 0.25h), 1, smoothstep(1, 4, 2 * magnitude / sigma.x));
-            // half w = exp(-((half)(x * x + y * y) / (2 * radius * radius)));
+            half w = exp(-((half)(x * x + y * y) / (2 * radius * radius)));
 
-            half lumaWeight = /*(gaussianBlur5x5[y + 2][x + 2] + 0.25h) * */ w * (1 - step(1, lumaDiff));
+            half lumaWeight = w * (1 - step(1, lumaDiff));
             half2 chromaWeight = 1 - step((half) chromaBoost, length(chromaDiff) * lumaDiff);
 
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight);
@@ -863,8 +851,8 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
     // Desarurate chroma where denoising is weak
-    // half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1; //  - 0.05 * (1 - chromaDenoise * chromaDenoise);
+    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
+    half desaturate = 1 - 0.05 * (1 - chromaDenoise * chromaDenoise);
 
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
 }

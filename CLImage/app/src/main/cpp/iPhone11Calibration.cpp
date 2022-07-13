@@ -188,11 +188,11 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
 //        }
 //    }};
 
-    float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
-    float lerp_c = std::lerp(1.0f, 1.2f, nlf_alpha);
+    float lerp = std::lerp(0.2f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(1.0f, 2.0f, nlf_alpha);
 
     // Default Good
-    float lmult[5] = { 6, 4, 2, 0.5, 0.125 };
+    float lmult[5] = { 4, 2, 1, 0.25, 0.125 / 2 };
     float cmult[5] = { 1, 1, 1, 1, 1 };
 
     float chromaBoost = 4;
@@ -201,7 +201,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
-            .chromaBoost = 4,
+            .chromaBoost = chromaBoost,
             .gradientBoost = 2,
             .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
         },
@@ -209,7 +209,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
+            .gradientBoost = chromaBoost,
             .sharpening = 1.1
         },
         {
