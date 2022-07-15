@@ -247,12 +247,12 @@ int main(int argc, const char* argv[]) {
 
             // transcodeAdobeDNG(input_path);
             // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-            const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
+            // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
             // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
-            // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
+            const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-            rgb_image->write_jpeg_file((input_path.parent_path() / input_path.stem()).string() + "_rgb_wb_ltm_blacks_1.0_r_2.jpg", 95);
+            rgb_image->write_jpeg_file((input_path.parent_path() / input_path.stem()).string() + "_rgb_wb_ltm_blacks_1.0_r_5.jpg", 95);
         }
 
 //        LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;

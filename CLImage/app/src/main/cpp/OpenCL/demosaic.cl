@@ -1113,7 +1113,62 @@ typedef struct LTMParameters {
     float detail;
 } LTMParameters;
 
+#define EXACT_GUIDED_FILTER true
+
 float4 localToneMappingMask(LTMParameters *ltmParameters, Matrix3x3* ycbcr_srgb, image2d_t inputImage, image2d_t guideImage,
+                            int2 imageCoordinates, sampler_t linear_sampler, float2 inputNorm) {
+    const float2 pos = convert_float2(imageCoordinates) * inputNorm;
+
+    // One channel Fast Guided Filter to estimate the image's illuminance
+
+    float sum = 0;
+    float sumSq = 0;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            float sample = read_imagef(guideImage, linear_sampler, pos + ((float2) (x, y) + 0.5f) * inputNorm).x;
+            sum += sample;
+            sumSq += sample * sample;
+        }
+    }
+    float mean = sum / 25;
+    float var = (sumSq - sum * sum / 25) / 25;
+
+    // Sample the input value from the high resolution image
+    const float3 input = read_imagef(inputImage, linear_sampler, pos + 0.5f * inputNorm).xyz;
+    const float luma = input.x;
+
+    const float eps = 0; // ltmParameters->guidedFilterEps;
+#if EXACT_GUIDED_FILTER
+    // Sample the input value from the high resolution image
+    float filteredPixel = 0;
+    float weightSum = 0;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            float sample = read_imagef(inputImage, linear_sampler, pos + ((float2) (x, y) + 0.5f) * inputNorm).x;
+            float weight = mean + (sample - mean) * var / (var + eps);
+            filteredPixel += weight * sample;
+            weightSum += weight;
+        }
+    }
+    // The filtered image is an estimate of the illuminance
+    float illuminance = filteredPixel / weightSum;
+#else
+    float illuminance = mean + ((luma - mean) * var / (var + eps));
+#endif
+    float reflectance = luma / illuminance;
+
+    // YCbCr -> RGB version of the input pixel, for highlights compression
+    float3 rgb = (float3) (dot(ycbcr_srgb->m[0], input),
+                           dot(ycbcr_srgb->m[1], input),
+                           dot(ycbcr_srgb->m[2], input));
+
+    // LTM curve computed in Log space
+    const float highlightsClipping = min(length(sqrt(2 * rgb)), 1.0);
+    const float tonalCompression = mix(ltmParameters->shadows, ltmParameters->highlights, highlightsClipping);
+    return pow(illuminance, 1.0 / tonalCompression) * pow(reflectance, ltmParameters->detail) / luma;
+}
+
+float4 localToneMappingMaskV1(LTMParameters *ltmParameters, Matrix3x3* ycbcr_srgb, image2d_t inputImage, image2d_t guideImage,
                             int2 imageCoordinates, sampler_t linear_sampler, float2 inputNorm) {
     const float2 pos = convert_float2(imageCoordinates) * inputNorm;
 
