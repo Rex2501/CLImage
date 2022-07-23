@@ -184,12 +184,12 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
 
     std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
-    float lerp_c = 2 * std::lerp(0.5f, 1.2f, nlf_alpha);
+    float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
 
     // Default Good
-    float lmult[5] = { 0.5, 2, 0.5, 0.25, 0.125 };
-    float cmult[5] = { 1, 1, 1, 1, 1 };
+    float lmult[5] = { 0.25, 2, 0.25, 0.125, 0.125 / 2 };
+    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
 
     float chromaBoost = 8;
 
@@ -199,7 +199,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = chromaBoost,
             .gradientBoost = 2,
-            .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
+            .sharpening = 1.5, // std::lerp(1.5f, 0.8f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,

@@ -791,8 +791,8 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
     // Desarurate chroma where denoising is weak
-//    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1; //  - 0.05 * (1 - chromaDenoise * chromaDenoise);
+    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
+    half desaturate = 1 - 0.05 * (1 - chromaDenoise * chromaDenoise);
 
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
 }
@@ -817,12 +817,23 @@ half __attribute__((overloadable)) diffPatch(read_only image2d_t inputImage, con
     return sqrt(diffSum / 9);
 }
 
+float2 signedGaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
+    // Average Sobel Filter on a 3x3 raw patch
+    float2 sum = 0;
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            sum += gaussianBlur3x3[j + 1][i + 1] * sobel(inputImage, x + i, y + j);
+        }
+    }
+    return sum;
+}
+
 half tunnel(half x, half y, half angle, half sigma) {
-    half a = x * cos(angle) - y * sin(angle);
+    half a = x * cos(angle) + y * sin(angle);
     return exp(-(a * a) / sigma);
 }
 
-kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, write_only image2d_t denoisedImage) {
+kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, int straightenEdges, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
@@ -832,11 +843,12 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     half patch[9];
     loadPatch(inputImage, imageCoordinates, patch);
 
-    float2 gradient = gaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
+    float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
-//    half edge = smoothstep(1, 4, 32 * magnitude / sigma.x);
-//    half radius = mix(0.25h, 1, edge);
+    half edgeStrenght = smoothstep(1, 4,  magnitude / sigma.x);
+    half highEdgeStrenght = smoothstep(4, 16,  magnitude / sigma.x);
+    half edgeWeight = straightenEdges ? mix(1, 0.125h, highEdgeStrenght) : 1;
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -847,14 +859,12 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
             half lumaDiff = diffPatch(inputImage, imageCoordinates + (int2)(x, y), patch) / sigma.x;
             half2 chromaDiff = (inputSampleYCC.yz - inputYCC.yz) / sigma.yz;
 
-            // half w = (half) tunnel(x, y, angle, mix(0.25h, 4, smoothstep(1, 4, 2 * magnitude / sigma.x)));
-            half w = (half) mix(tunnel(x, y, angle, 0.25h), 1, smoothstep(1, 4, 2 * magnitude / sigma.x));
-            // half w = exp(-((half)(x * x + y * y) / (2 * radius * radius)));
+            // half w = (half) tunnel(x, y, angle, mix(4, 0.25h, edgeStrenght));
+            half w = (half) mix(gaussianBlur5x5[y + 2][x + 2], tunnel(x, y, angle, 0.25h), edgeStrenght);
+            half lumaWeight = w * (1 - step(1, edgeWeight * lumaDiff));
+            half chromaWeight = 1 - step((half) chromaBoost, length((half3) (lumaDiff, chromaDiff)));
 
-            half lumaWeight = /*(gaussianBlur5x5[y + 2][x + 2] + 0.25h) * */ w * (1 - step(1, lumaDiff));
-            half2 chromaWeight = 1 - step((half) chromaBoost, length(chromaDiff) * lumaDiff);
-
-            half3 sampleWeight = (half3) (lumaWeight, chromaWeight);
+            half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
 
             filtered_pixel += sampleWeight * inputSampleYCC;
             kernel_norm += sampleWeight;
@@ -864,7 +874,7 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
 
     // Desarurate chroma where denoising is weak
     // half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1; //  - 0.05 * (1 - chromaDenoise * chromaDenoise);
+    half desaturate = 1; // - 0.05 * (1 - chromaDenoise * chromaDenoise);
 
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
 }

@@ -136,7 +136,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> RicohGRIIIDenoiseParameters(i
 
     // Default Good
     float lmult[5] = { 0.125, 1, 0.5, 0.25, 0.125 };
-    float cmult[5] = { 1, 1, 1, 1, 1 };
+    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
 
     float chromaBoost = 8;
 
@@ -252,7 +252,7 @@ void calibrateRicohGRIII(RawConverter* rawConverter, const std::filesystem::path
 gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     DemosaicParameters demosaicParameters = {
         .rgbConversionParameters = {
-            .localToneMapping = true
+            .localToneMapping = false
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,

@@ -294,7 +294,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                  float chromaBoost, float gradientBoost,
+                  float chromaBoost, float gradientBoost, bool straightenEdges,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
@@ -305,6 +305,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
                                     cl_float3,    // var_b
                                     float,        // chromaBoost
                                     float,        // gradientBoost
+                                    int,          // straightenEdges
                                     cl::Image2D   // outputImage
                                     >(program, "denoiseImagePatch");
 
@@ -313,7 +314,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), cl_var_a, cl_var_b, chromaBoost, gradientBoost, outputImage->getImage2D());
+           inputImage.getImage2D(), cl_var_a, cl_var_b, chromaBoost, gradientBoost, (int) straightenEdges, outputImage->getImage2D());
 }
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,

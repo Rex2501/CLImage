@@ -34,7 +34,7 @@ struct BilateralDenoiser : ImageDenoiser {
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
                  float chromaBoost, float gradientBoost, int pyramidLevel,
               gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, gradientBoost, outputImage);
+        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, gradientBoost, pyramidLevel == 0 ? true : false, outputImage);
     }
 };
 
@@ -163,8 +163,36 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
     applyKernel(glsContext, "noiseStatistics", image, &noiseStats);
     const auto noiseStatsCpu = noiseStats.mapImage();
 
+    const double maxVarianceHistVal = 0.01;
+    int minBinSize = 0.0015 * image.width  * image.height;
+    const int variance_bins = 128;
+    uint32_t log_variance[variance_bins] = { 0 };
+    noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns) {
+        int hist_index = rint((variance_bins - 1) * fmin(log(1 + ns[1]) / log(1 + maxVarianceHistVal), 1));
+        log_variance[hist_index]++;
+    });
+
     // Only consider pixels with variance lower than the expected noise value
-    const double varianceMax = 0.001;
+    double varianceMax = 0.001;
+
+    std::cout << "log_variance: ";
+    int max_bin = 0;
+    int max_val = 0;
+    bool descending = false;
+    for (int i = 0; i < variance_bins; i++) {
+        if (log_variance[i] > max_val) {
+            max_bin = i;
+            max_val = log_variance[i];
+            descending = false;
+        } else if (log_variance[i] > minBinSize && log_variance[i] <= max_val) {
+            varianceMax = 40 * (exp((i / ((float) variance_bins - 1)) * log(1 + maxVarianceHistVal)) - 1);
+            std::cout << i << " - ";
+            std::cout << log_variance[i] << " @ " << std::scientific << varianceMax << ", ";
+            break;
+        }
+    }
+    std::cout << std::endl;
+
     // Limit to pixels the more linear intensity zone of the sensor
     const double maxValue = 0.5;
     const double minValue = 0.001;
@@ -255,7 +283,6 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
     };
 }
 
-
 gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern) {
     gls::cl_image_2d<gls::rgba_pixel_float> meanImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
     gls::cl_image_2d<gls::rgba_pixel_float> varImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
@@ -265,8 +292,6 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     const auto meanImageCpu = meanImage.mapImage();
     const auto varImageCpu = varImage.mapImage();
 
-    // Only consider pixels with variance lower than the expected noise value
-    const double varianceMax = 0.001;
     // Limit to pixels the more linear intensity zone of the sensor
     const double maxValue = 0.5;
     const double minValue = 0.001;
@@ -276,6 +301,42 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     gls::DVector<4> s_y = {{ 0, 0, 0, 0 }};
     gls::DVector<4> s_xx = {{ 0, 0, 0, 0 }};
     gls::DVector<4> s_xy = {{ 0, 0, 0, 0 }};
+
+    const int variance_bins = 128;
+    uint32_t log_variance[variance_bins] = { 0 };
+    const double maxVarianceHistVal = 0.01;
+
+    // auto greenVarImageCpu = gls::image<gls::luma_pixel_16>(varImageCpu.width, varImageCpu.height);
+
+    varImageCpu.apply([&](const gls::rgba_pixel_float& vv, int x, int y) {
+        int hist_index = rint((variance_bins - 1) * fmin(log(1 + vv[1]) / log(1 + maxVarianceHistVal), 1));
+        log_variance[hist_index]++;
+        // greenVarImageCpu[y][x] = 0xffff * vv[1] / meanImageCpu[y][x][1];
+    });
+
+    // greenVarImageCpu.write_png_file("/Users/fabio/greenVar.png");
+
+    // Only consider pixels with variance lower than the expected noise value
+    double varianceMax = 0.001;
+
+    std::cout << "log_variance: ";
+    int max_bin = 0;
+    int max_val = 0;
+    int minBinSize = 0.0004 * rawImage.width * rawImage.height;
+    bool descending = false;
+    for (int i = 0; i < variance_bins; i++) {
+        if (log_variance[i] > max_val) {
+            max_bin = i;
+            max_val = log_variance[i];
+            descending = false;
+        } else if (log_variance[i] > minBinSize && log_variance[i] <= max_val) {
+            varianceMax = 40 * (exp((i / ((float) variance_bins - 1)) * log(1 + maxVarianceHistVal)) - 1);
+            std::cout << i << " - ";
+            std::cout << log_variance[i] << " @ " << std::scientific << varianceMax << ", ";
+            break;
+        }
+    }
+    std::cout << std::endl;
 
     double N = 0;
     meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {

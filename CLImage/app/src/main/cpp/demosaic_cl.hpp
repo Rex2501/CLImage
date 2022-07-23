@@ -80,7 +80,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                  float chromaBoost, float gradientBoost,
+                  float chromaBoost, float gradientBoost, bool straightenEdges,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,
