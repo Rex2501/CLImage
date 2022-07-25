@@ -159,35 +159,30 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
             .sharpening = 1.5, // std::lerp(1.5f, 1.0f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
             .sharpening = 1.2
         },
         {
             .luma = lmult[2] * lerp,
             .chroma = cmult[2] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
             .sharpening = 1
         },
         {
             .luma = lmult[3] * lerp,
             .chroma = cmult[3] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
             .sharpening = 1
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 2,
             .sharpening = 1
         }
     }};

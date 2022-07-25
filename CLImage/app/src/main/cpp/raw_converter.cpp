@@ -101,7 +101,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
     demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
-    const bool high_noise_image = (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
+    const bool high_noise_image = false; // (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
 
     if (high_noise_image) {
         allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);

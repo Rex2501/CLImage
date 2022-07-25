@@ -32,9 +32,9 @@ struct BilateralDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
+                 float chromaBoost, int pyramidLevel,
               gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, gradientBoost, pyramidLevel == 0 ? true : false, outputImage);
+        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, pyramidLevel == 0 ? true : false, outputImage);
     }
 };
 
@@ -44,7 +44,7 @@ struct GuidedFastDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
+                 float chromaBoost, int pyramidLevel,
                  gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
         ::denoiseImageGuided(glsContext, inputImage, var_a, var_b, outputImage);
     }
@@ -60,7 +60,7 @@ struct GuidedPreciseDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
+                 float chromaBoost, int pyramidLevel,
                  gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
         guidedFilter.filter(glsContext, inputImage, /*filterSize=*/ 5, var_b, outputImage);
     }
@@ -126,7 +126,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
     const auto& np = calibrated_nlf[levels-1];
     denoiser[levels-1]->denoise(glsContext, *(imagePyramid[levels-2]),
                                 { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
-                                (*denoiseParameters)[levels-1].chromaBoost, (*denoiseParameters)[levels-1].gradientBoost, /*pyramidLevel=*/ levels-1,
+                                (*denoiseParameters)[levels-1].chromaBoost, /*pyramidLevel=*/ levels-1,
                                 denoisedImagePyramid[levels-1].get());
 
     for (int i = levels - 2; i >= 0; i--) {
@@ -136,7 +136,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
         const auto& np = calibrated_nlf[i];
         denoiser[i]->denoise(glsContext, *denoiseInput,
                              { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
-                             (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, /*pyramidLevel=*/ i,
+                             (*denoiseParameters)[i].chromaBoost, /*pyramidLevel=*/ i,
                              denoisedImagePyramid[i].get());
 
         std::cout << "Reassembling layer " << i << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;

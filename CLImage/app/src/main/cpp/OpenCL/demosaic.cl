@@ -225,7 +225,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float whiteness = clamp(min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave)), 0.0, 1.0);
 
         // Minimum gradient threshold wrt the noise model
-        float low_gradient_threshold = smoothstep(2 * rawStdDev, 8 * rawStdDev, length(gradient));
+        float low_gradient_threshold = 0.5 + 0.5 * smoothstep(2 * rawStdDev, 8 * rawStdDev, length(gradient));
 
         // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
         float hf_gain = low_gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
@@ -833,7 +833,7 @@ half tunnel(half x, half y, half angle, half sigma) {
     return exp(-(a * a) / sigma);
 }
 
-kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, int straightenEdges, write_only image2d_t denoisedImage) {
+kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, int straightenEdges, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
