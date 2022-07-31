@@ -52,9 +52,11 @@ typedef struct NoiseModel {
 
 typedef struct LTMParameters {
     float guidedFilterEps = 0.01;
-    float shadows = 1.25;
-    float highlights = 1.0;
-    float detail = 1.1;
+    float shadows = 0.8;
+    float highlights = 1.05;
+    float hfDetail = 1.3;
+    float mfDetail = 1.2;
+    float lfDetail = 1.1;
 } LTMParameters;
 
 typedef struct DemosaicParameters {

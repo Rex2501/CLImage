@@ -44,6 +44,12 @@ void RawConverter::allocateLtmMaskImage(gls::OpenCLContext* glsContext, int widt
 
     if (ltmMaskImage->width != width || ltmMaskImage->height != height) {
         ltmMaskImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
+        ltmLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+        ltmMeanLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+        ltmMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+        ltmMeanMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+        ltmHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
+        ltmMeanHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
     }
 }
 
@@ -121,6 +127,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
+    // TODO: why divide by 4?
     interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, (noiseModel->rawNlf[1] + noiseModel->rawNlf[3]) / 4);
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
@@ -156,8 +163,31 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
-        localToneMappingMask(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[4]), demosaicParameters->ltmParameters,
-                             inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier, ltmMaskImage.get());
+        const auto& ltmParameters = demosaicParameters->ltmParameters;
+
+        // Low Frequency LTM and sharpening
+        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[4]),
+                               *ltmLFAbGfImage, *ltmMeanLFAbGfImage,
+                               /*chainLtmMask=*/ false,
+                               ltmParameters.guidedFilterEps, ltmParameters.shadows, ltmParameters.highlights, ltmParameters.lfDetail,
+                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               ltmMaskImage.get());
+
+        // Mid Frequency sharpening
+        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[2]),
+                               *ltmMFAbGfImage, *ltmMeanMFAbGfImage,
+                               /*chainLtmMask=*/ true,
+                               ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.mfDetail,
+                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               ltmMaskImage.get());
+
+        // High Frequency sharpening
+        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[0]),
+                               *ltmHFAbGfImage, *ltmMeanHFAbGfImage,
+                               /*chainLtmMask=*/ true,
+                               ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.hfDetail,
+                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               ltmMaskImage.get());
     }
 
     // Convert result back to camera RGB

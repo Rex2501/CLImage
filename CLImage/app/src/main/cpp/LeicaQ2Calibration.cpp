@@ -166,40 +166,48 @@ static std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIso(const std::a
 }
 
 std::pair<float, std::array<DenoiseParameters, 5>> LeicaQ2DenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(25000) - log2(100)), 0.0, 1.0);
+    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
 
     std::cout << "LeicaQ2DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = std::lerp(1.0f, 2.0f, nlf_alpha);
-    float lerp_c = std::lerp(1.0f, 4.0f, nlf_alpha);
+    float lerp = 0.5 * std::lerp(0.125f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
 
-    float lmult[5] = { 0.125, 1.0, 0.5, 0.25, 0.125 };
-    float cmult[5] = { 1, 2, 2, 1, 1 };
+    // Default Good
+    float lmult[5] = { 0.25, 2, 0.25, 0.125, 0.125 / 2 };
+    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
+
+    float chromaBoost = 8;
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
-            .luma = lmult[0], // * lerp,
+            .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
-            .sharpening = std::lerp(1.5f, 0.7f, nlf_alpha)
+            .chromaBoost = chromaBoost,
+            .sharpening = 1, // Sharpen HF in LTM
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
+            .chromaBoost = chromaBoost,
             .sharpening = 1.1
         },
         {
             .luma = lmult[2] * lerp,
             .chroma = cmult[2] * lerp_c,
+            .chromaBoost = chromaBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[3] * lerp,
             .chroma = cmult[3] * lerp_c,
+            .chromaBoost = chromaBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
+            .chromaBoost = chromaBoost,
             .sharpening = 1
         }
     }};
@@ -286,6 +294,15 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConve
             .contrast = 1.05,
             .saturation = 1.0,
             .toneCurveSlope = 3.5,
+            .localToneMapping = true
+        },
+        .ltmParameters = {
+            .guidedFilterEps = 0.01,
+            .shadows = 0.8,
+            .highlights = 1.05,
+            .lfDetail = 1.1,
+            .mfDetail = 1.2,
+            .hfDetail = 1.3,
         }
     };
 

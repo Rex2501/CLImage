@@ -289,18 +289,19 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
     DemosaicParameters demosaicParameters = {
         .rgbConversionParameters = {
             .contrast = 1.0,
-            .saturation = 0.9,
+            // .saturation = 0.9,
             .toneCurveSlope = 3.5,
-            .exposureBias = -0.8,
-            .blacks = 0.12,
+            // .exposureBias = -0.8,
+            .blacks = 0.15,
             .localToneMapping = true
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,
-            // .shadows = 1.15, // LTM Low
-            .shadows = 1.25, // LTM High
-            .highlights = 1,
-            .detail = 1.1,
+            .shadows = 0.85,
+            .highlights = 1.05,
+            .lfDetail = 1.1,
+            .mfDetail = 1.1,
+            .hfDetail = 1.3,
         }
     };
 

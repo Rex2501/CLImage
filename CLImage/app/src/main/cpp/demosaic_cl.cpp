@@ -371,6 +371,73 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
            outputImage->getImage2D(), linear_sampler);
 }
 
+void localToneMappingMaskII(gls::OpenCLContext* glsContext,
+                            const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                            const gls::cl_image_2d<gls::rgba_pixel_float>& guideImage,
+                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abImage,
+                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abMeanImage,
+                            int chainLtmMask, float eps,
+                            float shadows, float highlights, float detail,
+                            const gls::Matrix<3, 3>& ycbcr_srgb,
+                            gls::cl_image_2d<gls::luma_pixel_float>* outputImage) {
+    assert(guideImage.width == abImage.width && guideImage.height == abImage.height);
+
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    struct Matrix3x3 {
+        cl_float3 m[3];
+    } cl_ycbcr_srgb = {{
+        { ycbcr_srgb[0][0], ycbcr_srgb[0][1], ycbcr_srgb[0][2] },
+        { ycbcr_srgb[1][0], ycbcr_srgb[1][1], ycbcr_srgb[1][2] },
+        { ycbcr_srgb[2][0], ycbcr_srgb[2][1], ycbcr_srgb[2][2] }
+    }};
+
+    const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
+    // Bind the kernel parameters
+    auto gfKernel = cl::KernelFunctor<cl::Image2D,  // guideImage
+                                      cl::Image2D,  // abImage
+                                      float,        // eps
+                                      cl::Sampler   // linear_sampler
+                                      >(program, "GuidedFilterABImage");
+
+    auto gfMeanKernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                          cl::Image2D,  // outputImage
+                                          cl::Sampler   // linear_sampler
+                                          >(program, "BoxFilterGFImage");
+
+    auto ltmKernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                       cl::Image2D,  // abImage
+                                       cl::Image2D,  // ltmMaskImageIn
+                                       cl::Image2D,  // ltmMasktImageOut
+                                       int,          // useInputMask
+                                       float,        // eps,
+                                       float,        // shadows,
+                                       float,        // highlights,
+                                       float,        // detail
+                                       Matrix3x3,    // ycbcr_srgb
+                                       cl::Sampler   // linear_sampler
+                                       >(program, "localToneMappingMaskImageII");
+
+    try {
+        // Schedule the kernel on the GPU
+        gfKernel(gls::OpenCLContext::buildEnqueueArgs(guideImage.width, guideImage.height),
+                 guideImage.getImage2D(), abImage.getImage2D(), eps, linear_sampler);
+
+        gfMeanKernel(gls::OpenCLContext::buildEnqueueArgs(abImage.width, abImage.height),
+                     abImage.getImage2D(), abMeanImage.getImage2D(), linear_sampler);
+
+        ltmKernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
+                  inputImage.getImage2D(), abMeanImage.getImage2D(), outputImage->getImage2D(), outputImage->getImage2D(),
+                  chainLtmMask, eps, shadows, highlights, detail,
+                  cl_ycbcr_srgb, linear_sampler);
+    } catch (cl::Error& e) {
+        std::cout << "Error: " << e.what() << " - " << gls::clStatusToString(e.err()) << std::endl;
+        throw std::logic_error("This is bad");
+    }
+}
+
 void bayerToRawRGBA(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                     gls::cl_image_2d<gls::rgba_pixel_float>* rgbaImage,

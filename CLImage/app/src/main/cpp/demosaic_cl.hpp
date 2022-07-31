@@ -94,6 +94,16 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
                           const LTMParameters& ltmParameters, const gls::Matrix<3, 3>& transform,
                           gls::cl_image_2d<gls::luma_pixel_float>* outputImage);
 
+void localToneMappingMaskII(gls::OpenCLContext* glsContext,
+                            const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                            const gls::cl_image_2d<gls::rgba_pixel_float>& guideImage,
+                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abImage,
+                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abMeanImage,
+                            int chainLtmMask, float eps,
+                            float shadows, float highlights, float detail,
+                            const gls::Matrix<3, 3>& ycbcr_srgb,
+                            gls::cl_image_2d<gls::luma_pixel_float>* outputImage);
+
 void denoiseLumaImage(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                       const DenoiseParameters& denoiseParameters,

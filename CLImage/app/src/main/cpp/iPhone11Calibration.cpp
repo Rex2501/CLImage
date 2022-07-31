@@ -198,9 +198,11 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaiciPhone11(RawConverter* rawConvert
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,
-            .shadows = 1.35,
-            .highlights = 1,
-            .detail = 1.0,
+            .shadows = 0.8,
+            .highlights = 1.05,
+            .lfDetail = 1.1,
+            .mfDetail = 1.2,
+            .hfDetail = 1.3,
         }
     };
 

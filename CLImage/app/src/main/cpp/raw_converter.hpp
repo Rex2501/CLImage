@@ -32,6 +32,12 @@ class RawConverter {
 
     std::unique_ptr<PyramidalDenoise<5>> pyramidalDenoise;
 
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmLFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanLFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanMFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmHFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanHFAbGfImage;
     gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr ltmMaskImage;
 
     // RawConverter HighNoise textures

@@ -361,6 +361,8 @@ float unpackDNGMetadata(const gls::image<gls::luma_pixel_16>& rawImage,
         (*dng_metadata)[TIFFTAG_ASSHOTNEUTRAL] = as_shot_neutral;
 
         pre_mul = cam_mul;
+
+        std::cout << "*** auto_white_balance pre_mul: " << pre_mul / pre_mul[1] << std::endl;
     }
 
     // Scale Input Image

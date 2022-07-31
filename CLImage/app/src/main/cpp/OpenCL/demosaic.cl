@@ -15,7 +15,8 @@
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
-#define IPHONE_LENS_SHADING false
+#define LENS_SHADING false
+#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,
@@ -390,10 +391,10 @@ kernel void blendHighlightsImage(read_only image2d_t inputImage, float clip, wri
                          dot(itrans[2], lab[0])) / 3;
     }
 
-#if IPHONE_LENS_SHADING
+#if LENS_SHADING
     float2 imageCenter = convert_float2(get_image_dim(inputImage) / 2);
     float distance_from_center = length(convert_float2(imageCoordinates) - imageCenter) / length(imageCenter);
-    float lens_shading = 1 + 2 * distance_from_center * distance_from_center;
+    float lens_shading = 1 + LENS_SHADING_GAIN * distance_from_center * distance_from_center;
     pixel *= lens_shading;
 #endif
 
@@ -848,7 +849,7 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     half magnitude = length(gradient);
     half edgeStrenght = smoothstep(1, 4,  magnitude / sigma.x);
     half highEdgeStrenght = smoothstep(4, 16,  magnitude / sigma.x);
-    half edgeWeight = straightenEdges ? mix(1, 0.125h, highEdgeStrenght) : 1;
+    half edgeWeight = straightenEdges ? mix(1, 0.5h, highEdgeStrenght) : 1; // TODO: Make this a tuning parameter
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -1005,7 +1006,7 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
         sharpening = 1 + (sharpening - 1) * detail;
     }
 
-    denoisedPixel.x = mix(inputPixelDenoised1.x, denoisedPixel.x, sharpening);
+    denoisedPixel = mix(inputPixelDenoised1, denoisedPixel, sharpening);
 
     write_imagef(outputImage, output_pos, denoisedPixel);
 }
@@ -1176,6 +1177,91 @@ float4 localToneMappingMask(LTMParameters *ltmParameters, Matrix3x3* ycbcr_srgb,
     const float highlightsClipping = min(length(sqrt(2 * rgb)), 1.0);
     const float tonalCompression = mix(ltmParameters->shadows, ltmParameters->highlights, highlightsClipping);
     return pow(illuminance, 1.0 / tonalCompression) * pow(reflectance, ltmParameters->detail) / luma;
+}
+
+kernel void GuidedFilterABImage(read_only image2d_t guideImage, write_only image2d_t abImage, float eps, sampler_t linear_sampler) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(guideImage));
+    const float2 pos = convert_float2(imageCoordinates) * inputNorm;
+
+    float sum = 0;
+    float sumSq = 0;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            float sample = read_imagef(guideImage, linear_sampler, pos + ((float2)(x, y) + 0.5f) * inputNorm).x;
+            sum += sample;
+            sumSq += sample * sample;
+        }
+    }
+    float mean = sum / 25;
+    float var = (sumSq - sum * sum / 25) / 25;
+
+    float a = var / (var + eps);
+    float b = mean * (1 - a);
+
+    write_imagef(abImage, imageCoordinates, (float4)(a, b, 0, 0));
+}
+
+kernel void BoxFilterGFImage(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(inputImage));
+    const float2 pos = convert_float2(imageCoordinates) * inputNorm;
+
+    float2 meanAB = 0;
+    for (int i = 0; i < 9; i++) {
+        constant ConvolutionParameters* cp = &boxFilter5x5[i];
+        meanAB += cp->weight * read_imagef(inputImage, linear_sampler, pos + (cp->offset + 0.5f) * inputNorm).xy;
+    }
+
+    write_imagef(outputImage, imageCoordinates, (float4)(meanAB, 0, 0));
+}
+
+kernel void localToneMappingMaskImageII(read_only image2d_t inputImage,
+                                        read_only image2d_t abImage,
+                                        read_only image2d_t ltmMaskImageIn,
+                                        write_only image2d_t ltmMasktImageOut,
+                                        int useInputMask, float eps,
+                                        float shadows, float highlights,
+                                        float detail, Matrix3x3 ycbcr_srgb,
+                                        sampler_t linear_sampler) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(ltmMasktImageOut));
+    const float2 pos = convert_float2(imageCoordinates) * inputNorm;
+
+    float2 abSample = read_imagef(abImage, linear_sampler, pos + 0.5f * inputNorm).xy;
+
+    // Sample the input value from the high resolution image
+    const float3 input = read_imagef(inputImage, imageCoordinates).xyz;
+    const float luma = input.x;
+
+    // The filtered image is an estimate of the illuminance
+    const float illuminance = abSample.x * luma + abSample.y;
+    const float reflectance = luma / illuminance;
+
+    // Avoid sharpening bright edges and regions of high variance and/or saturation
+    const float var = abs(eps * abSample.x / (1 - abSample.x));
+    const float highContrast = smoothstep(0, 2, sqrt(abs(var)) / luma);
+    const float colorfulness = smoothstep(0.0625, 0.25, length(input.yz));
+    const float brightEdge = smoothstep(0.25, 1, 8 * illuminance) * smoothstep(0.25, 2.0, (luma - illuminance) / illuminance);
+    float adjusted_detail = mix(detail, 1, min(highContrast + colorfulness + brightEdge, 1));
+
+    // YCbCr -> RGB version of the input pixel, for highlights compression
+    float3 rgb = (float3) (dot(ycbcr_srgb.m[0], input),
+                           dot(ycbcr_srgb.m[1], input),
+                           dot(ycbcr_srgb.m[2], input));
+
+    const float highlightsClipping = min(length(sqrt(2 * rgb)), 1.0);
+    const float adjusted_shadows = mix(shadows, 1, highlightsClipping);
+    const float gamma = mix(adjusted_shadows, highlights, smoothstep(0.25, 0.5, illuminance));
+
+    // LTM curve computed in Log space
+    float ltmMultiplier = pow(illuminance, gamma) * pow(reflectance, adjusted_detail) / luma;
+
+    if (useInputMask) {
+        ltmMultiplier *= read_imagef(ltmMaskImageIn, imageCoordinates).x;
+    }
+
+    write_imagef(ltmMasktImageOut, imageCoordinates, (float4) (ltmMultiplier, 0, 0, 0));
 }
 
 float4 localToneMappingMaskV1(LTMParameters *ltmParameters, Matrix3x3* ycbcr_srgb, image2d_t inputImage, image2d_t guideImage,
@@ -1573,7 +1659,7 @@ kernel void convertTosRGB(read_only image2d_t linearImage, read_only image2d_t l
         if (ltmBoost > 1) {
             // Modified Naik and Murthy’s method for preserving hue/saturation under luminance changes
             const float luma = 0.2126 * rgb.x + 0.7152 * rgb.y + 0.0722 * rgb.z; // BT.709-2 (sRGB) luma primaries
-            rgb = mix(rgb * ltmBoost, luma < 1 ? 1 - (1.0 - rgb) * (1 - ltmBoost * luma) / (1 - luma) : rgb, pow(luma, 0.5));
+            rgb = mix(rgb * ltmBoost, luma < 1 ? 1 - (1.0 - rgb) * (1 - ltmBoost * luma) / (1 - luma) : rgb, min(pow(luma, 0.5), 1));
         } else if (ltmBoost < 1) {
             rgb *= ltmBoost;
         }
