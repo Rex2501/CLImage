@@ -173,10 +173,10 @@ void read_tiff_file(const std::string& filename, int pixel_channels, int pixel_b
         TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
 
         uint16_t tiff_samplesperpixel;
-        TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &tiff_samplesperpixel);
+        TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &tiff_samplesperpixel);
 
         uint16_t tiff_sampleformat;
-        TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
+        TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &tiff_sampleformat);
         if (tiff_sampleformat != SAMPLEFORMAT_UINT) {
             throw std::runtime_error("can not read sample format other than uint");
         }
