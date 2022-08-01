@@ -16,7 +16,7 @@
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
 #define LENS_SHADING false
-#define LENS_SHADING_GAIN 1
+#define LENS_SHADING_GAIN 2
 
 enum BayerPattern {
     grbg = 0,
@@ -222,15 +222,17 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float2 g_lf = { (g_left + g_right) / 2, (g_up + g_down) / 2 };
         float2 g_hf = { (2 * c_xy - (c_left + c_right)) / 4, (2 * c_xy - (c_up + c_down)) / 4 };
 
+        // Limit the range of HF correction to something reasonable
+        g_hf = clamp(g_hf, - 2 * g_lf, 2 * g_lf);
+
         // Estimate the pixel's "whiteness"
         float whiteness = clamp(min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave)), 0.0, 1.0);
 
         // Minimum gradient threshold wrt the noise model
         float low_gradient_threshold = 0.5 + 0.5 * smoothstep(2 * rawStdDev, 8 * rawStdDev, length(gradient));
 
-        // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
-        float hf_gain = low_gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
-        float2 g_est = g_lf + hf_gain * g_hf;
+        // Edges that are in strong highlights tend to grossly overestimate the gradient
+        float highlights_edge = 1 - smoothstep(0.25, 1.0, max(c_xy, max(max(c_left, c_right), max(c_up, c_down))));
 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
@@ -241,6 +243,13 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         // If the gradient is below threshold just go flat
         direction = mix(0.5, direction, low_gradient_threshold);
+
+        // Reduce hf_gain when direction is diagonal
+        float diagonality = 1 - 0.5 * sin(M_PI_F * direction);
+
+        // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
+        float hf_gain = diagonality * highlights_edge * low_gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
+        float2 g_est = g_lf + hf_gain * g_hf;
 
         // Green pixel estimation
         float sample = mix(g_est.y, g_est.x, direction);
