@@ -104,8 +104,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern, demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
-    const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
-    demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
+//    const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+//    demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
     const bool high_noise_image = false; // (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
 
@@ -155,6 +155,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 //    std::cout << "falseColorsRemovalImage" << std::endl;
 //    applyKernel(_glsContext, "falseColorsRemovalImage", *clLinearRGBImageB, clLinearRGBImageA.get());
 
+    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
+
     auto clDenoisedImage = pyramidalDenoise->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
                                                      clLinearRGBImageB.get(),
                                                      demosaicParameters->rgb_cam, gmb_position, rotate_180,
@@ -170,7 +172,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                                *ltmLFAbGfImage, *ltmMeanLFAbGfImage,
                                /*chainLtmMask=*/ false,
                                ltmParameters.guidedFilterEps, ltmParameters.shadows, ltmParameters.highlights, ltmParameters.lfDetail,
-                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               normalized_ycbcr_to_cam,
                                ltmMaskImage.get());
 
         // Mid Frequency sharpening
@@ -178,7 +180,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                                *ltmMFAbGfImage, *ltmMeanMFAbGfImage,
                                /*chainLtmMask=*/ true,
                                ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.mfDetail,
-                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               normalized_ycbcr_to_cam,
                                ltmMaskImage.get());
 
         // High Frequency sharpening
@@ -186,12 +188,12 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                                *ltmHFAbGfImage, *ltmMeanHFAbGfImage,
                                /*chainLtmMask=*/ true,
                                ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.hfDetail,
-                               inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier,
+                               normalized_ycbcr_to_cam,
                                ltmMaskImage.get());
     }
 
     // Convert result back to camera RGB
-    transformImage(_glsContext, *clDenoisedImage, clDenoisedImage, inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier);
+    transformImage(_glsContext, *clDenoisedImage, clDenoisedImage, normalized_ycbcr_to_cam);
 
     // --- Image Post Processing ---
 

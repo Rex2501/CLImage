@@ -13,10 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+ #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
-#define LENS_SHADING false
-#define LENS_SHADING_GAIN 2
+//#define half float
+//#define half2 float2
+//#define half3 float3
+//#define half4 float4
+//#define read_imageh read_imagef
+//#define write_imageh write_imagef
+
+#define LENS_SHADING true
+#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,
@@ -93,9 +100,9 @@ constant half gaussianBlur5x5[5][5] = {
 };
 
 constant half gaussianBlur3x3[3][3] = {
-    { 1/16.0h, 1/8.0h, 1/16.0h },
-    { 1/8.0h,  1/4.0h, 1/8.0h  },
-    { 1/16.0h, 1/8.0h, 1/16.0h }
+    { 1/16.0, 1/8.0, 1/16.0 },
+    { 1/8.0,  1/4.0, 1/8.0  },
+    { 1/16.0, 1/8.0, 1/16.0 }
 };
 
 
@@ -702,9 +709,9 @@ kernel void medianFilterImage5x5x4(read_only image2d_t inputImage, write_only im
         half3 p = read_imageh(image, pos).xyz;        \
         max = p > max ? p : max;                      \
         min = p < min ? p : min;                      \
-        half W = 1.0h / (1.0h + p.x - inputPixel.x);  \
+        half W = 1 / (1 + p.x - inputPixel.x);        \
         crossCorrelation += p.yz * W;                 \
-        centerCorrelation += W > 0.6h;                \
+        centerCorrelation += W > 0.6;                 \
         sumW += W;                                    \
         p.yz;                                         \
     })
@@ -738,7 +745,7 @@ kernel void falseColorsRemovalImage(read_only image2d_t inputImage, write_only i
     crossCorrelation = centerCorrelation > 1 ? crossCorrelation / (inputPixel.yz * sumW) : 1;
 
     // Mix the chroma median with the original signal according
-    half2 chroma = mix(chromaMedian, inputPixel.yz, min(cf + crossCorrelation * crossCorrelation, 1.0h));
+    half2 chroma = mix(chromaMedian, inputPixel.yz, min(cf + crossCorrelation * crossCorrelation, 1));
 
     write_imageh(denoisedImage, imageCoordinates, (half4) (inputPixel.x, chroma, 0));
 }
@@ -789,8 +796,8 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
             half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
             half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
-            half lumaWeight = gaussianBlur5x5[y + 2][x + 2] * (1 - step(1.0h, abs(inputDiff.x)));
-            half2 chromaWeight = 1 - step((half) chromaBoost * M_SQRT2_H, length(inputDiff.yz) * abs(inputDiff.x));
+            half lumaWeight = gaussianBlur5x5[y + 2][x + 2] * (1 - step(1, abs(inputDiff.x)));
+            half2 chromaWeight = 1 - step((half) (chromaBoost * M_SQRT2), length(inputDiff.yz) * abs(inputDiff.x));
 
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight);
 
@@ -858,7 +865,7 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     half magnitude = length(gradient);
     half edgeStrenght = smoothstep(1, 4,  magnitude / sigma.x);
     half highEdgeStrenght = smoothstep(4, 16,  magnitude / sigma.x);
-    half edgeWeight = straightenEdges ? mix(1, 0.5h, highEdgeStrenght) : 1; // TODO: Make this a tuning parameter
+    half edgeWeight = straightenEdges ? mix(1, (half) 0.25, highEdgeStrenght) : 1; // TODO: Make this a tuning parameter
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -870,7 +877,7 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
             half2 chromaDiff = (inputSampleYCC.yz - inputYCC.yz) / sigma.yz;
 
             // half w = (half) tunnel(x, y, angle, mix(4, 0.25h, edgeStrenght));
-            half w = (half) mix(gaussianBlur5x5[y + 2][x + 2], tunnel(x, y, angle, 0.25h), edgeStrenght);
+            half w = (half) mix(gaussianBlur5x5[y + 2][x + 2], tunnel(x, y, angle, 0.25), edgeStrenght);
             half lumaWeight = w * (1 - step(1, edgeWeight * lumaDiff));
             half chromaWeight = 1 - step((half) chromaBoost, length((half3) (lumaDiff, chromaDiff)));
 
@@ -982,11 +989,15 @@ kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t
 
     // Sub-Pixel Sampling Location
     const float2 s = 0.5 * input_norm;
-    float4 outputPixel = read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x, -s.y));
-    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x, -s.y));
-    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x,  s.y));
-    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x,  s.y));
-    write_imagef(outputImage, output_pos, 0.25 * outputPixel);
+    float3 outputPixel = read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x, -s.y)).xyz;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x, -s.y)).xyz;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x,  s.y)).xyz;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x,  s.y)).xyz;
+    write_imagef(outputImage, output_pos, (float4) (0.25 * outputPixel, 0));
+}
+
+float3 applyTransform(float3 value, Matrix3x3 *transform) {
+    return (float3) (dot(transform->m[0], value), dot(transform->m[1], value), dot(transform->m[2], value));
 }
 
 kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only image2d_t inputImage1,
@@ -996,11 +1007,11 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
     const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
     const float2 input_pos = (convert_float2(output_pos) + 0.5) * inputNorm;
 
-    float4 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos);
-    float4 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos);
-    float4 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos);
+    float3 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos).xyz;
+    float3 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos).xyz;
+    float3 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos).xyz;
 
-    float4 denoisedPixel = inputPixelDenoised0 - (inputPixel1 - inputPixelDenoised1);
+    float3 denoisedPixel = inputPixelDenoised0 - (inputPixel1 - inputPixelDenoised1);
 
     if (sharpening > 1.0) {
         float dx = (read_imagef(inputImageDenoised1, linear_sampler, input_pos + (float2)(1, 0) * inputNorm).x -
@@ -1015,9 +1026,10 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
         sharpening = 1 + (sharpening - 1) * detail;
     }
 
+    // Sharpen all components
     denoisedPixel = mix(inputPixelDenoised1, denoisedPixel, sharpening);
 
-    write_imagef(outputImage, output_pos, denoisedPixel);
+    write_imagef(outputImage, output_pos, (float4) (denoisedPixel, 0));
 }
 
 kernel void bayerToRawRGBA(read_only image2d_t rawImage, write_only image2d_t rgbaImage, int bayerPattern) {
@@ -1225,6 +1237,53 @@ kernel void BoxFilterGFImage(read_only image2d_t inputImage, write_only image2d_
     write_imagef(outputImage, imageCoordinates, (float4)(meanAB, 0, 0));
 }
 
+#if EXPERIMENTAL_SOFT_SKIN
+/* Skin tone detection, adapted from:
+    N.Rahman, K.Wei and J.See
+    RGB-H-CbCr Skin Colour Model for Human Face Detection(2006)
+    Faculty of Information Technology, Multimedia University.
+ */
+
+bool skinToneRGB(float3 rgb) {
+    float R = 3 * 255 * sqrt(rgb[0]);
+    float G = 3 * 255 * sqrt(rgb[1]);
+    float B = 3 * 255 * sqrt(rgb[2]);
+
+    float Xmax = max(R, max(G, B));
+    float Xmin = min(R, min(G, B));
+
+//    float C = Xmax - Xmin;
+//    float H = 0;
+//    if (C > 0) {
+//        if (Xmax == R) {
+//            H = 60 * (G - B) / C;
+//        } else if (Xmax == G) {
+//            H = 60 * (2 + (B - R) / C);
+//        } else if (Xmax == B) {
+//            H = 60 * (4 + (R - G) / C);
+//        }
+//    }
+
+    return (((R > 95) && (G > 40) && (B > 20) &&
+             (Xmax - Xmin > 15) &&
+             (abs(R - G) > 15) && (R > G) && (R > B)) ||
+            ((R > 220) && (G > 210) && (B > 170) &&
+             (abs(R - G) <= 15) && (R > B) && (G > B))) /* &&
+            (H < 25 || H > 230) */;
+}
+
+bool skinToneYCbCr(float3 ycbcr) {
+    float Cb = 255 * (ycbcr[1] + 0.5);
+    float Cr = 255 * (ycbcr[2] + 0.5);
+
+    return (Cr <= 1.5862 * Cb + 20) &&
+           (Cr >= 0.3448 * Cb + 76.2069) &&
+           (Cr >= -4.5652 * Cb + 234.5652) &&
+           (Cr <= -1.15 * Cb + 301.75) &&
+           (Cr <= -2.2857 * Cb + 432.85);
+}
+#endif
+
 kernel void localToneMappingMaskImageII(read_only image2d_t inputImage,
                                         read_only image2d_t abImage,
                                         read_only image2d_t ltmMaskImageIn,
@@ -1243,28 +1302,26 @@ kernel void localToneMappingMaskImageII(read_only image2d_t inputImage,
     const float3 input = read_imagef(inputImage, imageCoordinates).xyz;
     const float luma = input.x;
 
+    // YCbCr -> RGB version of the input pixel, for highlights compression, ensure definite positiveness
+    float3 rgb = max ((float3) (dot(ycbcr_srgb.m[0], input),
+                                dot(ycbcr_srgb.m[1], input),
+                                dot(ycbcr_srgb.m[2], input)), 0);
+
+#if EXPERIMENTAL_SOFT_SKIN
+    const float skin = detail < 0 && skinToneRGB(rgb) && skinToneYCbCr(input) ? 1 - 0.8 * (-detail - 1) * smoothstep(0, 1, input.z / abs(input.y)) : 1;
+    detail = abs(detail);
+#endif
+
     // The filtered image is an estimate of the illuminance
     const float illuminance = abSample.x * luma + abSample.y;
     const float reflectance = luma / illuminance;
 
-    // Avoid sharpening bright edges and regions of high variance and/or saturation
-    const float var = abs(eps * abSample.x / (1 - abSample.x));
-    const float highContrast = smoothstep(0, 2, sqrt(abs(var)) / luma);
-    const float colorfulness = smoothstep(0.0625, 0.25, length(input.yz));
-    const float brightEdge = smoothstep(0.25, 1, 8 * illuminance) * smoothstep(0.25, 2.0, (luma - illuminance) / illuminance);
-    float adjusted_detail = mix(detail, 1, min(highContrast + colorfulness + brightEdge, 1));
-
-    // YCbCr -> RGB version of the input pixel, for highlights compression
-    float3 rgb = (float3) (dot(ycbcr_srgb.m[0], input),
-                           dot(ycbcr_srgb.m[1], input),
-                           dot(ycbcr_srgb.m[2], input));
-
     const float highlightsClipping = min(length(sqrt(2 * rgb)), 1.0);
     const float adjusted_shadows = mix(shadows, 1, highlightsClipping);
-    const float gamma = mix(adjusted_shadows, highlights, smoothstep(0.25, 0.5, illuminance));
+    const float gamma = mix(adjusted_shadows, highlights, smoothstep(0.125, 0.75, illuminance));
 
     // LTM curve computed in Log space
-    float ltmMultiplier = pow(illuminance, gamma) * pow(reflectance, adjusted_detail) / luma;
+    float ltmMultiplier = pow(illuminance, gamma) * pow(reflectance, detail) / luma;
 
     if (useInputMask) {
         ltmMultiplier *= read_imagef(ltmMaskImageIn, imageCoordinates).x;
@@ -1653,13 +1710,10 @@ kernel void convertTosRGB(read_only image2d_t linearImage, read_only image2d_t l
     // Contrast
     pixel_value = parameters.contrast != 1.0 ? contrastBoost(pixel_value, parameters.contrast) : pixel_value;
 
-    // Conversion to target color space
-    float3 rgb = (float3) (dot(transform.m[0], pixel_value),
-                           dot(transform.m[1], pixel_value),
-                           dot(transform.m[2], pixel_value));
-
-    // Tone Curve
-    rgb = clamp(toneCurve(rgb, parameters.toneCurveSlope), 0.0, 1.0);
+    // Conversion to target color space, ensure definite positiveness
+    float3 rgb = max((float3) (dot(transform.m[0], pixel_value),
+                               dot(transform.m[1], pixel_value),
+                               dot(transform.m[2], pixel_value)), 0);
 
     // Local Tone Mapping
     if (parameters.localToneMapping) {
@@ -1668,18 +1722,21 @@ kernel void convertTosRGB(read_only image2d_t linearImage, read_only image2d_t l
         if (ltmBoost > 1) {
             // Modified Naik and Murthy’s method for preserving hue/saturation under luminance changes
             const float luma = 0.2126 * rgb.x + 0.7152 * rgb.y + 0.0722 * rgb.z; // BT.709-2 (sRGB) luma primaries
-            rgb = mix(rgb * ltmBoost, luma < 1 ? 1 - (1.0 - rgb) * (1 - ltmBoost * luma) / (1 - luma) : rgb, min(pow(luma, 0.5), 1));
+            rgb = mix(rgb * ltmBoost, luma < 1 ? 1 - (1.0 - rgb) * (1 - ltmBoost * luma) / (1 - luma) : rgb, min(2 * pow(luma, 0.5), 1));
         } else if (ltmBoost < 1) {
             rgb *= ltmBoost;
         }
     }
+
+    // Tone Curve
+    rgb = toneCurve(max(rgb, 0), parameters.toneCurveSlope);
 
     // Black Level Adjustment
     if (parameters.blacks > 0) {
         rgb = (rgb - parameters.blacks) / (1 - parameters.blacks);
     }
 
-    write_imagef(rgbImage, imageCoordinates, (float4) (rgb, 0.0));
+    write_imagef(rgbImage, imageCoordinates, (float4) (clamp(rgb, 0.0, 1.0), 0.0));
 }
 
 kernel void resample(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {

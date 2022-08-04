@@ -106,7 +106,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
                                                                                 imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                                                                                 const gls::rectangle* gmb_position, bool rotate_180,
                                                                                 gls::Matrix<levels, 6>* nlfParameters) {
-    const bool calibrate_nlf = true; // gmb_position != nullptr;
+    const bool calibrate_nlf = false; // gmb_position != nullptr;
 
     std::array<std::array<float, 6>, levels> calibrated_nlf;
 
@@ -408,7 +408,7 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
     nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
 
-    assert(err2[0] >= newErr2[0] && err2[1] >= newErr2[1] && err2[2] >= newErr2[2] && err2[3] >= newErr2[3]);
+    // assert(err2[0] >= newErr2[0] && err2[1] >= newErr2[1] && err2[2] >= newErr2[2] && err2[3] >= newErr2[3]);
 
     std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", err2: " << newErr2
               << " on " << std::setprecision(1) << std::fixed << 100 * N / (rawImage.width * rawImage.height) << "% pixels"<< std::endl;
