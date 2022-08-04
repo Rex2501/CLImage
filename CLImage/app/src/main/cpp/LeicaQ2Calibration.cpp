@@ -297,12 +297,10 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConve
             .localToneMapping = true
         },
         .ltmParameters = {
-            .guidedFilterEps = 0.01,
+            .eps = 0.01,
             .shadows = 0.7,
             .highlights = 1.3,
-            .lfDetail = 1.1,
-            .mfDetail = 1.2,
-            .hfDetail = 1.5,
+            .detail = { 1, 1.05, 1.3 }
         }
     };
 

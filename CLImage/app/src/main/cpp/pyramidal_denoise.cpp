@@ -106,7 +106,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
                                                                                 imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                                                                                 const gls::rectangle* gmb_position, bool rotate_180,
                                                                                 gls::Matrix<levels, 6>* nlfParameters) {
-    const bool calibrate_nlf = false; // gmb_position != nullptr;
+    const bool calibrate_nlf = true; // gmb_position != nullptr;
 
     std::array<std::array<float, 6>, levels> calibrated_nlf;
 

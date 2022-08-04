@@ -88,21 +88,15 @@ void denoiseImageGuided(gls::OpenCLContext* glsContext,
                         const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
                         gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
+// Arrays order is LF, MF, HF
 void localToneMappingMask(gls::OpenCLContext* glsContext,
                           const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                          const gls::cl_image_2d<gls::rgba_pixel_float>& guideImage,
-                          const LTMParameters& ltmParameters, const gls::Matrix<3, 3>& transform,
+                          const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage,
+                          const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abImage,
+                          const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage,
+                          const LTMParameters& ltmParameters,
+                          const gls::Matrix<3, 3>& ycbcr_srgb,
                           gls::cl_image_2d<gls::luma_pixel_float>* outputImage);
-
-void localToneMappingMaskII(gls::OpenCLContext* glsContext,
-                            const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                            const gls::cl_image_2d<gls::rgba_pixel_float>& guideImage,
-                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abImage,
-                            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& abMeanImage,
-                            int chainLtmMask, float eps,
-                            float shadows, float highlights, float detail,
-                            const gls::Matrix<3, 3>& ycbcr_srgb,
-                            gls::cl_image_2d<gls::luma_pixel_float>* outputImage);
 
 void denoiseLumaImage(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

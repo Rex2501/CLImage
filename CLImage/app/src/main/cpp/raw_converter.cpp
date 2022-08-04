@@ -104,8 +104,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern, demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
-//    const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
-//    demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
+    const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+    demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
     const bool high_noise_image = false; // (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
 
@@ -165,31 +165,19 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
-        const auto& ltmParameters = demosaicParameters->ltmParameters;
+        const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage = {
+            pyramidalDenoise->denoisedImagePyramid[4].get(),
+            pyramidalDenoise->denoisedImagePyramid[2].get(),
+            pyramidalDenoise->denoisedImagePyramid[0].get()
+        };
+        const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abImage = {
+            ltmLFAbGfImage.get(), ltmMFAbGfImage.get(), ltmHFAbGfImage.get()
+        };
+        const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage = {
+            ltmMeanLFAbGfImage.get(), ltmMeanMFAbGfImage.get(), ltmMeanHFAbGfImage.get()
+        };
 
-        // Low Frequency LTM and sharpening
-        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[4]),
-                               *ltmLFAbGfImage, *ltmMeanLFAbGfImage,
-                               /*chainLtmMask=*/ false,
-                               ltmParameters.guidedFilterEps, ltmParameters.shadows, ltmParameters.highlights, ltmParameters.lfDetail,
-                               normalized_ycbcr_to_cam,
-                               ltmMaskImage.get());
-
-        // Mid Frequency sharpening
-        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[2]),
-                               *ltmMFAbGfImage, *ltmMeanMFAbGfImage,
-                               /*chainLtmMask=*/ true,
-                               ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.mfDetail,
-                               normalized_ycbcr_to_cam,
-                               ltmMaskImage.get());
-
-        // High Frequency sharpening
-        localToneMappingMaskII(_glsContext, *clDenoisedImage, *(pyramidalDenoise->denoisedImagePyramid[0]),
-                               *ltmHFAbGfImage, *ltmMeanHFAbGfImage,
-                               /*chainLtmMask=*/ true,
-                               ltmParameters.guidedFilterEps, /*shadows=*/ 1, /*highlights=*/ 1, ltmParameters.hfDetail,
-                               normalized_ycbcr_to_cam,
-                               ltmMaskImage.get());
+        localToneMappingMask(_glsContext, *clDenoisedImage, guideImage, abImage, abMeanImage, demosaicParameters->ltmParameters, ycbcr_srgb, ltmMaskImage.get());
     }
 
     // Convert result back to camera RGB

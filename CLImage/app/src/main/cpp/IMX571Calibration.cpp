@@ -296,12 +296,10 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
             .localToneMapping = true
         },
         .ltmParameters = {
-            .guidedFilterEps = 0.01,
+            .eps = 0.01,
             .shadows = 0.75,
             .highlights = 1.3,
-            .lfDetail = 1.0,
-            .mfDetail = 1.1,
-            .hfDetail = 1.5,
+            .detail = { 1, 1.1, 1.5 }
         }
     };
 

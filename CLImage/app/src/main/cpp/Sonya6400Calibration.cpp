@@ -184,21 +184,21 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
 
     std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
+    float lerp = std::lerp(0.125f / 2, 2.0f, nlf_alpha);
     float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
 
     // Default Good
     float lmult[5] = { 0.25, 2, 0.25, 0.125, 0.125 / 2 };
     float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
 
-    float chromaBoost = 8;
+    float chromaBoost = 4;
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1.5, // std::lerp(1.5f, 0.8f, nlf_alpha)
+            .sharpening = 1.2, // Sharpen HF in LTM
         },
         {
             .luma = lmult[1] * lerp,
@@ -306,8 +306,14 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawCon
         .rgbConversionParameters = {
             .contrast = 1.05,
             .saturation = 1.0,
-            .toneCurveSlope = 3.7,
-            .localToneMapping = false
+            .toneCurveSlope = 3.5,
+            .localToneMapping = true
+        },
+        .ltmParameters = {
+            .eps = 0.01,
+            .shadows = 0.7,
+            .highlights = 1.5,
+            .detail = { 1, 1.05, 1.3 }
         }
     };
 

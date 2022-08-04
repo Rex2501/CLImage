@@ -250,12 +250,10 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII2DNG(RawConverter* rawC
             .localToneMapping = true
         },
         .ltmParameters = {
-            .guidedFilterEps = 0.01,
+            .eps = 0.01,
             .shadows = 0.6,
             .highlights = 1.2,
-            .lfDetail = 1,
-            .mfDetail = 1.05,
-            .hfDetail = 1.5,
+            .detail = { 1, 1.05, 1.5 }
         }
     };
 

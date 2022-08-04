@@ -246,8 +246,8 @@ int main(int argc, const char* argv[]) {
             LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
             // transcodeAdobeDNG(input_path);
-            const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-            // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
+            // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
+            const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
             // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
             // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
