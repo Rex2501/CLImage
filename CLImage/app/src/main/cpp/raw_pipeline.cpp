@@ -208,7 +208,7 @@ void processKodakSet(gls::OpenCLContext* glsContext, const std::filesystem::path
 
         const auto demosaiced = demosaicPlainFile(&rawConverter, dng_file);
 
-        auto demosaiced_png_file = (input_path.parent_path() / input_path.stem()).string() + "_demosaiced_5_corr.PNG";
+        auto demosaiced_png_file = (input_path.parent_path() / input_path.stem()).string() + "_demosaiced_6_corr.PNG";
         demosaiced->write_png_file(demosaiced_png_file);
     }
 }
@@ -246,13 +246,13 @@ int main(int argc, const char* argv[]) {
             LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 
             // transcodeAdobeDNG(input_path);
-            // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
+            const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
             // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
             // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
-            const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-            rgb_image->write_jpeg_file((input_path.parent_path() / "Processed" / input_path.stem()).string() + "_new_LTM_3L.jpg", 95);
+            // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
+            rgb_image->write_jpeg_file((input_path.parent_path() / /* "Processed" / */ input_path.stem()).string() + "_new_b.jpg", 95);
         }
 
 //        LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;

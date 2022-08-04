@@ -184,7 +184,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> LeicaQ2DenoiseParameters(int 
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1, // Sharpen HF in LTM
+            .sharpening = 1.2, // Sharpen HF in LTM
         },
         {
             .luma = lmult[1] * lerp,
@@ -298,11 +298,11 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConve
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,
-            .shadows = 0.8,
-            .highlights = 1.05,
+            .shadows = 0.7,
+            .highlights = 1.3,
             .lfDetail = 1.1,
             .mfDetail = 1.2,
-            .hfDetail = 1.3,
+            .hfDetail = 1.5,
         }
     };
 

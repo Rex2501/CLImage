@@ -162,7 +162,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> IMX571DenoiseParameters(int i
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
-            .sharpening = 1.1
+            .sharpening = 1, // 1.1
         },
         {
             .luma = lmult[2] * lerp,
@@ -297,11 +297,11 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,
-            .shadows = 0.85,
-            .highlights = 1.05,
-            .lfDetail = 1.1,
+            .shadows = 0.75,
+            .highlights = 1.3,
+            .lfDetail = 1.0,
             .mfDetail = 1.1,
-            .hfDetail = 1.3,
+            .hfDetail = 1.5,
         }
     };
 

@@ -141,11 +141,11 @@ std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIsoiPhone(const std::ar
 }
 
 std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(6400) - log2(100)), 0.0, 1.0);
+    const float nlf_alpha = std::clamp((log2(iso) - log2(25)) / (log2(6400) - log2(25)), 0.0, 1.0);
 
     std::cout << "iPhone11DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = 0.75 * std::lerp(0.2f, 2.0f, nlf_alpha);
+    float lerp = 0.5 * std::lerp(0.2f, 2.0f, nlf_alpha);
     float lerp_c = std::lerp(1.0f, 2.0f, nlf_alpha);
 
     // Default Good
@@ -198,11 +198,11 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaiciPhone11(RawConverter* rawConvert
         },
         .ltmParameters = {
             .guidedFilterEps = 0.01,
-            .shadows = 0.8,
-            .highlights = 1.05,
-            .lfDetail = 1.1,
-            .mfDetail = 1.2,
-            .hfDetail = 1.3,
+            .shadows = 0.6,
+            .highlights = 1.5,
+            .lfDetail = 1,
+            .mfDetail = 1,
+            .hfDetail = 1,
         }
     };
 
