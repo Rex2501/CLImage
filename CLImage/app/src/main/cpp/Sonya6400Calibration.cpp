@@ -184,12 +184,19 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
 
     std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = std::lerp(0.125f / 2, 2.0f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+    float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
+    float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
     // Default Good
-    float lmult[5] = { 0.25, 2, 0.25, 0.125, 0.125 / 2 };
-    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
+    float highNoise = smoothstep(0.0, 0.6, nlf_alpha);
+    float lmult[5] = {
+        std::lerp(0.25f, 0.5f, highNoise),
+        std::lerp(1.0f, 4.0f, highNoise),
+        std::lerp(0.5f, 0.5f, highNoise),
+        std::lerp(0.25f, 0.5f, highNoise),
+        std::lerp(0.125f, 0.25f, highNoise),
+    };
+    float cmult[5] = { 1, 1, 1, 1, 1 };
 
     float chromaBoost = 4;
 
@@ -197,31 +204,36 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1.2, // Sharpen HF in LTM
+            .chromaBoost = 2 * chromaBoost,
+            .gradientBoost = 8,
+            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
+            .gradientBoost = 1,
             .sharpening = 1.1
         },
         {
             .luma = lmult[2] * lerp,
             .chroma = cmult[2] * lerp_c,
             .chromaBoost = chromaBoost,
+            .gradientBoost = 1,
             .sharpening = 1
         },
         {
             .luma = lmult[3] * lerp,
             .chroma = cmult[3] * lerp_c,
             .chromaBoost = chromaBoost,
+            .gradientBoost = 1,
             .sharpening = 1
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
             .chromaBoost = chromaBoost,
+            .gradientBoost = 1,
             .sharpening = 1
         }
     }};
@@ -307,13 +319,13 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawCon
             .contrast = 1.05,
             .saturation = 1.0,
             .toneCurveSlope = 3.5,
-            .localToneMapping = true
+            .localToneMapping = false
         },
         .ltmParameters = {
             .eps = 0.01,
-            .shadows = 0.7,
-            .highlights = 1.5,
-            .detail = { 1, 1.05, 1.3 }
+            .shadows = 1, // 0.7,
+            .highlights = 1, // 1.5,
+            .detail = { 1, 1.1, 1.3 }
         }
     };
 

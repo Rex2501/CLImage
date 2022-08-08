@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
- #pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
 //#define half float
 //#define half2 float2
@@ -72,6 +72,20 @@ constant const int2 bayerOffsets[4][4] = {
 
 #define abs(a) ({__typeof__(a) _a = (a); \
     _a > 0 ? _a : -_a;})
+
+#ifdef __APPLE__
+inline half3 __attribute__((overloadable)) myconvert_half3(float3 val) {
+    return (half3) (val.x, val.y, val.z);
+}
+
+inline half4 __attribute__((overloadable)) myconvert_half4(float4 val) {
+    return (half4) (val.x, val.y, val.z, val.w);
+}
+#else
+#define myconvert_half3(val)    convert_half3(val)
+
+#define myconvert_half4(val)    convert_half4(val)
+#endif
 
 // Fast 5x5 box filtering with linear subsampling
 typedef struct ConvolutionParameters {
@@ -565,7 +579,7 @@ kernel void despeckleImage(read_only image2d_t inputImage, float3 var_a, float3 
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedLuma, inputPixel.yz, 0.0));
 }
 
-half4 despeckle_3x3x4(image2d_t inputImage, int2 imageCoordinates) {
+half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordinates) {
     half4 sample = 0, firstMax = 0, secMax = 0;
     half4 firstMin = (half) 100, secMin = (half) 100;
 
@@ -587,13 +601,17 @@ half4 despeckle_3x3x4(image2d_t inputImage, int2 imageCoordinates) {
         }
     }
 
-    return clamp(sample, secMin, secMax);
+    half4 sigma = sqrt(myconvert_half4(rawVariance) * sample);
+    half4 minVal = mix(secMin, firstMin, smoothstep(sigma, 4 * sigma, secMin - firstMin));
+    half4 maxVal = mix(secMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - secMax));
+
+    return clamp(sample, minVal, maxVal);
 }
 
-kernel void despeckleRawRGBAImage(read_only image2d_t inputImage, write_only image2d_t denoisedImage) {
+kernel void despeckleRawRGBAImage(read_only image2d_t inputImage, float4 rawVariance, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    half4 despeckledPixel = despeckle_3x3x4(inputImage, imageCoordinates);
+    half4 despeckledPixel = despeckle_3x3x4(inputImage, rawVariance, imageCoordinates);
 
     write_imageh(denoisedImage, imageCoordinates, despeckledPixel);
 }
@@ -778,62 +796,6 @@ kernel void transformImage(read_only image2d_t inputImage, write_only image2d_t 
     write_imagef(outputImage, imageCoordinates, (float4) (outputPixel, 0.0));
 }
 
-inline half3 __attribute__((overloadable)) myconvert_half3(float3 val) {
-    return (half3) (val.x, val.y, val.z);
-}
-
-kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, write_only image2d_t denoisedImage) {
-    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-
-    const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
-
-    half3 sigma = sqrt(myconvert_half3(var_a) + myconvert_half3(var_b) * inputYCC.x);
-
-    half3 filtered_pixel = 0;
-    half3 kernel_norm = 0;
-    for (int y = -2; y <= 2; y++) {
-        for (int x = -2; x <= 2; x++) {
-            half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
-
-            half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
-            half lumaWeight = gaussianBlur5x5[y + 2][x + 2] * (1 - step(1, abs(inputDiff.x)));
-            half2 chromaWeight = 1 - step((half) (chromaBoost * M_SQRT2), length(inputDiff.yz) * abs(inputDiff.x));
-
-            half3 sampleWeight = (half3) (lumaWeight, chromaWeight);
-
-            filtered_pixel += sampleWeight * inputSampleYCC;
-            kernel_norm += sampleWeight;
-        }
-    }
-    half3 denoisedPixel = filtered_pixel / kernel_norm;
-
-    // Desarurate chroma where denoising is weak
-    half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1 - 0.05 * (1 - chromaDenoise * chromaDenoise);
-
-    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
-}
-
-void __attribute__((overloadable)) loadPatch(read_only image2d_t inputImage, const int2 imageCoordinates, half patch[9]) {
-    for (int y = -1, i = 0; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++, i++) {
-            patch[i] = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).x;
-        }
-    }
-}
-
-half __attribute__((overloadable)) diffPatch(read_only image2d_t inputImage, const int2 imageCoordinates, half patch[9]) {
-    half diffSum = 0;
-    for (int y = -1, i = 0; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++, i++) {
-            half sample = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).x;
-            half diff = sample - patch[i];
-            diffSum += diff * diff;
-        }
-    }
-    return sqrt(diffSum / 9);
-}
-
 float2 signedGaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
     // Average Sobel Filter on a 3x3 raw patch
     float2 sum = 0;
@@ -850,22 +812,17 @@ half tunnel(half x, half y, half angle, half sigma) {
     return exp(-(a * a) / sigma);
 }
 
-kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, int straightenEdges, write_only image2d_t denoisedImage) {
+kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
 
-    half3 sigma = sqrt(myconvert_half3(var_a) + myconvert_half3(var_b) * inputYCC.x);
-
-    half patch[9];
-    loadPatch(inputImage, imageCoordinates, patch);
+    half3 sigma = myconvert_half3(sqrt(var_a + var_b * inputYCC.x));
 
     float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
-    half edgeStrenght = smoothstep(1, 4,  magnitude / sigma.x);
-    half highEdgeStrenght = smoothstep(4, 16,  magnitude / sigma.x);
-    half edgeWeight = straightenEdges ? mix(1, (half) 0.5, highEdgeStrenght) : 1; // TODO: Make this a tuning parameter
+    half edge = smoothstep(4, 16, magnitude / sigma.x);
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -873,14 +830,11 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
         for (int x = -2; x <= 2; x++) {
             half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
-            half lumaDiff = diffPatch(inputImage, imageCoordinates + (int2)(x, y), patch) / sigma.x;
-            half2 chromaDiff = (inputSampleYCC.yz - inputYCC.yz) / sigma.yz;
+            half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
 
-            // half w = (half) tunnel(x, y, angle, mix(4, 0.25h, edgeStrenght));
-            half w = (half) mix(gaussianBlur5x5[y + 2][x + 2], tunnel(x, y, angle, 0.25), edgeStrenght);
-            half lumaWeight = w * (1 - step(1, edgeWeight * lumaDiff));
-            half chromaWeight = 1 - step((half) chromaBoost, length((half3) (lumaDiff, chromaDiff)));
-
+            half w = (half) mix(1, tunnel(x, y, angle, 0.25h), edge);
+            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * edge, abs(inputDiff.x)));
+            half chromaWeight = 1 - step((half) chromaBoost, length(inputDiff));
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
 
             filtered_pixel += sampleWeight * inputSampleYCC;
@@ -889,11 +843,7 @@ kernel void denoiseImagePatch(read_only image2d_t inputImage, float3 var_a, floa
     }
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
-    // Desarurate chroma where denoising is weak
-    // half chromaDenoise = length(kernel_norm.yz) / (25 * M_SQRT2_F);
-    half desaturate = 1; // - 0.05 * (1 - chromaDenoise * chromaDenoise);
-
-    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, desaturate * denoisedPixel.yz, 0.0));
+    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, denoisedPixel.yz, 0.0));
 }
 
 float3 denoiseLumaChromaGuided(float3 var_a, float3 var_b, image2d_t inputImage, int2 imageCoordinates) {
@@ -1208,6 +1158,7 @@ kernel void localToneMappingMaskImage(read_only image2d_t inputImage,
                                       write_only image2d_t ltmMaskImage,
                                       LTMParameters ltmParameters,
                                       Matrix3x3 ycbcr_srgb,
+                                      float2 nlf,
                                       sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const float2 inputNorm = 1.0 / convert_float2(get_image_dim(ltmMaskImage));
@@ -1226,8 +1177,20 @@ kernel void localToneMappingMaskImage(read_only image2d_t inputImage,
     }
 
     if (ltmParameters.detail[2] != 1) {
+        float detail = ltmParameters.detail[2];
+
+        if (detail > 1.0) {
+            float dx = (read_imagef(inputImage, imageCoordinates + (int2)(1, 0)).x -
+                        read_imagef(inputImage, imageCoordinates - (int2)(1, 0)).x) / 2;
+            float dy = (read_imagef(inputImage, imageCoordinates + (int2)(0, 1)).x -
+                        read_imagef(inputImage, imageCoordinates - (int2)(0, 1)).x) / 2;
+
+            float noiseThreshold = sqrt(nlf.x + nlf.y * input.x);
+            detail = 1 + (detail - 1) * smoothstep(0.5 * noiseThreshold, 2 * noiseThreshold, length((float2) (dx, dy)));
+        }
+
         float2 hfAbSample = read_imagef(hfAbImage, linear_sampler, pos + 0.5f * inputNorm).xy;
-        ltmMultiplier *= computeLtmMultiplier(input, hfAbSample, ltmParameters.eps, 1, 1, ltmParameters.detail[2], &ycbcr_srgb);
+        ltmMultiplier *= computeLtmMultiplier(input, hfAbSample, ltmParameters.eps, 1, 1, detail, &ycbcr_srgb);
     }
 
     write_imagef(ltmMaskImage, imageCoordinates, (float4) (ltmMultiplier, 0, 0, 0));

@@ -252,17 +252,17 @@ int main(int argc, const char* argv[]) {
             // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
             // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-            rgb_image->write_jpeg_file((input_path.parent_path() / /* "Processed" / */ input_path.stem()).string() + "_new_b.jpg", 95);
+            rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new_i.jpg", 95);
         }
 
 //        LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
 //
 //        // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
 //        // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
-//        // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
+//        const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
 //        // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
-//        const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-//        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
+//        // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
+//        rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
 
 //        {
 //            gls::tiff_metadata dng_metadata, exif_metadata;

@@ -126,6 +126,7 @@ add_executable(
         iPhone11Calibration.cpp
         LeicaQ2Calibration.cpp
         RicohGRIIICalibration.cpp
+        Sonya6400Calibration.cpp
         filesystem/operations.cpp
         filesystem/directory_iterator.cpp
 )

@@ -182,7 +182,7 @@ void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName
 template <typename T>
 void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
                      const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                     float sharpening, gls::Vector<2> nlf, gls::cl_image_2d<T>* outputImage) {
+                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
@@ -207,7 +207,7 @@ void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& 
 template
 void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised0,
                      const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
-                     float sharpening, gls::Vector<2> nlf, gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void transformImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
@@ -294,7 +294,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                  float chromaBoost, bool straightenEdges,
+                  float chromaBoost, float gradientBoost,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
@@ -304,16 +304,16 @@ void denoiseImage(gls::OpenCLContext* glsContext,
                                     cl_float3,    // var_a
                                     cl_float3,    // var_b
                                     float,        // chromaBoost
-                                    int,          // straightenEdges
+                                    float,        // gradientBoost
                                     cl::Image2D   // outputImage
-                                    >(program, "denoiseImagePatch");
+                                    >(program, "denoiseImage");
 
     cl_float3 cl_var_a = { var_a[0], var_a[1], var_a[2] };
     cl_float3 cl_var_b = { var_b[0], var_b[1], var_b[2] };
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), cl_var_a, cl_var_b, chromaBoost, (int) straightenEdges, outputImage->getImage2D());
+           inputImage.getImage2D(), cl_var_a, cl_var_b, chromaBoost, gradientBoost, outputImage->getImage2D());
 }
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,
@@ -346,6 +346,7 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
                           const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage,
                           const LTMParameters& ltmParameters,
                           const gls::Matrix<3, 3>& ycbcr_srgb,
+                          const gls::Vector<2>& nlf,
                           gls::cl_image_2d<gls::luma_pixel_float>* outputImage) {
     for (int i = 0; i < 3; i++) {
         assert(guideImage[i]->width == abImage[i]->width && guideImage[i]->height == abImage[i]->height);
@@ -384,6 +385,7 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
                                        cl::Image2D,     // ltmMaskImage
                                        LTMParameters,   // ltmParameters
                                        Matrix3x3,       // ycbcr_srgb
+                                       cl_float2,       // nlf
                                        cl::Sampler      // linear_sampler
                                        >(program, "localToneMappingMaskImage");
 
@@ -401,7 +403,7 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
 
         ltmKernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
                   inputImage.getImage2D(), abMeanImage[0]->getImage2D(), abMeanImage[1]->getImage2D(), abMeanImage[2]->getImage2D(), outputImage->getImage2D(),
-                  ltmParameters, cl_ycbcr_srgb, linear_sampler);
+                  ltmParameters, cl_ycbcr_srgb, { nlf[0], nlf[1] }, linear_sampler);
     } catch (cl::Error& e) {
         std::cout << "Error: " << e.what() << " - " << gls::clStatusToString(e.err()) << std::endl;
         throw std::logic_error("This is bad");
@@ -468,18 +470,20 @@ void denoiseRawRGBAImage(gls::OpenCLContext* glsContext,
 
 void despeckleRawRGBAImage(gls::OpenCLContext* glsContext,
                            const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                           const gls::Vector<4> rawVariance,
                            gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                    cl_float4,    // rawVariance
                                     cl::Image2D   // outputImage
                                     >(program, "despeckleRawRGBAImage");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), outputImage->getImage2D());
+           inputImage.getImage2D(), { rawVariance[0], rawVariance[1], rawVariance[2], rawVariance[3] }, outputImage->getImage2D());
 }
 
 void gaussianBlurImage(gls::OpenCLContext* glsContext,

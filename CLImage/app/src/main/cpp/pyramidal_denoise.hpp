@@ -29,7 +29,7 @@ struct ImageDenoiser {
     virtual void denoise(gls::OpenCLContext* glsContext,
                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                          const gls::Vector<3>& sigma_a, const gls::Vector<3>& sigma_b,
-                         float chromaBoost, int pyramidLevel,
+                         float chromaBoost, float gradientBoost, int pyramidLevel,
                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) = 0;
 };
 

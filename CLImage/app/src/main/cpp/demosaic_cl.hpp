@@ -59,7 +59,7 @@ void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName
 template <typename T>
 void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
                      const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                     float sharpening, gls::Vector<2> nlf, gls::cl_image_2d<T>* outputImage);
+                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage);
 
 void transformImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
@@ -80,7 +80,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                  float chromaBoost, bool straightenEdges,
+                  float chromaBoost, float gradientBoost,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,
@@ -96,6 +96,7 @@ void localToneMappingMask(gls::OpenCLContext* glsContext,
                           const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage,
                           const LTMParameters& ltmParameters,
                           const gls::Matrix<3, 3>& ycbcr_srgb,
+                          const gls::Vector<2>& nlf,
                           gls::cl_image_2d<gls::luma_pixel_float>* outputImage);
 
 void denoiseLumaImage(gls::OpenCLContext* glsContext,
@@ -120,6 +121,7 @@ void denoiseRawRGBAImage(gls::OpenCLContext* glsContext,
 
 void despeckleRawRGBAImage(gls::OpenCLContext* glsContext,
                            const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                           const gls::Vector<4> rawVariance,
                            gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void gaussianBlurImage(gls::OpenCLContext* glsContext,

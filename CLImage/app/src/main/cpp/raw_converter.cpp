@@ -19,7 +19,7 @@
 
 static const char* TAG = "RAW Converter";
 
-// #define PRINT_EXECUTION_TIME true
+#define PRINT_EXECUTION_TIME true
 
 void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, int height) {
     auto clContext = glsContext->clContext();
@@ -107,7 +107,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
     demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
-    const bool high_noise_image = false; // (rawNLF[5] + rawNLF[7]) / 2 > 1e-03;
+    const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf[1] + demosaicParameters->noiseModel.rawNlf[3]) / 2 > 1e-03;
 
     if (high_noise_image) {
         allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
@@ -118,7 +118,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
         bayerToRawRGBA(_glsContext, *clScaledRawImage, rgbaRawImage.get(), demosaicParameters->bayerPattern);
 
-        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, denoisedRgbaRawImage.get());
+        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, demosaicParameters->noiseModel.rawNlf, denoisedRgbaRawImage.get());
 
         // denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf, rgbaRawImage.get());
 
@@ -177,7 +177,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
             ltmMeanLFAbGfImage.get(), ltmMeanMFAbGfImage.get(), ltmMeanHFAbGfImage.get()
         };
 
-        localToneMappingMask(_glsContext, *clDenoisedImage, guideImage, abImage, abMeanImage, demosaicParameters->ltmParameters, ycbcr_srgb, ltmMaskImage.get());
+        gls::Vector<2> nlf = { noiseModel->pyramidNlf[0][0], noiseModel->pyramidNlf[0][3] };
+        localToneMappingMask(_glsContext, *clDenoisedImage, guideImage, abImage, abMeanImage, demosaicParameters->ltmParameters, ycbcr_srgb, nlf, ltmMaskImage.get());
     }
 
     // Convert result back to camera RGB

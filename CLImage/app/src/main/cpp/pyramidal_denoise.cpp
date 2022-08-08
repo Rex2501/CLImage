@@ -32,9 +32,9 @@ struct BilateralDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, int pyramidLevel,
+                 float chromaBoost, float gradientBoost, int pyramidLevel,
               gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, pyramidLevel == 0 ? true : false, outputImage);
+        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, gradientBoost, outputImage);
     }
 };
 
@@ -44,7 +44,7 @@ struct GuidedFastDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, int pyramidLevel,
+                 float chromaBoost, float gradientBoost, int pyramidLevel,
                  gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
         ::denoiseImageGuided(glsContext, inputImage, var_a, var_b, outputImage);
     }
@@ -60,7 +60,7 @@ struct GuidedPreciseDenoiser : ImageDenoiser {
     void denoise(gls::OpenCLContext* glsContext,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, int pyramidLevel,
+                 float chromaBoost, float gradientBoost, int pyramidLevel,
                  gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
         guidedFilter.filter(glsContext, inputImage, /*filterSize=*/ 5, var_b, outputImage);
     }
@@ -126,7 +126,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
     const auto& np = calibrated_nlf[levels-1];
     denoiser[levels-1]->denoise(glsContext, *(imagePyramid[levels-2]),
                                 { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
-                                (*denoiseParameters)[levels-1].chromaBoost, /*pyramidLevel=*/ levels-1,
+                                (*denoiseParameters)[levels-1].chromaBoost, (*denoiseParameters)[levels-1].gradientBoost, /*pyramidLevel=*/ levels-1,
                                 denoisedImagePyramid[levels-1].get());
 
     for (int i = levels - 2; i >= 0; i--) {
@@ -136,13 +136,13 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
         const auto& np = calibrated_nlf[i];
         denoiser[i]->denoise(glsContext, *denoiseInput,
                              { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
-                             (*denoiseParameters)[i].chromaBoost, /*pyramidLevel=*/ i,
+                             (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, /*pyramidLevel=*/ i,
                              denoisedImagePyramid[i].get());
 
         std::cout << "Reassembling layer " << i << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
         // Subtract noise from previous layer
         reassembleImage(glsContext, *(denoisedImagePyramid[i]), *(imagePyramid[i]), *(denoisedImagePyramid[i+1]),
-                        (*denoiseParameters)[i].sharpening, {np[0], np[3]}, denoisedImagePyramid[i].get());
+                        (*denoiseParameters)[i].sharpening, { np[0], np[3] }, denoisedImagePyramid[i].get());
     }
 
     return denoisedImagePyramid[0].get();
@@ -163,6 +163,10 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
     applyKernel(glsContext, "noiseStatistics", image, &noiseStats);
     const auto noiseStatsCpu = noiseStats.mapImage();
 
+    // Only consider pixels with variance lower than the expected noise value
+    double varianceMax = 0.001;
+
+#if EXPERIMENTAL_MAX_NOISE_VARIANCE
     const double maxVarianceHistVal = 0.01;
     int minBinSize = 0.0015 * image.width  * image.height;
     const int variance_bins = 128;
@@ -171,9 +175,6 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
         int hist_index = rint((variance_bins - 1) * fmin(log(1 + ns[1]) / log(1 + maxVarianceHistVal), 1));
         log_variance[hist_index]++;
     });
-
-    // Only consider pixels with variance lower than the expected noise value
-    double varianceMax = 0.001;
 
     std::cout << "log_variance: ";
     int max_bin = 0;
@@ -192,6 +193,7 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
         }
     }
     std::cout << std::endl;
+#endif
 
     // Limit to pixels the more linear intensity zone of the sensor
     const double maxValue = 0.5;
@@ -302,6 +304,10 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     gls::DVector<4> s_xx = {{ 0, 0, 0, 0 }};
     gls::DVector<4> s_xy = {{ 0, 0, 0, 0 }};
 
+    // Only consider pixels with variance lower than the expected noise value
+    double varianceMax = 0.001;
+
+#if EXPERIMENTAL_MAX_NOISE_VARIANCE
     const int variance_bins = 128;
     uint32_t log_variance[variance_bins] = { 0 };
     const double maxVarianceHistVal = 0.01;
@@ -315,9 +321,6 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     });
 
     // greenVarImageCpu.write_png_file("/Users/fabio/greenVar.png");
-
-    // Only consider pixels with variance lower than the expected noise value
-    double varianceMax = 0.001;
 
     std::cout << "log_variance: ";
     int max_bin = 0;
@@ -337,6 +340,7 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
         }
     }
     std::cout << std::endl;
+#endif
 
     double N = 0;
     meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
