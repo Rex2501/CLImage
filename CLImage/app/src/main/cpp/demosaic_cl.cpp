@@ -48,7 +48,7 @@ void scaleRawData(gls::OpenCLContext* glsContext,
 void interpolateGreen(gls::OpenCLContext* glsContext,
                      const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                      gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
-                     BayerPattern bayerPattern, float lumaVariance) {
+                     BayerPattern bayerPattern, gls::Vector<2> greenVariance) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
@@ -56,19 +56,19 @@ void interpolateGreen(gls::OpenCLContext* glsContext,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
                                     cl::Image2D,  // greenImage
                                     int,          // bayerPattern
-                                    float         // lumaVariance
+                                    cl_float2     // lumaVariance
                                     >(program, "interpolateGreen");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(greenImage->width, greenImage->height),
-           rawImage.getImage2D(), greenImage->getImage2D(), bayerPattern, lumaVariance);
+           rawImage.getImage2D(), greenImage->getImage2D(), bayerPattern, { greenVariance[0], greenVariance[1] });
 }
 
 void interpolateRedBlue(gls::OpenCLContext* glsContext,
                        const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                        const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
                        gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
-                       BayerPattern bayerPattern, float chromaVariance, bool rotate_180) {
+                       BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance, bool rotate_180) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
@@ -77,13 +77,15 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
                                     cl::Image2D,  // greenImage
                                     cl::Image2D,  // rgbImage
                                     int,          // bayerPattern
-                                    float,        // chromaVariance
+                                    cl_float2,    // redVariance
+                                    cl_float2,    // blueVariance
                                     int           // rotate_180
                                     >(program, "interpolateRedBlue");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
-           rawImage.getImage2D(), greenImage.getImage2D(), rgbImage->getImage2D(), bayerPattern, chromaVariance, rotate_180);
+           rawImage.getImage2D(), greenImage.getImage2D(), rgbImage->getImage2D(), bayerPattern,
+           { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] }, rotate_180);
 }
 
 void fasteDebayer(gls::OpenCLContext* glsContext,

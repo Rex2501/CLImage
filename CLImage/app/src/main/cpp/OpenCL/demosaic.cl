@@ -119,6 +119,12 @@ constant half gaussianBlur3x3[3][3] = {
     { 1/16.0, 1/8.0, 1/16.0 }
 };
 
+constant float2 sobelKernel2D[3][3] = {
+    { { 1,  1 }, { 0,  2 }, { -1,  1 } },
+    { { 2,  0 }, { 0,  0 }, { -2,  0 } },
+    { { 1, -1 }, { 0, -2 }, { -1, -1 } },
+};
+
 
 // Work on one Quad (2x2) at a time
 kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scaledRawImage,
@@ -132,28 +138,6 @@ kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scal
     }
 }
 
-float2 imageGradient(read_only image2d_t inputImage, int x, int y) {
-    // Average gradient on a 5x5 patch
-    float2 grad = 0;
-    for (int j = -2; j <= 2; j++) {
-        for (int i = -2; i <= 2; i++) {
-            float v_left  = read_imagef(inputImage, (int2)(x+i - 1, j+y)).x;
-            float v_right = read_imagef(inputImage, (int2)(x+i + 1, j+y)).x;
-            float v_up    = read_imagef(inputImage, (int2)(x+i, j+y - 1)).x;
-            float v_down  = read_imagef(inputImage, (int2)(x+i, j+y + 1)).x;
-
-            grad += (float2) (fabs(v_left - v_right), fabs(v_up - v_down));
-        }
-    }
-    return grad / 25;
-}
-
-constant float2 sobelKernel2D[3][3] = {
-    { { 1,  1 }, { 0,  2 }, { -1,  1 } },
-    { { 2,  0 }, { 0,  0 }, { -2,  0 } },
-    { { 1, -1 }, { 0, -2 }, { -1, -1 } },
-};
-
 float2 sobel(read_only image2d_t inputImage, int x, int y) {
     float2 value = 0;
     for (int j = -1; j <= 1; j++) {
@@ -166,7 +150,7 @@ float2 sobel(read_only image2d_t inputImage, int x, int y) {
     return value / sqrt(4.5);
 }
 
-float2 gaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
+float2 gaussFilteredAbsSobel3x3(read_only image2d_t inputImage, int x, int y) {
     // Average Sobel Filter on a 3x3 raw patch
     float2 sum = 0;
     for (int j = -1; j <= 1; j++) {
@@ -206,7 +190,7 @@ float2 channelCorrelation(read_only image2d_t rawImage, int x, int y) {
     return var_g > 0 && var_c > 0 ? abs(cov_cg / sqrt(var_g * var_c)) : 1;
 }
 
-kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern, float rawVariance) {
+kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern, float2 greenVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const int x = imageCoordinates.x;
@@ -236,8 +220,8 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         // Estimate gradient intensity and direction
         float g_ave = (g_left + g_right + g_up + g_down) / 4;
-        float rawStdDev = sqrt(rawVariance * g_ave);
-        float2 gradient = gaussFilteredSobel3x3(rawImage, x, y);
+        float rawStdDev = sqrt(greenVariance.x + greenVariance.y * g_ave);
+        float2 gradient = gaussFilteredAbsSobel3x3(rawImage, x, y);
 
         // Hamilton-Adams second order Laplacian Interpolation
         float2 g_lf = { (g_left + g_right) / 2, (g_up + g_down) / 2 };
@@ -250,7 +234,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float whiteness = clamp(min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave)), 0.0, 1.0);
 
         // Minimum gradient threshold wrt the noise model
-        float low_gradient_threshold = 0.5 + 0.5 * smoothstep(2 * rawStdDev, 8 * rawStdDev, length(gradient));
+        float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(gradient));
 
         // Edges that are in strong highlights tend to grossly overestimate the gradient
         float highlights_edge = 1 - smoothstep(0.25, 1.0, max(c_xy, max(max(c_left, c_right), max(c_up, c_down))));
@@ -258,18 +242,14 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
-        // Bias result towards vertical and horizontal lines
-        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * low_gradient_threshold, 0.45 * low_gradient_threshold, direction))
-                                    : mix(direction, 1, smoothstep((1 - 0.45) * low_gradient_threshold, (1 - 0.3) * low_gradient_threshold, direction));
-
         // If the gradient is below threshold just go flat
-        direction = mix(0.5, direction, low_gradient_threshold);
+        direction = mix(0.5, direction, gradient_threshold);
 
         // Reduce hf_gain when direction is diagonal
         float diagonality = 1 - 0.5 * sin(M_PI_F * direction);
 
         // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
-        float hf_gain = diagonality * highlights_edge * low_gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
+        float hf_gain = diagonality * highlights_edge * gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
         float2 g_est = g_lf + hf_gain * g_hf;
 
         // Green pixel estimation
@@ -282,8 +262,8 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 }
 
 kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t greenImage,
-                               write_only image2d_t rgbImage, int bayerPattern, float rawVariance,
-                               int rotate_180) {
+                               write_only image2d_t rgbImage, int bayerPattern,
+                               float2 redVariance, float2 blueVariance, int rotate_180) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const int x = imageCoordinates.x;
@@ -311,18 +291,27 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float g_bottom_left   = read_imagef(greenImage, (int2)(x - 1, y + 1)).x;
             float g_bottom_right  = read_imagef(greenImage, (int2)(x + 1, y + 1)).x;
 
-            float c2_top_left     = g_top_left     - read_imagef(rawImage, (int2)(x - 1, y - 1)).x;
-            float c2_top_right    = g_top_right    - read_imagef(rawImage, (int2)(x + 1, y - 1)).x;
-            float c2_bottom_left  = g_bottom_left  - read_imagef(rawImage, (int2)(x - 1, y + 1)).x;
-            float c2_bottom_right = g_bottom_right - read_imagef(rawImage, (int2)(x + 1, y + 1)).x;
+            float c2_top_left     = read_imagef(rawImage, (int2)(x - 1, y - 1)).x;
+            float c2_top_right    = read_imagef(rawImage, (int2)(x + 1, y - 1)).x;
+            float c2_bottom_left  = read_imagef(rawImage, (int2)(x - 1, y + 1)).x;
+            float c2_bottom_right = read_imagef(rawImage, (int2)(x + 1, y + 1)).x;
+            float c2_ave = (c2_top_left + c2_top_right + c2_bottom_left + c2_bottom_right) / 4;
 
-            // Estimate the flatness of the image using the raw noise model
-            float rawStdDev = sqrt(rawVariance * green);
+            float gc_top_left     = g_top_left     - c2_top_left;
+            float gc_top_right    = g_top_right    - c2_top_right;
+            float gc_bottom_left  = g_bottom_left  - c2_bottom_left;
+            float gc_bottom_right = g_bottom_right - c2_bottom_right;
+
+            float2 variance = color == raw_red ? redVariance : blueVariance;
+
+            // Estimate the gradient direction taking into account the raw noise model
+            float rawStdDev = sqrt(variance.x + variance.y * c2_ave);
             float2 dv = (float2) (fabs(c2_top_left - c2_bottom_right), fabs(c2_top_right - c2_bottom_left));
-            float flatness = 1 - smoothstep(0.25 * rawStdDev, rawStdDev, length(dv));
-            float alpha = mix(2 * atan2pi(dv.y, dv.x), 0.5, flatness);
-            float c2 = green - mix((c2_top_right + c2_bottom_left) / 2,
-                                   (c2_top_left + c2_bottom_right) / 2, alpha);
+            float direction = 2 * atan2pi(dv.y, dv.x);
+            float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(dv));
+            float alpha = mix(0.5, direction, gradient_threshold);
+            float c2 = green - mix((gc_top_right + gc_bottom_left) / 2,
+                                   (gc_top_left + gc_bottom_right) / 2, alpha);
 
             if (color == raw_red) {
                 red = c1;

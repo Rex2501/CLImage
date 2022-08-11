@@ -33,13 +33,13 @@ void scaleRawData(gls::OpenCLContext* glsContext,
 void interpolateGreen(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                       gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
-                      BayerPattern bayerPattern, float lumaVariance);
+                      BayerPattern bayerPattern, gls::Vector<2> greenVariance);
 
 void interpolateRedBlue(gls::OpenCLContext* glsContext,
                         const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                         const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
                         gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
-                        BayerPattern bayerPattern, float chromaVariance, bool rotate_180);
+                        BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance, bool rotate_180);
 
 void fasteDebayer(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,

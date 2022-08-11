@@ -241,6 +241,45 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
     return { nlf_alpha, denoiseParameters };
 }
 
+std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParametersGuided(int iso) {
+    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
+
+    std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+
+    float lerp = std::lerp(0.25f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.25f, 2.0f, nlf_alpha);
+
+    float lmult[5] = { 0.5, 1, 0.5, 0.25, 0.125 };
+    float cmult[5] = { 0.5, 1, 0.5, 0.25, 0.125 };
+
+    std::array<DenoiseParameters, 5> denoiseParameters = {{
+        {
+            .luma = lmult[0] * lerp,
+            .chroma = cmult[0] * lerp_c,
+            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
+        },
+        {
+            .luma = lmult[1] * lerp,
+            .chroma = cmult[1] * lerp_c,
+            .sharpening = 1.1
+        },
+        {
+            .luma = lmult[2] * lerp,
+            .chroma = cmult[2] * lerp_c,
+        },
+        {
+            .luma = lmult[3] * lerp,
+            .chroma = cmult[3] * lerp_c,
+        },
+        {
+            .luma = lmult[4] * lerp,
+            .chroma = cmult[4] * lerp_c,
+        }
+    }};
+
+    return { nlf_alpha, denoiseParameters };
+}
+
 gls::image<gls::rgb_pixel>::unique_ptr calibrateSonya6400(RawConverter* rawConverter,
                                                            const std::filesystem::path& input_path,
                                                            DemosaicParameters* demosaicParameters,

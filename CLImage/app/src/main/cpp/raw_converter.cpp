@@ -105,6 +105,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                  demosaicParameters->black_level / 0xffff);
 
     const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+
     demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
     const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf[1] + demosaicParameters->noiseModel.rawNlf[3]) / 2 > 1e-03;
@@ -127,11 +128,15 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
+    gls::Vector<2> greenVariance = { (rawNLF[1] + rawNLF[3]) / 2, (rawNLF[5] + rawNLF[7]) / 2 };
+    gls::Vector<2> redVariance = { rawNLF[0], rawNLF[4] };
+    gls::Vector<2> blueVariance = { rawNLF[3], rawNLF[6] };
+
     // TODO: why divide by 4?
-    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, (noiseModel->rawNlf[1] + noiseModel->rawNlf[3]) / 4);
+    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, greenVariance);
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
-                       (noiseModel->rawNlf[1] + noiseModel->rawNlf[3]) / 2, rotate_180);
+                       redVariance, blueVariance, rotate_180);
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());
