@@ -30,7 +30,9 @@ template<size_t M, size_t N, typename baseT = float> struct Matrix;
 // ---- Vector Type ----
 template <size_t N, typename baseT = float>
 struct Vector : public std::array<baseT, N> {
-    Vector() { }
+    Vector() {
+        this->fill(0);  // Zero the array content
+    }
 
     Vector(const baseT(&il)[N]) {
         std::copy(il, il + N, this->begin());

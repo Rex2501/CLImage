@@ -29,28 +29,69 @@
 #include "gls_image_png.h"
 #include "gls_image_tiff.h"
 
-#define USE_FP16_FLOATS 1
+#define USE_FP16_FLOATS true
 
 namespace gls {
 
-struct point {
-    int x;
-    int y;
+template <typename T>
+struct basic_point {
+    T x;
+    T y;
 
-    point(int _x, int _y) : x(_x), y(_y) {}
+    basic_point(T _x, T _y) : x(_x), y(_y) {}
+    basic_point() { }
+
+    bool operator == (const basic_point& other) const {
+        return x == other.x && y == other.y;
+    }
 };
 
-struct size {
-    int width;
-    int height;
+template <typename T>
+bool operator == (const basic_point<T>& a, const basic_point<T>& b) {
+    return a.x == b.x && a.y == b.y;
+}
 
-    size(int _width, int _height) : width(_width), height(_height) {}
+template <typename T>
+struct basic_size {
+    T width;
+    T height;
+
+    basic_size(T _width, T _height) : width(_width), height(_height) {}
+    basic_size() { }
+
+    bool operator == (const basic_size& other) const {
+        return width == other.width && height == other.height;
+    }
 };
 
-struct rectangle : public point, size {
-    rectangle(point _origin, size _dimensions) : point(_origin), size(_dimensions) {}
-    rectangle(int _x, int _y, int _width, int _height) : point(_x, _y), size(_width, _height) {}
+template <typename T>
+bool operator == (const basic_size<T>& a, const basic_size<T>& b) {
+    return a.width == b.width && a.height == b.height;
+}
+
+template <typename T>
+struct basic_rectangle : public basic_point<T>, basic_size<T> {
+    basic_rectangle(basic_point<T> _origin, basic_size<T> _dimensions) : basic_point<T>(_origin), basic_size<T>(_dimensions) {}
+    basic_rectangle(T _x, T _y, T _width, T _height) : basic_point<T>(_x, _y), basic_size<T>(_width, _height) {}
+    basic_rectangle() { }
+
+    bool contains(const gls::basic_point<T> p) const {
+        return p.x >= basic_point<T>::x && p.y >= basic_point<T>::y && p.x < basic_point<T>::x + basic_size<T>::width && p.y < basic_point<T>::y + basic_size<T>::height;
+    }
+
+    bool operator == (const basic_rectangle& other) const {
+        return this->x == other.x && this->y == other.y && this->width == other.width && this->height == other.height;
+    }
 };
+
+template <typename T>
+bool operator == (const basic_rectangle<T>& a, const basic_rectangle<T>& b) {
+    return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
+}
+
+typedef basic_point<int> point;
+typedef basic_size<int> size;
+typedef basic_rectangle<int> rectangle;
 
 template <typename T>
 struct basic_luma_pixel {
@@ -217,6 +258,10 @@ class basic_image {
     const int width;
     const int height;
 
+    gls::size size() const {
+        return { width, height };
+    }
+
     static const constexpr int pixel_bit_depth = T::bit_depth;
     static const constexpr int pixel_channels = T::channels;
     static const constexpr int pixel_size = sizeof(T);
@@ -224,7 +269,7 @@ class basic_image {
     typedef std::unique_ptr<basic_image<T>> unique_ptr;
 
     basic_image(int _width, int _height) : width(_width), height(_height) {}
-    basic_image(size _dimensions) : width(_dimensions.width), height(_dimensions.height) {}
+    basic_image(gls::size _dimensions) : width(_dimensions.width), height(_dimensions.height) {}
 };
 
 template <typename T>
@@ -261,13 +306,13 @@ class image : public basic_image<T> {
         assert(_x + _width <= _base->width && _y + _height <= _base->height);
     }
 
-    image(image *_base, rectangle _crop) : image(_base, _crop.x, _crop.y, _crop.width, _crop.height) {}
+    image(image *_base, const rectangle& _crop) : image(_base, _crop.x, _crop.y, _crop.width, _crop.height) {}
 
     image(const image& _base, int _x, int _y, int _width, int _height) : image<T>(_width, _height, _base.stride, std::span(_base._data.data() + _y * _base.stride + _x, _base.stride * _height)) {
         assert(_x + _width <= _base.width && _y + _height <= _base.height);
     }
 
-    image(const image& _base, rectangle _crop) : image(_base, _crop.x, _crop.y, _crop.width, _crop.height) {}
+    image(const image& _base, const rectangle& _crop) : image(_base, _crop.x, _crop.y, _crop.width, _crop.height) {}
 
     // row access
     T* operator[](int row) { return &_data[stride * row]; }

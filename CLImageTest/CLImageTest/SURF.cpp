@@ -1,0 +1,1107 @@
+//
+//  SURF.cpp
+//  RawPipeline
+//
+//  Created by Fabio Riccardi on 8/12/22.
+//
+
+#include "SURF.hpp"
+
+#include <float.h>
+
+#include <cmath>
+#include <iostream>
+
+#include <unordered_map>
+
+#include "gls_cl_image.hpp"
+
+template<>
+struct std::hash<gls::size> {
+    std::size_t operator()(gls::size const& r) const noexcept {
+        return r.width ^ r.height;
+    }
+};
+
+namespace surf {
+
+struct SurfHF {
+    gls::point p0 = {0, 0};
+    gls::point p1 = {0, 0};
+    gls::point p2 = {0, 0};
+    gls::point p3 = {0, 0};
+    float w = 0;
+};
+
+struct Point2F {
+    float x;
+    float y;
+};
+
+struct mKeyPoint {
+    Point2F pt;
+    float size;
+    float angle;
+    float response;
+    int octave;
+    int class_id;
+};
+
+struct mKeypointGreater {
+    inline bool operator()(const mKeyPoint& kp1, const mKeyPoint& kp2) const {
+        if (kp1.response > kp2.response) return true;
+        if (kp1.response < kp2.response) return false;
+        if (kp1.size > kp2.size) return true;
+        if (kp1.size < kp2.size) return false;
+        if (kp1.octave > kp2.octave) return true;
+        if (kp1.octave < kp2.octave) return false;
+        if (kp1.pt.y < kp2.pt.y) return false;
+        if (kp1.pt.y > kp2.pt.y) return true;
+        return kp1.pt.x < kp2.pt.x;
+    }
+};
+
+class mDMatch {
+   public:
+    mDMatch() : queryIdx(-1), trainIdx(-1), imgIdx(-1), distance(FLT_MAX) {}
+    mDMatch(int _queryIdx, int _trainIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(-1), distance(_distance) {}
+    mDMatch(int _queryIdx, int _trainIdx, int _imgIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(_imgIdx), distance(_distance) {}
+
+    int queryIdx;  // query descriptor index
+    int trainIdx;  // train descriptor index
+    int imgIdx;    // train image index
+
+    float distance;
+
+    // less is better
+    bool operator<(const mDMatch& m) const { return distance < m.distance; }
+};
+
+struct refineMatch {
+    inline bool operator()(const mDMatch& mp1, const mDMatch& mp2) const {
+        if (mp1.distance < mp2.distance) return true;
+        if (mp1.distance > mp2.distance) return false;
+        // if (mp1.queryIdx < mp2.queryIdx) return true;
+        // if (mp1.queryIdx > mp2.queryIdx) return false;
+        /*if (mp1.octave > mp2.octave) return true;
+        if (mp1.octave < mp2.octave) return false;
+        if (mp1.pt.y < mp2.pt.y) return false;
+        if (mp1.pt.y > mp2.pt.y) return true;*/
+        return mp1.queryIdx < mp2.queryIdx;
+    }
+};
+
+template <size_t N>
+void mresizeHaarPattern(const int src[][5], std::array<SurfHF, N>& dst, int oldSize, int newSize, int widthStep) {
+    float ratio = (float) newSize / oldSize;
+    for (int k = 0; k < N; k++) {
+        int dx1 = int(ratio * src[k][0] + 0.5);
+        int dy1 = int(ratio * src[k][1] + 0.5);
+        int dx2 = int(ratio * src[k][2] + 0.5);
+        int dy2 = int(ratio * src[k][3] + 0.5);
+        dst[k].p0 = { dx1, dy1 };
+        dst[k].p1 = { dx1, dy2 };
+        dst[k].p2 = { dx2, dy1 };
+        dst[k].p3 = { dx2, dy2 };
+        dst[k].w = src[k][4] / ((float)(dx2 - dx1) * (dy2 - dy1));
+    }
+}
+
+struct cl_context {
+    cl::Buffer DxBuffer;
+    cl::Buffer DyBuffer;
+    cl::Buffer DxyBuffer;
+} *cl_context_ptr = nullptr;
+
+struct clSurfHF {
+    cl_int2 p0, p1, p2, p3;
+    cl_float w;
+
+    clSurfHF() {}
+
+    clSurfHF(const SurfHF& other) :
+        p0({other.p0.x, other.p0.y}),
+        p1({other.p1.x, other.p1.y}),
+        p2({other.p2.x, other.p2.y}),
+        p3({other.p3.x, other.p3.y}),
+        w(other.w) {}
+};
+
+void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
+                       const gls::cl_image_2d<gls::luma_pixel_fp32>& sumImage,
+                       gls::cl_image_2d<gls::luma_pixel_fp32>* detImage,
+                       gls::cl_image_2d<gls::luma_pixel_fp32>* traceImage,
+                       int sampleStep,
+                       std::array<SurfHF, 3>& Dx,
+                       std::array<SurfHF, 3>& Dy,
+                       std::array<SurfHF, 4>& Dxy) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("SURF");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
+                                    cl::Image2D,  // detImage
+                                    cl::Image2D,  // traceImage
+                                    int,          // sampleStep
+                                    cl::Buffer,   // Dx
+                                    cl::Buffer,   // Dy
+                                    cl::Buffer    // Dxy
+                                    >(program, "calcDetAndTrace");
+
+    std::array<clSurfHF, 3> clDx;
+    for (int i = 0; i < Dx.size(); i++) {
+        clDx[i] = Dx[i];
+    }
+    std::array<clSurfHF, 3> clDy;
+    for (int i = 0; i < Dy.size(); i++) {
+        clDy[i] = Dy[i];
+    }
+    std::array<clSurfHF, 4> clDxy;
+    for (int i = 0; i < Dxy.size(); i++) {
+        clDxy[i] = Dxy[i];
+    }
+
+    if (!cl_context_ptr) {
+        cl_context_ptr = new cl_context {
+            .DxBuffer = cl::Buffer(clDx.begin(), clDx.end(), /* readOnly */ true),
+            .DyBuffer = cl::Buffer(clDy.begin(), clDy.end(), /* readOnly */ true),
+            .DxyBuffer = cl::Buffer(clDxy.begin(), clDxy.end(), /* readOnly */ true)
+        };
+    } else {
+        cl::copy(clDx.begin(), clDx.end(), cl_context_ptr->DxBuffer);
+        cl::copy(clDy.begin(), clDy.end(), cl_context_ptr->DyBuffer);
+        cl::copy(clDxy.begin(), clDxy.end(), cl_context_ptr->DxyBuffer);
+    }
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(detImage->width, detImage->height),
+           sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
+           sampleStep, cl_context_ptr->DxBuffer, cl_context_ptr->DyBuffer, cl_context_ptr->DxyBuffer);
+}
+
+template <size_t N>
+float mcalcHaarPattern(const gls::image<float>& img, const gls::point& p, const std::array<SurfHF, N>& f) {
+    float d = 0;
+    for (int k = 0; k < N; k++) {
+        const auto& fk = f[k];
+
+        d += (img[p.y + fk.p0.y][p.x + fk.p0.x] +
+              img[p.y + fk.p3.y][p.x + fk.p3.x] -
+              img[p.y + fk.p1.y][p.x + fk.p1.x] -
+              img[p.y + fk.p2.y][p.x + fk.p2.x]) * fk.w;
+    }
+    return d;
+}
+
+void calcDetAndTrace(const gls::image<float>& sum,
+                     gls::image<float>* det,
+                     gls::image<float>* trace,
+                     int x, int y, int sampleStep,
+                     const std::array<SurfHF, 3>& Dx,
+                     const std::array<SurfHF, 3>& Dy,
+                     const std::array<SurfHF, 4>& Dxy) {
+    const gls::point p = { x * sampleStep, y * sampleStep };
+
+    float dx = mcalcHaarPattern(sum, p, Dx);
+    float dy = mcalcHaarPattern(sum, p, Dy);
+    float dxy = mcalcHaarPattern(sum, p, Dxy);
+
+    (*det)[y][x] = dx * dy - 0.81f * dxy * dxy;
+    (*trace)[y][x] = dx + dy;
+}
+
+extern gls::OpenCLContext* glsContext;
+
+std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> sumMemory;
+std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
+std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
+
+void mcalcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep, gls::image<float>* det_full, gls::image<float>* trace_full) {
+    std::cout << "mcalcLayerDetAndTrace - size: " << size << ", sampleStep: " << sampleStep << std::endl;
+
+    const int NX = 3, NY = 3, NXY = 4;
+
+    const int dx_s[NX][5] = {
+        {0, 2, 3, 7, 1},
+        {3, 2, 6, 7, -2},
+        {6, 2, 9, 7, 1}
+    };
+    const int dy_s[NY][5] = {
+        {2, 0, 7, 3, 1},
+        {2, 3, 7, 6, -2},
+        {2, 6, 7, 9, 1}
+    };
+    const int dxy_s[NXY][5] = {
+        {1, 1, 4, 4, 1},
+        {5, 1, 8, 4, -1},
+        {1, 5, 4, 8, -1},
+        {5, 5, 8, 8, 1}
+    };
+    std::array<SurfHF, NX> Dx;
+    std::array<SurfHF, NY> Dy;
+    std::array<SurfHF, NXY> Dxy;
+
+    if (size > (sum.height - 1) || size > (sum.width - 1))
+        return;
+
+    mresizeHaarPattern(dx_s, Dx, 9, size, sum.width);
+    mresizeHaarPattern(dy_s, Dy, 9, size, sum.width);
+    mresizeHaarPattern(dxy_s, Dxy, 9, size, sum.width);
+
+    int height = 1 + (sum.height - 1 - size) / sampleStep;
+    int width = 1 + (sum.width - 1 - size) / sampleStep;
+    int margin = (size / 2) / sampleStep;
+
+    gls::rectangle output_crop = {margin, margin, width, height};
+    gls::image<float> det = gls::image<float>(*det_full, output_crop);
+    gls::image<float> trace = gls::image<float>(*trace_full, output_crop);
+
+#if true
+    auto sumImage = sumMemory[sum.size()];
+    if (!sumImage) {
+        sumImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), *((gls::image<gls::luma_pixel_fp32>*) &sum));
+        sumMemory[sum.size()] = sumImage;
+    } else {
+        // TODO: this is unnecessary, add proper per input image context
+        sumImage->copyPixelsFrom(*((gls::image<gls::luma_pixel_fp32>*) &sum));
+    }
+
+    auto detImage = detMemory[{width, height}];
+    if (!detImage) {
+        detImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), width, height);
+        detMemory[{width, height}] = detImage;
+    }
+
+    auto traceImage = traceMemory[{width, height}];
+    if (!traceImage) {
+        traceImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), width, height);
+        traceMemory[{width, height}] = traceImage;
+    }
+
+    clCalcDetAndTrace(glsContext, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
+
+    detImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &det);
+    traceImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &trace);
+#else
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            calcDetAndTrace(sum, &det, &trace, x, y, sampleStep, Dx, Dy, Dxy);
+        }
+    }
+#endif
+}
+
+void mSURFBuildInvoker(const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
+                       std::vector<gls::image<float>*>& dets, std::vector<gls::image<float>*> traces) {
+    int N = (int) sizes.size();
+    for (int i = 0; i < N; i++) {
+        mcalcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i], traces[i]);
+    }
+}
+
+void integral(const gls::image<float>& img, gls::image<float>* sum) {
+    for (int j = 0; j < sum->height; j++) {
+        for (int i = 0; i < sum->width; i++) {
+            (*sum)[j][i] = 0;
+        }
+    }
+
+    for (int j = 1; j < sum->height; j++) {
+        for (int i = 1; i < sum->width; i++) {
+            (*sum)[j][i] = img[j - 1][i - 1] + (*sum)[j][i - 1] + (*sum)[j - 1][i] - (*sum)[j - 1][i - 1];
+        }
+    }
+}
+
+static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, mKeyPoint& kpt);
+
+void mfindMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+                        const std::vector<int>& sizes, std::vector<mKeyPoint>* keypoints, int octave,
+                        int layer, float hessianThreshold, int sampleStep) {
+    int size = sizes[layer];
+    int layer_height = (sum.height - 1) / sampleStep;
+    int layer_width = (sum.width - 1) / sampleStep;
+    int margin = (sizes[layer + 1] / 2) / sampleStep + 1;
+
+    const gls::image<float>& det1 = *dets[layer - 1];
+    const gls::image<float>& det2 = *dets[layer];
+    const gls::image<float>& det3 = *dets[layer + 1];
+
+    for (int i = margin; i < layer_height - margin; i++) {
+        for (int j = margin; j < layer_width - margin; j++) {
+            const float val0 = (*dets[layer])[i][j];
+
+            if (val0 > hessianThreshold) {
+                int sum_i = sampleStep * (i - (size / 2) / sampleStep);
+                int sum_j = sampleStep * (j - (size / 2) / sampleStep);
+
+                float N9[3][9] = {{det1[i-1][j-1], det1[i-1][j], det1[i-1][j+1], det1[i][j-1],
+                                   det1[i][j], det1[i][j+1], det1[i+1][j-1], det1[i+1][j], det1[i+1][j+1]},
+                                  {det2[i-1][j-1], det2[i-1][j], det2[i-1][j+1], det2[i][j-1],
+                                   det2[i][j], det2[i][j+1], det2[i+1][j-1], det2[i+1][j], det2[i+1][j+1]},
+                                  {det3[i-1][j-1], det3[i-1][j], det3[i-1][j+1], det3[i][j-1],
+                                   det3[i][j], det3[i][j+1], det3[i+1][j-1], det3[i+1][j], det3[i+1][j+1]}};
+
+                if (val0 > N9[0][0] && val0 > N9[0][1] && val0 > N9[0][2] && val0 > N9[0][3] &&
+                    val0 > N9[0][4] && val0 > N9[0][5] && val0 > N9[0][6] && val0 > N9[0][7] &&
+                    val0 > N9[0][8] && val0 > N9[1][0] && val0 > N9[1][1] && val0 > N9[1][2] &&
+                    val0 > N9[1][3] && val0 > N9[1][5] && val0 > N9[1][6] && val0 > N9[1][7] &&
+                    val0 > N9[1][8] && val0 > N9[2][0] && val0 > N9[2][1] && val0 > N9[2][2] &&
+                    val0 > N9[2][3] && val0 > N9[2][4] && val0 > N9[2][5] && val0 > N9[2][6] &&
+                    val0 > N9[2][7] && val0 > N9[2][8]) {
+                    float center_i = sum_i + (size - 1) * 0.5f;
+                    float center_j = sum_j + (size - 1) * 0.5f;
+                    mKeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[i][j] > 0 };
+
+                    int ds = size - sizes[layer - 1];
+                    int interp_ok = interpolateKeypoint(N9, sampleStep, sampleStep, ds, kpt);
+
+                    if (interp_ok) {
+                        keypoints->push_back(kpt);
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <size_t N, size_t M, typename baseT>
+void swap_rows(gls::Matrix<N, M, baseT>& m, size_t i, size_t j) {
+    for (size_t column = 0; column < M; column++)
+        std::swap(m[i][column], m[j][column]);
+}
+
+// Convert matrix to reduced row echelon form
+template <size_t N, size_t M, typename baseT>
+void rref(gls::Matrix<N, M, baseT>& m) {
+    for (size_t row = 0, lead = 0; row < N && lead < M; ++row, ++lead) {
+        size_t i = row;
+        while (m[i][lead] == 0) {
+            if (++i == N) {
+                i = row;
+                if (++lead == M)
+                    return;
+            }
+        }
+        swap_rows(m, i, row);
+        if (m[row][lead] != 0) {
+            baseT f = m[row][lead];
+            for (size_t column = 0; column < M; ++column)
+                m[row][column] /= f;
+        }
+        for (size_t j = 0; j < N; ++j) {
+            if (j == row)
+                continue;
+            baseT f = m[j][lead];
+            for (size_t column = 0; column < M; ++column)
+                m[j][column] -= f * m[row][column];
+        }
+    }
+}
+
+template <size_t N, typename baseT>
+gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
+    gls::Matrix<N, 2 * N, baseT> tmp;
+    for (size_t row = 0; row < N; ++row) {
+        for (size_t column = 0; column < N; ++column)
+            tmp[row][column] = m[row][column];
+        tmp[row][row + N] = 1;
+    }
+    rref(tmp);
+    gls::Matrix<N, N, baseT> inv;
+    for (size_t row = 0; row < N; ++row) {
+        for (size_t column = 0; column < N; ++column)
+            inv[row][column] = tmp[row][column + N];
+    }
+    return inv;
+}
+
+static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, mKeyPoint& kpt) {
+    gls::Vector<3> B = {
+        -(N9[1][5] - N9[1][3]) / 2, // Negative 1st deriv with respect to x
+        -(N9[1][7] - N9[1][1]) / 2, // Negative 1st deriv with respect to y
+        -(N9[2][4] - N9[0][4]) / 2  // Negative 1st deriv with respect to s
+    };
+    gls::Matrix<3, 3> A = {
+        { N9[1][3] - 2 * N9[1][4] + N9[1][5],                   // 2nd deriv x, x
+          (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
+          (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4 },    // 2nd deriv x, s
+        { (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
+          N9[1][1] - 2 * N9[1][4] + N9[1][7],                   // 2nd deriv y, y
+          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4 },    // 2nd deriv y, s
+        { (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4,      // 2nd deriv x, s
+          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4,      // 2nd deriv y, s
+          N9[0][4] - 2 * N9[1][4] + N9[2][4] }                  // 2nd deriv s, s
+    };
+    gls::Vector<3> x = B * gls::inverse(A);
+    // gls::Vector<3> x = surf::inverse(A) * B;
+
+    bool ok = (x[0] != 0 || x[1] != 0 || x[2] != 0) && std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 &&
+              std::abs(x[2]) <= 1;
+    if (ok) {
+        kpt.pt.x += x[0] * dx;
+        kpt.pt.y += x[1] * dy;
+        kpt.size = (float)(int)(kpt.size + x[2] * ds + 0.5);
+    }
+    return ok;
+}
+
+void mSURFFindInvoker(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+                      const std::vector<int>& sizes, const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
+                      std::vector<mKeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
+    int M = (int) middleIndices.size();
+    for (int i = 0; i < M; i++) {
+        int layer = middleIndices[i];
+        int octave = i / nOctaveLayers;
+        mfindMaximaInLayer(sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
+                           sampleSteps[layer]);
+    }
+}
+
+void mFastHessianDetector(const gls::image<float>& sum, std::vector<mKeyPoint>* keypoints, int nOctaves,
+                          int nOctaveLayers, float hessianThreshold) {
+    int SAMPLE_SETEPO = 1;
+    int nTotalLayers = (nOctaveLayers + 2) * nOctaves;
+    int nMiddleLayers = nOctaveLayers * nOctaves;
+
+    int SURF_HAAR_SIZE0 = 9;
+    int SURF_HAAR_SIXE_INC = 6;
+
+    std::vector<gls::image<float>*> dets(nTotalLayers);
+    std::vector<gls::image<float>*> traces(nTotalLayers);
+    std::vector<int> sizes(nTotalLayers);
+    std::vector<int> sampleSteps(nTotalLayers);
+    std::vector<int> middleIndices(nMiddleLayers);
+    keypoints->clear();
+
+    int index = 0, middleIndex = 0, step = SAMPLE_SETEPO;
+    for (int octave = 0; octave < nOctaves; octave++) {
+        for (int layer = 0; layer < nOctaveLayers + 2; layer++) {
+            dets[index] = new gls::image<float>((sum.width - 1) / step, (sum.height - 1) / step);
+            traces[index] = new gls::image<float>((sum.width - 1) / step, (sum.height - 1) / step);
+            sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIXE_INC * layer) << octave;
+            sampleSteps[index] = step;
+
+            if (0 < layer && layer <= nOctaveLayers) {
+                middleIndices[middleIndex++] = index;
+            }
+            index++;
+        }
+        step *= 2;
+    }
+
+    mSURFBuildInvoker(sum, sizes, sampleSteps, dets, traces);
+
+    mSURFFindInvoker(sum, dets, traces, sizes, sampleSteps, middleIndices, keypoints, nOctaveLayers,
+                     hessianThreshold);
+    sort(keypoints->begin(), keypoints->end(), mKeypointGreater());
+
+    for (int i = 0; i < nTotalLayers; i++) {
+        delete dets[i];
+        delete traces[i];
+    }
+}
+
+void SURF_detect(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<mKeyPoint>* keypoints, float hessianThreshold) {
+    int nOctaves = 4;
+    int nOctaveLayers = 2;
+    mFastHessianDetector(integralSum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
+}
+
+float* mgetGaussianKernel(int n, float sigma) {
+    const int SMALL_GAUSSIAN_SIZE = 7;
+    static const float small_gaussian_tab[][SMALL_GAUSSIAN_SIZE] = {
+        {1.f},
+        {0.25f, 0.5f, 0.25f},
+        {0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f},
+        {0.03125f, 0.109375f, 0.21875f, 0.28125f, 0.21875f, 0.109375f, 0.03125f}};
+
+    const float* fixed_kernel =
+        n % 2 == 1 && n <= SMALL_GAUSSIAN_SIZE && sigma <= 0 ? small_gaussian_tab[n >> 1] : 0;
+
+    float* kernel = (float*)calloc(n, sizeof(float));
+    // Mat kernel(n, 1, ktype);
+
+    // float* cf = (float*)kernel.data;
+    float* cd = kernel;
+
+    float sigmaX = sigma > 0 ? sigma : ((n - 1) * 0.5 - 1) * 0.3 + 0.8;
+    float scale2X = -0.5 / (sigmaX * sigmaX);
+    float sum = 0;
+
+    int i;
+    for (i = 0; i < n; i++) {
+        float x = i - (n - 1) * 0.5;
+        float t = fixed_kernel ? (float)fixed_kernel[i] : std::exp(scale2X * x * x);
+
+        cd[i] = t;
+        sum += cd[i];
+        //}
+    }
+
+    sum = 1. / sum;
+    for (i = 0; i < n; i++) {
+        cd[i] *= sum;
+    }
+
+    return kernel;
+};
+
+// void resizeVV(const std::vector<std::vector<float>>& src, std::vector<std::vector<float>>* dst, int interpolation) {
+void resizeVV(const gls::image<float>& src, gls::image<float>* dst, int interpolation) {
+    // Note that src and dst represent square matrices
+
+    float dsize = (float)src.height / dst->height;
+    if (dst->height && dst->width) {
+        for (int i = 0; i < dst->height; i++) {
+            for (int j = 0; j < dst->width; j++) {
+                int _i = (int)i * dsize;       // integer part
+                float _idec = i * dsize - _i;  // fractional part
+                int _j = (int)j * dsize;
+                float _jdec = j * dsize - _j;
+                if (_j >= 0 && _j < (src.height - 1) && _i >= 0 &&
+                    _i < (src.height - 1))  // Bilinear interpolation
+                {
+                    (*dst)[i][j] = (1 - _idec) * (1 - _jdec) * src[_i][_j] +
+                                    _idec * (1 - _jdec) * src[_i + 1][_j] +
+                                    _jdec * (1 - _idec) * src[_j][_j + 1] +
+                                    _idec * _jdec * src[_i + 1][_j + 1];
+                }
+            }
+        }
+    }
+}
+
+void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, std::vector<mKeyPoint>* keypoints, gls::image<float>* descriptors) {
+    enum { ORI_RADIUS = 6, ORI_WIN = 60, PATCH_SZ = 20 };
+    const int nOriSampleBound = (2 * ORI_RADIUS + 1) * (2 * ORI_RADIUS + 1);
+    std::vector<Point2F> apt;
+    std::vector<float> aptw;
+    std::vector<float> DW;
+    apt.resize(nOriSampleBound);
+    aptw.resize(nOriSampleBound);
+    DW.resize(PATCH_SZ * PATCH_SZ);
+    float SURF_ORI_SIGMA = 2.5f;
+
+    float* G_ori = mgetGaussianKernel(2 * ORI_RADIUS + 1, SURF_ORI_SIGMA);
+
+    int nOriSamples = 0;
+    for (int i = -ORI_RADIUS; i <= ORI_RADIUS; i++) {
+        for (int j = -ORI_RADIUS; j <= ORI_RADIUS; j++) {
+            if (i * i + j * j <= ORI_RADIUS * ORI_RADIUS) {
+                apt[nOriSamples].x = i;
+                apt[nOriSamples].y = j;
+
+                aptw[nOriSamples++] = G_ori[i + ORI_RADIUS] * G_ori[j + ORI_RADIUS];
+            }
+        }
+    }
+    int SURF_DESC_SIGMA = 3.3f;
+
+    float* G_desc = mgetGaussianKernel(PATCH_SZ, SURF_DESC_SIGMA);
+    for (int i = 0; i < PATCH_SZ; i++) {
+        for (int j = 0; j < PATCH_SZ; j++) DW[i * PATCH_SZ + j] = G_desc[i] * G_desc[j];
+    }
+
+    const int NX = 2, NY = 2;
+    const int dx_s[NX][5] = {{0, 0, 2, 4, -1}, {2, 0, 4, 4, 1}};
+    const int dy_s[NY][5] = {{0, 0, 4, 2, 1}, {0, 2, 4, 4, -1}};
+
+    float X[nOriSampleBound], Y[nOriSampleBound], angle[nOriSampleBound];
+    // std::vector<std::vector<float>> mPATCH(PATCH_SZ + 1, std::vector<float>(PATCH_SZ + 1, 0));
+    gls::image<float> mPATCH(PATCH_SZ + 1, PATCH_SZ + 1);
+    float DX[PATCH_SZ][PATCH_SZ], DY[PATCH_SZ][PATCH_SZ];
+    int dsize = 64;
+    float maxSize = 0;
+    for (int k = 0; k < (int)keypoints->size(); k++) {
+        maxSize = std::max(maxSize, (*keypoints)[k].size);
+    }
+
+    for (int k = 0; k < (int)keypoints->size(); k++) {
+        std::array<SurfHF, NX> dx_t;
+        std::array<SurfHF, NY> dy_t;
+        mKeyPoint& kp = (*keypoints)[k];
+        float size = kp.size;
+        Point2F center = kp.pt;
+        float s = size * 1.2f / 9.0f;
+        int grad_wav_size = 2 * round(2 * s);
+        if (sum.height < grad_wav_size || sum.width < grad_wav_size) {
+            kp.size = -1;
+            continue;
+        }
+        float descriptor_dir = 360.f - 90.f;
+        mresizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
+        mresizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
+        int nangle = 0;
+        for (int kk = 0; kk < nOriSamples; kk++) {
+            int x = round(center.x + apt[kk].x * s - (float)(grad_wav_size - 1) / 2);
+            int y = round(center.y + apt[kk].y * s - (float)(grad_wav_size - 1) / 2);
+            if (y < 0 || y >= sum.height - grad_wav_size || x < 0 || x >= sum.width - grad_wav_size) continue;
+            const gls::point p = {x, y};
+            float vx = mcalcHaarPattern(sum, p, dx_t);
+            float vy = mcalcHaarPattern(sum, p, dy_t);
+            X[nangle] = vx * aptw[kk];
+            Y[nangle] = vy * aptw[kk];
+            nangle++;
+        }
+        if (nangle == 0) {
+            kp.size = -1;
+            continue;
+        }
+
+        for (int i = 0; i < nangle; i++) {
+            float temp = atan2(Y[i], X[i]) * (180 / M_PI);
+            if (temp < 0)
+                angle[i] = temp + 360;
+            else
+                angle[i] = temp;
+        }
+
+        float bestx = 0, besty = 0, descriptor_mod = 0;
+        int SURF_ORI_SEARCH_INC = 5;
+        for (float i = 0; i < 360; i += SURF_ORI_SEARCH_INC) {
+            float sumx = 0, sumy = 0, temp_mod;
+            for (int j = 0; j < nangle; j++) {
+                float d = std::abs(round(angle[j]) - i);
+                if (d < ORI_WIN / 2 || d > 360 - ORI_WIN / 2) {
+                    sumx += X[j];
+                    sumy += Y[j];
+                }
+            }
+            temp_mod = sumx * sumx + sumy * sumy;
+            if (temp_mod > descriptor_mod) {
+                descriptor_mod = temp_mod;
+                bestx = sumx;
+                besty = sumy;
+            }
+        }
+        descriptor_dir = atan2(-besty, bestx);
+
+        kp.angle = descriptor_dir;
+
+        int win_size = (int)((PATCH_SZ + 1) * s);
+        // std::vector<std::vector<float>> mwin(win_size, std::vector<float>(win_size));
+        gls::image<float> mwin(win_size, win_size);
+        descriptor_dir *= (float)(M_PI / 180);
+        float sin_dir = -std::sin(descriptor_dir);
+        float cos_dir = std::cos(descriptor_dir);
+
+        float win_offset = -(float)(win_size - 1) / 2;
+        float start_x = center.x + win_offset * cos_dir + win_offset * sin_dir;
+        float start_y = center.y - win_offset * sin_dir + win_offset * cos_dir;
+        int ncols1 = img.width - 1, nrows1 = img.height - 1;
+        for (int i = 0; i < win_size; i++, start_x += sin_dir, start_y += cos_dir) {
+            float pixel_x = start_x;
+            float pixel_y = start_y;
+            for (int j = 0; j < win_size; j++, pixel_x += cos_dir, pixel_y -= sin_dir) {
+                float ixf = std::floor(pixel_x);
+                float iyf = std::floor(pixel_y);
+                int ix = (int)ixf;
+                int iy = (int)iyf;
+
+                if ((unsigned)ix < (unsigned)ncols1 && (unsigned)iy < (unsigned)nrows1) {
+                    float a = pixel_x - ixf;
+                    float b = pixel_y - iyf;
+
+                    mwin[i][j] = std::round((img[iy][ix] * (1 - a) + img[iy][ix + 1] * a) * (1 - b) +
+                                            (img[iy + 1][ix] * (1 - a) + img[iy + 1][ix + 1] * a) * b);
+                } else {
+                    int x = std::clamp((int)std::round(pixel_x), 0, ncols1);
+                    int y = std::clamp((int)std::round(pixel_y), 0, nrows1);
+                    mwin[i][j] = img[y][x];
+                }
+            }
+        }
+
+        resizeVV(mwin, &mPATCH, 0);
+        for (int i = 0; i < PATCH_SZ; i++)
+            for (int j = 0; j < PATCH_SZ; j++) {
+                float dw = DW[i * PATCH_SZ + j];
+                float vx = (mPATCH[i][j + 1] - mPATCH[i][j] + mPATCH[i + 1][j + 1] - mPATCH[i + 1][j]) * dw;
+                float vy = (mPATCH[i + 1][j] - mPATCH[i][j] + mPATCH[i + 1][j + 1] - mPATCH[i][j + 1]) * dw;
+                DX[i][j] = vx;
+                DY[i][j] = vy;
+            }
+        for (int kk = 0; kk < dsize; kk++) {
+            (*descriptors)[k][kk] = 0;
+        }
+        float square_mag = 0;
+
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                int index = 16 * i + 4 * j;
+
+                for (int y = i * 5; y < i * 5 + 5; y++) {
+                    for (int x = j * 5; x < j * 5 + 5; x++) {
+                        float tx = DX[y][x], ty = DY[y][x];
+                        (*descriptors)[k][index + 0] += tx;
+                        (*descriptors)[k][index + 1] += ty;
+                        (*descriptors)[k][index + 2] += (float)fabs(tx);
+                        (*descriptors)[k][index + 3] += (float)fabs(ty);
+                    }
+                }
+                for (int kk = 0; kk < 4; kk++) {
+                    float v = (*descriptors)[k][index + kk];
+                    square_mag += v * v;
+                }
+            }
+        }
+        float scale = (float)(1. / (sqrt(square_mag) + FLT_EPSILON));
+        for (int kk = 0; kk < dsize; kk++) {
+            (*descriptors)[k][kk] *= scale;
+        }
+    }
+}
+
+void SURF_descriptor(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<mKeyPoint>* keypoints, gls::image<float>* descriptors) {
+    int N = (int) keypoints->size();
+    if (N > 0) {
+        mSURFInvoker(srcImg, integralSum, keypoints, descriptors);
+    }
+}
+
+float calcDistance(float* p1, float* p2, int n) {
+    float distance = 0;
+    for (int i = 0; i < n; i++) {
+        distance += fabs(p1[i] - p2[i]);
+    }
+    return distance;
+}
+
+bool mSURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
+                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
+    // (1) Convert the format to IMAGE, and calculate the integral image
+    gls::image<float> integralSum1(srcIMAGE1.width + 1, srcIMAGE1.height + 1);
+    gls::image<float> integralSum2(srcIMAGE2.width + 1, srcIMAGE2.height + 1);
+    integral(srcIMAGE1, &integralSum1);                     // Calculate the integral image
+    integral(srcIMAGE2, &integralSum2);                     // Calculate the integral image
+
+    // (2) Detect SURF feature points
+    std::vector<mKeyPoint> keypoints1, keypoints2;
+    float hessianThreshold = 800;  // hessian threshold 1300
+
+    // SURF detects feature points
+    SURF_detect(srcIMAGE1, integralSum1, &keypoints1, hessianThreshold);
+    SURF_detect(srcIMAGE2, integralSum2, &keypoints2, hessianThreshold);
+    printf(" ---------- \n Detected feature points: %ld \t %ld \n", keypoints1.size(),
+           keypoints2.size());
+
+//    if (keypoints1.size() >= 10 && keypoints2.size() >= 10) {
+//        for (int i = 0; i < 10; i++) {
+//            const auto& kp = keypoints1[i];
+//            std::cout << "kp1[" << i << "]: " << kp.pt.x << ", " << kp.pt.y
+//                      << ", size: " << kp.size
+//                      << ", angle: " << kp.angle
+//                      << ", response: " << kp.response
+//                      << ", octave: " << kp.octave
+//                      << ", class_id: " << kp.class_id << std::endl;
+//        }
+//
+//        for (int i = 0; i < 10; i++) {
+//            const auto& kp = keypoints2[i];
+//            std::cout << "kp2[" << i << "]: " << kp.pt.x << ", " << kp.pt.y
+//                      << ", size: " << kp.size
+//                      << ", angle: " << kp.angle
+//                      << ", response: " << kp.response
+//                      << ", octave: " << kp.octave
+//                      << ", class_id: " << kp.class_id << std::endl;
+//        }
+//    }
+
+    // SURF calculates the angle and feature point description matrix
+    if (keypoints1.empty() || keypoints2.empty()) {  // If the number of detected feature points is 0, return
+        return false;
+    }
+
+    /* ********* By limiting the number of feature points, the matching time is shortened and the efficiency is improved *********** */
+
+    int Nk = 2;  // keep the matching point coefficient
+
+    if (true) {
+        if (keypoints1.size() > Nk * matches_num) {
+            keypoints1.erase(keypoints1.begin() + Nk * matches_num, keypoints1.end());
+            printf("keypoints1 erase: %d ", Nk * matches_num);
+        }
+        if (keypoints2.size() > Nk * matches_num) {
+            keypoints2.erase(keypoints2.begin() + Nk * matches_num, keypoints2.end());
+            printf("keypoints2 erase: %d\n", Nk * matches_num);
+        }
+    }
+    if (/* DISABLES CODE */ (false)) {
+        if (keypoints1.size() > Nk * matches_num) {
+            float temp = keypoints1[Nk * matches_num].response;
+            int k2index = Nk * matches_num;
+            for (int i = 0; i < keypoints2.size(); i++) {
+                if (keypoints2[i].response < temp) {
+                    k2index = i;
+                    break;
+                }
+            }
+            keypoints1.erase(keypoints1.begin() + Nk * matches_num, keypoints1.end());
+            printf("keypoints1 erase: %d ", Nk * matches_num);
+            keypoints2.erase(keypoints2.begin() + k2index, keypoints2.end());
+            printf("keypoints2 erase: %d\n", Nk * matches_num);
+        }
+    }
+
+    // (3) Feature point description
+
+    gls::image<float> descriptor1(64, (int)keypoints1.size());
+    gls::image<float> descriptor2(64, (int)keypoints2.size());
+    SURF_descriptor(srcIMAGE1, integralSum1, &keypoints1, &descriptor1);
+    SURF_descriptor(srcIMAGE2, integralSum2, &keypoints2, &descriptor2);
+
+    // (4) Match feature points
+    std::vector<mDMatch> matchedPoints;
+    for (int i = 0; i < keypoints1.size(); i++) {
+        // start of i line of descriptor1
+        float* p1 = descriptor1[i];
+        float distance_min = 100;
+        int j_min = 0, i_min = 0;
+        int j;
+        float dx = 0, dy = 0;
+        for (j = 0; j < keypoints2.size(); j++) {
+            dx = fabs(keypoints1[i].pt.x - keypoints2[j].pt.x);
+            dy = fabs(keypoints1[i].pt.y - keypoints2[j].pt.y);
+
+            float* p2 = descriptor2[j];
+            // calculate distance
+            float distance_t = calcDistance(p1, p2, 64);
+            if (distance_t < distance_min) {
+                distance_min = distance_t;
+                i_min = i;
+                j_min = j;
+            }
+        }
+        matchedPoints.push_back(mDMatch(i_min, j_min, distance_min));
+    }
+
+    std::sort(matchedPoints.begin(), matchedPoints.end(), refineMatch());  // feature point sorting
+
+    // Convert to Point2D format
+    int goodPoints = matches_num < (int)matchedPoints.size() ? matches_num : (int)matchedPoints.size();
+    for (int i = 0; i < goodPoints; i++) {
+        matchpoints1->push_back(Point2f(keypoints1[matchedPoints[i].queryIdx].pt.x,
+                                        keypoints1[matchedPoints[i].queryIdx].pt.y));
+        matchpoints2->push_back(Point2f(keypoints2[matchedPoints[i].trainIdx].pt.x,
+                                        keypoints2[matchedPoints[i].trainIdx].pt.y));
+    }
+
+    /* ******* Registration Performance Evaluation - Additional Contents ********* */
+
+    if (matchpoints1->size() && matchpoints2->size())
+        return true;
+    else
+        return false;
+}
+
+// RANSAC
+
+bool MatrixMultiplyV(const std::vector<std::vector<float>>& X1, const std::vector<std::vector<float>>& X2,
+                     std::vector<std::vector<float>>* Y) {
+    int row1 = (int) X1.size();
+    int col1 = (int) X1[0].size();
+    int row2 = (int) X2.size();
+    int col2 = (int) X2[0].size();
+    if (col1 != row2) return false;
+    Y->resize(row1);
+    for (int i = 0; i < row1; i++) (*Y)[i].resize(col2);
+
+    for (int i = 0; i < Y->size(); i++) {
+        for (int j = 0; j < (*Y)[0].size(); j++) {
+            float sum = 0;
+            for (int ki = 0; ki < col1; ki++) {
+                sum += X1[i][ki] * X2[ki][j];
+            }
+            (*Y)[i][j] = sum;
+        }
+    }
+    return true;
+}
+
+template <typename TIN, typename TA, typename TB>
+void getPerspectiveTransformAB(const TIN& src, const TIN& dst, TA& a, TB& b) {
+    int count = (int) src.size();
+
+    for (int i = 0; i < count; i++) {
+        a[i][0] = a[i + count][3] = src[i].x;
+        a[i][1] = a[i + count][4] = src[i].y;
+        a[i][2] = a[i + count][5] = 1;
+        a[i][3] = a[i][4] = a[i][5] = a[i + count][0] = a[i + count][1] = a[i + count][2] = 0;
+        a[i][6] = -src[i].x * dst[i].x;
+        a[i][7] = -src[i].y * dst[i].x;
+        a[i + count][6] = -src[i].x * dst[i].y;
+        a[i + count][7] = -src[i].y * dst[i].y;
+        b[i][0] = dst[i].x;
+        b[i + count][0] = dst[i].y;
+    }
+}
+
+template <size_t NN=8>
+gls::Vector<NN> getPerspectiveTransformIata(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+    gls::Matrix<NN, NN> a;
+    gls::Matrix<NN, 1> b;
+    getPerspectiveTransformAB(src, dst, a, b);
+
+    gls::Matrix<NN, NN> at = transpose(a);
+    gls::Matrix<NN, NN> ata = at * a;
+    gls::Vector<NN> atb = at * b;
+
+    return surf::inverse(ata) * atb;
+}
+
+template <size_t NN=8>
+std::vector<float> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+    int count = (int) src.size();
+
+    std::vector<std::vector<float>> a;
+    std::vector<std::vector<float>> b;
+    a.resize(2 * count);
+    b.resize(2 * count);
+    for (int i = 0; i < 2 * count; i++) {
+        a[i].resize(NN, 0);
+        b[i].resize(1, 0);
+    }
+
+    getPerspectiveTransformAB(src, dst, a, b);
+
+    std::vector<std::vector<float>> at(NN, std::vector<float>(a.size()));
+    for (int i = 0; i < NN; i++) { // transpose of a
+        for (int j = 0; j < 2 * count; j++) {
+            at[i][j] = a[j][i];
+        }
+    }
+
+    gls::Matrix<NN, NN> aa;
+    gls::Vector<NN> bb;
+
+    std::vector<std::vector<float>> ata(NN, std::vector<float>(NN, 0));
+    std::vector<std::vector<float>> atb(NN, std::vector<float>(1, 0));
+
+    if (MatrixMultiplyV(at, a, &ata) && MatrixMultiplyV(at, b, &atb)) {
+        for (int i = 0; i < NN; i++) {
+            for (int j = 0; j < NN; j++) {
+                aa[i][j] = ata[i][j];
+            }
+        }
+        for (int i = 0; i < NN; i++) {
+            bb[i] = atb[i][0];
+        }
+    }
+
+    gls::Vector<NN> trans = surf::inverse(aa) * bb;
+
+    return std::vector<float>(trans.begin(), trans.end());
+}
+
+std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
+    std::vector<float> homoV;
+    if (p1.size() == 0) return homoV;
+    // Calculate the maximum set of interior points
+    int max_iters = 2000;
+    int iters = max_iters;
+    int innerP, max_innerP = 0;
+    std::vector<int> innerPvInd;  // Inner point set index - temporary
+    std::vector<int> innerPvInd_i;
+    std::vector<Point2f> selectP1, selectP2;
+    // generate random table
+    int selectIndex[2000][4];
+    srand(0 /*(unsigned) time(NULL)*/);  // Use time as seed, each time the random number is different
+    int pCount = (int)p1.size();
+
+    for (int i = 0; i < 2000; i++) {
+        for (int j = 0; j < 4; j++) {
+            int ii = 0;
+            int temp = 0;
+            selectIndex[i][0] = selectIndex[i][1] = selectIndex[i][2] = selectIndex[i][3] =
+                pCount + 1;
+            while (ii < 4) {
+                temp = rand() % pCount;
+                if (temp != selectIndex[i][0] && temp != selectIndex[i][1] &&
+                    temp != selectIndex[i][2] && temp != selectIndex[i][3]) {
+                    selectIndex[i][ii] = temp;
+                    ii++;
+                }
+            }
+        }
+    }
+
+    int k = 0;
+    for (; k < iters; k++) {
+        selectP1.push_back(p1[selectIndex[k][0]]);
+        selectP1.push_back(p1[selectIndex[k][1]]);
+        selectP1.push_back(p1[selectIndex[k][2]]);
+        selectP1.push_back(p1[selectIndex[k][3]]);
+        selectP2.push_back(p2[selectIndex[k][0]]);
+        selectP2.push_back(p2[selectIndex[k][1]]);
+        selectP2.push_back(p2[selectIndex[k][2]]);
+        selectP2.push_back(p2[selectIndex[k][3]]);
+
+        // Calculate the perspective transformation matrix
+        // (currently the singular matrix inverse cannot be solved, and the
+        // singular decomposition inversion method will be improved in the future)
+        try {
+            gls::Vector<8> trans = getPerspectiveTransformIata(selectP1, selectP2);
+
+            // Calculate the model parameter error, if the error is greater than the threshold, discard
+            // this set of model parameters
+            innerP = 0;
+            float u, v, w;
+            float errX, errY;
+            for (int i = 0; i < p1.size(); i++) {
+                errX = errY = 0;
+                u = p1[i].x * trans[0] + p1[i].y * trans[1] + trans[2];
+                v = p1[i].x * trans[3] + p1[i].y * trans[4] + trans[5];
+                w = p1[i].x * trans[6] + p1[i].y * trans[7] + 1;
+                errX = fabs(u / w - p2[i].x);
+                errY = fabs(v / w - p2[i].y);
+                if (threshold > (errX * errX + errY * errY)) {
+                    innerP++;
+                    innerPvInd.push_back(i);
+                }
+            }
+            if (innerP > max_innerP) {
+                max_innerP = innerP;
+                innerPvInd_i = innerPvInd;
+                // update the number of iterations
+                float p = 0.995;
+                float ep = (float)(p1.size() - innerP) / p1.size();
+                // avoid inf's & nan's
+                float num_ = std::max(1.f - p, FLT_MIN);
+                float denom_ = 1. - pow(1.f - ep, 4);
+
+                if (denom_ < FLT_MIN)
+                    iters = 0;
+                else {
+                    float num = log(num_);
+                    float denom = log(denom_);
+                    iters =
+                        (denom >= 0 || -num >= max_iters * (-denom) ? max_iters : (int)(num / denom));
+                }
+            }
+            innerPvInd.clear();
+        } catch (const std::logic_error& e) {
+            printf("Perspective transformation matrix transformation error");
+        }
+
+        selectP1.clear();
+        selectP2.clear();
+    }
+    printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, p1.size(), k);
+
+    // Calculate projection matrix parameters based on interior points
+
+    std::vector<Point2f> _p1, _p2;
+    for (int i = 0; i < max_innerP; i++) {
+        _p1.push_back(Point2f(p1[innerPvInd_i[i]].x, p1[innerPvInd_i[i]].y));
+        _p2.push_back(Point2f(p2[innerPvInd_i[i]].x, p2[innerPvInd_i[i]].y));
+    }
+
+    homoV = getPerspectiveTransformLSM2(_p1, _p2);
+    return homoV;
+}
+
+} // namespace surf
+

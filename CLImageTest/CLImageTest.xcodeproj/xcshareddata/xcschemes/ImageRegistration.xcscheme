@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1330"
-   version = "1.8">
+   LastUpgradeVersion = "1400"
+   version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES">
@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E5188C6827EA63A700F2332C"
-               BuildableName = "RawPipeline"
-               BlueprintName = "RawPipeline"
+               BlueprintIdentifier = "E5E9EA8D28B8D86E0079A5C0"
+               BuildableName = "ImageRegistration"
+               BlueprintName = "ImageRegistration"
                ReferencedContainer = "container:CLImageTest.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -34,47 +34,40 @@
       buildConfiguration = "Release"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      enableASanStackUseAfterReturn = "YES"
       disableMainThreadChecker = "YES"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      enableGPUFrameCaptureMode = "3"
-      enableGPUShaderValidationMode = "2"
+      enableGPUValidationMode = "1"
       allowLocationSimulation = "YES"
-      queueDebuggingEnabled = "No"
-      GPUProfilerEnabled = "No">
+      viewDebuggingEnabled = "No">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E5188C6827EA63A700F2332C"
-            BuildableName = "RawPipeline"
-            BlueprintName = "RawPipeline"
+            BlueprintIdentifier = "E5E9EA8D28B8D86E0079A5C0"
+            BuildableName = "ImageRegistration"
+            BlueprintName = "ImageRegistration"
             ReferencedContainer = "container:CLImageTest.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "/Users/fabio/work/Sonya6600/DSC00028.dng"
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      savedToolIdentifier = "CPU Profiler"
+      savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E5188C6827EA63A700F2332C"
-            BuildableName = "RawPipeline"
-            BlueprintName = "RawPipeline"
+            BlueprintIdentifier = "E5E9EA8D28B8D86E0079A5C0"
+            BuildableName = "ImageRegistration"
+            BlueprintName = "ImageRegistration"
             ReferencedContainer = "container:CLImageTest.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

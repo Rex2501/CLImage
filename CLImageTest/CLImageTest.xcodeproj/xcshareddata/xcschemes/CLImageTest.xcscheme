@@ -62,12 +62,21 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
+            BlueprintIdentifier = "E5188C6827EA63A700F2332C"
+            BuildableName = "RawPipeline"
+            BlueprintName = "RawPipeline"
+            ReferencedContainer = "container:CLImageTest.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
             BlueprintIdentifier = "E5AD623B27616ABA0055F712"
             BuildableName = "CLImageTest"
             BlueprintName = "CLImageTest"
             ReferencedContainer = "container:CLImageTest.xcodeproj">
          </BuildableReference>
-      </BuildableProductRunnable>
+      </MacroExpansion>
       <CommandLineArguments>
          <CommandLineArgument
             argument = "/Users/fabio/work/CLImage/CLImage/app/src/main/assets/2022-03-18-12-08-16-322.png"
