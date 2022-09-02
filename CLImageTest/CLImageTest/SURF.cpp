@@ -16,6 +16,8 @@
 
 #include "gls_cl_image.hpp"
 
+#include "feature2d.hpp"
+
 template<>
 struct std::hash<gls::size> {
     std::size_t operator()(gls::size const& r) const noexcept {
@@ -25,82 +27,58 @@ struct std::hash<gls::size> {
 
 namespace surf {
 
+static const int   SURF_ORI_SEARCH_INC = 5;
+static const float SURF_ORI_SIGMA      = 2.5f;
+static const float SURF_DESC_SIGMA     = 3.3f;
+
+// Wavelet size at first layer of first octave.
+static const int SURF_HAAR_SIZE0 = 9;
+
+// Wavelet size increment between layers. This should be an even number,
+// such that the wavelet sizes in an octave are either all even or all odd.
+// This ensures that when looking for the neighbours of a sample, the layers
+// above and below are aligned correctly.
+static const int SURF_HAAR_SIZE_INC = 6;
+
+//    Detected feature points: 39254      35185
+//    keypoints1 erase: 300 keypoints2 erase: 300
+//    isFeatureDection: 1
+//    RANSAC interior point ratio - number of loops: 61 150 191
+//     Transformation matrix parameter:
+//    0.987000 0.026489 86.500000
+//    -0.031013 0.990479 122.000000
+//    -0.000002 -0.000002 1
+//    Elapsed Time: 653.417834
+
 struct SurfHF {
-    gls::point p0 = {0, 0};
-    gls::point p1 = {0, 0};
-    gls::point p2 = {0, 0};
-    gls::point p3 = {0, 0};
-    float w = 0;
-};
+    gls::point p0, p1, p2, p3;
+    float w;
 
-struct Point2F {
-    float x;
-    float y;
-};
-
-struct mKeyPoint {
-    Point2F pt;
-    float size;
-    float angle;
-    float response;
-    int octave;
-    int class_id;
-};
-
-struct mKeypointGreater {
-    inline bool operator()(const mKeyPoint& kp1, const mKeyPoint& kp2) const {
-        if (kp1.response > kp2.response) return true;
-        if (kp1.response < kp2.response) return false;
-        if (kp1.size > kp2.size) return true;
-        if (kp1.size < kp2.size) return false;
-        if (kp1.octave > kp2.octave) return true;
-        if (kp1.octave < kp2.octave) return false;
-        if (kp1.pt.y < kp2.pt.y) return false;
-        if (kp1.pt.y > kp2.pt.y) return true;
-        return kp1.pt.x < kp2.pt.x;
-    }
-};
-
-class mDMatch {
-   public:
-    mDMatch() : queryIdx(-1), trainIdx(-1), imgIdx(-1), distance(FLT_MAX) {}
-    mDMatch(int _queryIdx, int _trainIdx, float _distance)
-        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(-1), distance(_distance) {}
-    mDMatch(int _queryIdx, int _trainIdx, int _imgIdx, float _distance)
-        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(_imgIdx), distance(_distance) {}
-
-    int queryIdx;  // query descriptor index
-    int trainIdx;  // train descriptor index
-    int imgIdx;    // train image index
-
-    float distance;
-
-    // less is better
-    bool operator<(const mDMatch& m) const { return distance < m.distance; }
-};
-
-struct refineMatch {
-    inline bool operator()(const mDMatch& mp1, const mDMatch& mp2) const {
-        if (mp1.distance < mp2.distance) return true;
-        if (mp1.distance > mp2.distance) return false;
-        // if (mp1.queryIdx < mp2.queryIdx) return true;
-        // if (mp1.queryIdx > mp2.queryIdx) return false;
-        /*if (mp1.octave > mp2.octave) return true;
-        if (mp1.octave < mp2.octave) return false;
-        if (mp1.pt.y < mp2.pt.y) return false;
-        if (mp1.pt.y > mp2.pt.y) return true;*/
-        return mp1.queryIdx < mp2.queryIdx;
-    }
+    SurfHF() : p0({0, 0}), p1({0, 0}), p2({0, 0}), p3({0, 0}), w(0) {}
 };
 
 template <size_t N>
-void mresizeHaarPattern(const int src[][5], std::array<SurfHF, N>& dst, int oldSize, int newSize, int widthStep) {
+float calcHaarPattern(const gls::image<float>& img, const gls::point& p, const std::array<SurfHF, N>& f) {
+    float d = 0;
+    for (int k = 0; k < N; k++) {
+        const auto& fk = f[k];
+
+        d += (img[p.y + fk.p0.y][p.x + fk.p0.x] +
+              img[p.y + fk.p3.y][p.x + fk.p3.x] -
+              img[p.y + fk.p1.y][p.x + fk.p1.x] -
+              img[p.y + fk.p2.y][p.x + fk.p2.x]) * fk.w;
+    }
+    return d;
+}
+
+template <size_t N>
+void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>& dst, int oldSize, int newSize, int widthStep) {
     float ratio = (float) newSize / oldSize;
     for (int k = 0; k < N; k++) {
-        int dx1 = int(ratio * src[k][0] + 0.5);
-        int dy1 = int(ratio * src[k][1] + 0.5);
-        int dx2 = int(ratio * src[k][2] + 0.5);
-        int dy2 = int(ratio * src[k][3] + 0.5);
+        int dx1 = (int)lrint(ratio * src[k][0]);
+        int dy1 = (int)lrint(ratio * src[k][1]);
+        int dx2 = (int)lrint(ratio * src[k][2]);
+        int dy2 = (int)lrint(ratio * src[k][3]);
         dst[k].p0 = { dx1, dy1 };
         dst[k].p1 = { dx1, dy2 };
         dst[k].p2 = { dx2, dy1 };
@@ -121,12 +99,12 @@ struct clSurfHF {
 
     clSurfHF() {}
 
-    clSurfHF(const SurfHF& other) :
-        p0({other.p0.x, other.p0.y}),
-        p1({other.p1.x, other.p1.y}),
-        p2({other.p2.x, other.p2.y}),
-        p3({other.p3.x, other.p3.y}),
-        w(other.w) {}
+    clSurfHF(const SurfHF& cpp) :
+        p0({cpp.p0.x, cpp.p0.y}),
+        p1({cpp.p1.x, cpp.p1.y}),
+        p2({cpp.p2.x, cpp.p2.y}),
+        p3({cpp.p3.x, cpp.p3.y}),
+        w(cpp.w) {}
 };
 
 void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
@@ -181,20 +159,6 @@ void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
            sampleStep, cl_context_ptr->DxBuffer, cl_context_ptr->DyBuffer, cl_context_ptr->DxyBuffer);
 }
 
-template <size_t N>
-float mcalcHaarPattern(const gls::image<float>& img, const gls::point& p, const std::array<SurfHF, N>& f) {
-    float d = 0;
-    for (int k = 0; k < N; k++) {
-        const auto& fk = f[k];
-
-        d += (img[p.y + fk.p0.y][p.x + fk.p0.x] +
-              img[p.y + fk.p3.y][p.x + fk.p3.x] -
-              img[p.y + fk.p1.y][p.x + fk.p1.x] -
-              img[p.y + fk.p2.y][p.x + fk.p2.x]) * fk.w;
-    }
-    return d;
-}
-
 void calcDetAndTrace(const gls::image<float>& sum,
                      gls::image<float>* det,
                      gls::image<float>* trace,
@@ -204,9 +168,9 @@ void calcDetAndTrace(const gls::image<float>& sum,
                      const std::array<SurfHF, 4>& Dxy) {
     const gls::point p = { x * sampleStep, y * sampleStep };
 
-    float dx = mcalcHaarPattern(sum, p, Dx);
-    float dy = mcalcHaarPattern(sum, p, Dy);
-    float dxy = mcalcHaarPattern(sum, p, Dxy);
+    float dx = calcHaarPattern(sum, p, Dx);
+    float dy = calcHaarPattern(sum, p, Dy);
+    float dxy = calcHaarPattern(sum, p, Dxy);
 
     (*det)[y][x] = dx * dy - 0.81f * dxy * dxy;
     (*trace)[y][x] = dx + dy;
@@ -218,9 +182,7 @@ std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> sumMemory
 std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
 std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
 
-void mcalcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep, gls::image<float>* det_full, gls::image<float>* trace_full) {
-    std::cout << "mcalcLayerDetAndTrace - size: " << size << ", sampleStep: " << sampleStep << std::endl;
-
+void calcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep, gls::image<float>* det_full, gls::image<float>* trace_full) {
     const int NX = 3, NY = 3, NXY = 4;
 
     const int dx_s[NX][5] = {
@@ -246,17 +208,20 @@ void mcalcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleSte
     if (size > (sum.height - 1) || size > (sum.width - 1))
         return;
 
-    mresizeHaarPattern(dx_s, Dx, 9, size, sum.width);
-    mresizeHaarPattern(dy_s, Dy, 9, size, sum.width);
-    mresizeHaarPattern(dxy_s, Dxy, 9, size, sum.width);
+    resizeHaarPattern(dx_s, Dx, 9, size, sum.width);
+    resizeHaarPattern(dy_s, Dy, 9, size, sum.width);
+    resizeHaarPattern(dxy_s, Dxy, 9, size, sum.width);
 
+    /* The integral image 'sum' is one pixel bigger than the source image */
     int height = 1 + (sum.height - 1 - size) / sampleStep;
     int width = 1 + (sum.width - 1 - size) / sampleStep;
+
+    /* Ignore pixels where some of the kernel is outside the image */
     int margin = (size / 2) / sampleStep;
 
-    gls::rectangle output_crop = {margin, margin, width, height};
-    gls::image<float> det = gls::image<float>(*det_full, output_crop);
-    gls::image<float> trace = gls::image<float>(*trace_full, output_crop);
+    gls::rectangle margin_crop = {margin, margin, width, height};
+    gls::image<float> det = gls::image<float>(*det_full, margin_crop);
+    gls::image<float> trace = gls::image<float>(*trace_full, margin_crop);
 
 #if true
     auto sumImage = sumMemory[sum.size()];
@@ -293,36 +258,80 @@ void mcalcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleSte
 #endif
 }
 
-void mSURFBuildInvoker(const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
-                       std::vector<gls::image<float>*>& dets, std::vector<gls::image<float>*> traces) {
+/*
+ * Maxima location interpolation as described in "Invariant Features from
+ * Interest Point Groups" by Matthew Brown and David Lowe. This is performed by
+ * fitting a 3D quadratic to a set of neighbouring samples.
+ *
+ * The gradient vector and Hessian matrix at the initial keypoint location are
+ * approximated using central differences. The linear system Ax = b is then
+ * solved, where A is the Hessian, b is the negative gradient, and x is the
+ * offset of the interpolated maxima coordinates from the initial estimate.
+ * This is equivalent to an iteration of Netwon's optimisation algorithm.
+ *
+ * N9 contains the samples in the 3x3x3 neighbourhood of the maxima
+ * dx is the sampling step in x
+ * dy is the sampling step in y
+ * ds is the sampling step in size
+ * point contains the keypoint coordinates and scale to be modified
+ *
+ * Return value is 1 if interpolation was successful, 0 on failure.
+ */
+
+static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, KeyPoint& kpt) {
+    gls::Vector<3> B = {
+        -(N9[1][5] - N9[1][3]) / 2, // Negative 1st deriv with respect to x
+        -(N9[1][7] - N9[1][1]) / 2, // Negative 1st deriv with respect to y
+        -(N9[2][4] - N9[0][4]) / 2  // Negative 1st deriv with respect to s
+    };
+    gls::Matrix<3, 3> A = {
+        { N9[1][3] - 2 * N9[1][4] + N9[1][5],                   // 2nd deriv x, x
+          (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
+          (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4 },    // 2nd deriv x, s
+        { (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
+          N9[1][1] - 2 * N9[1][4] + N9[1][7],                   // 2nd deriv y, y
+          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4 },    // 2nd deriv y, s
+        { (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4,      // 2nd deriv x, s
+          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4,      // 2nd deriv y, s
+          N9[0][4] - 2 * N9[1][4] + N9[2][4] }                  // 2nd deriv s, s
+    };
+    // gls::Vector<3> x = B * gls::inverse(A);
+    gls::Vector<3> x = surf::inverse(A) * B;
+
+    bool ok = (x[0] != 0 || x[1] != 0 || x[2] != 0) &&
+        std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 && std::abs(x[2]) <= 1;
+
+    if (ok) {
+        kpt.pt.x += x[0] * dx;
+        kpt.pt.y += x[1] * dy;
+        kpt.size = (float) lrint(kpt.size + x[2] * ds);
+    }
+    return ok;
+}
+
+void SURFBuildInvoker(const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
+                      std::vector<gls::image<float>*>& dets, std::vector<gls::image<float>*> traces) {
     int N = (int) sizes.size();
     for (int i = 0; i < N; i++) {
-        mcalcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i], traces[i]);
+        calcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i], traces[i]);
     }
 }
 
-void integral(const gls::image<float>& img, gls::image<float>* sum) {
-    for (int j = 0; j < sum->height; j++) {
-        for (int i = 0; i < sum->width; i++) {
-            (*sum)[j][i] = 0;
-        }
-    }
+/*
+ * Find the maxima in the determinant of the Hessian in a layer of the
+ * scale-space pyramid
+ */
 
-    for (int j = 1; j < sum->height; j++) {
-        for (int i = 1; i < sum->width; i++) {
-            (*sum)[j][i] = img[j - 1][i - 1] + (*sum)[j][i - 1] + (*sum)[j - 1][i] - (*sum)[j - 1][i - 1];
-        }
-    }
-}
-
-static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, mKeyPoint& kpt);
-
-void mfindMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
-                        const std::vector<int>& sizes, std::vector<mKeyPoint>* keypoints, int octave,
-                        int layer, float hessianThreshold, int sampleStep) {
+void findMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+                       const std::vector<int>& sizes, std::vector<KeyPoint>* keypoints, int octave,
+                       int layer, float hessianThreshold, int sampleStep) {
     int size = sizes[layer];
+
+    // The integral image 'sum' is one pixel bigger than the source image
     int layer_height = (sum.height - 1) / sampleStep;
     int layer_width = (sum.width - 1) / sampleStep;
+
+    // Ignore pixels without a 3x3x3 neighbourhood in the layer above
     int margin = (sizes[layer + 1] / 2) / sampleStep + 1;
 
     const gls::image<float>& det1 = *dets[layer - 1];
@@ -334,30 +343,46 @@ void mfindMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::ima
             const float val0 = (*dets[layer])[i][j];
 
             if (val0 > hessianThreshold) {
+                /* Coordinates for the start of the wavelet in the sum image. There
+                   is some integer division involved, so don't try to simplify this
+                   (cancel out sampleStep) without checking the result is the same */
                 int sum_i = sampleStep * (i - (size / 2) / sampleStep);
                 int sum_j = sampleStep * (j - (size / 2) / sampleStep);
 
-                float N9[3][9] = {{det1[i-1][j-1], det1[i-1][j], det1[i-1][j+1], det1[i][j-1],
-                                   det1[i][j], det1[i][j+1], det1[i+1][j-1], det1[i+1][j], det1[i+1][j+1]},
-                                  {det2[i-1][j-1], det2[i-1][j], det2[i-1][j+1], det2[i][j-1],
-                                   det2[i][j], det2[i][j+1], det2[i+1][j-1], det2[i+1][j], det2[i+1][j+1]},
-                                  {det3[i-1][j-1], det3[i-1][j], det3[i-1][j+1], det3[i][j-1],
-                                   det3[i][j], det3[i][j+1], det3[i+1][j-1], det3[i+1][j], det3[i+1][j+1]}};
+                /* The 3x3x3 neighbouring samples around the maxima.
+                   The maxima is included at N9[1][4] */
 
-                if (val0 > N9[0][0] && val0 > N9[0][1] && val0 > N9[0][2] && val0 > N9[0][3] &&
-                    val0 > N9[0][4] && val0 > N9[0][5] && val0 > N9[0][6] && val0 > N9[0][7] &&
-                    val0 > N9[0][8] && val0 > N9[1][0] && val0 > N9[1][1] && val0 > N9[1][2] &&
-                    val0 > N9[1][3] && val0 > N9[1][5] && val0 > N9[1][6] && val0 > N9[1][7] &&
-                    val0 > N9[1][8] && val0 > N9[2][0] && val0 > N9[2][1] && val0 > N9[2][2] &&
-                    val0 > N9[2][3] && val0 > N9[2][4] && val0 > N9[2][5] && val0 > N9[2][6] &&
-                    val0 > N9[2][7] && val0 > N9[2][8]) {
+                float N9[3][9] = { { det1[i-1][j-1], det1[i-1][j], det1[i-1][j+1],
+                                     det1[i][j-1],   det1[i][j],   det1[i][j+1],
+                                     det1[i+1][j-1], det1[i+1][j], det1[i+1][j+1] },
+                                   { det2[i-1][j-1], det2[i-1][j], det2[i-1][j+1],
+                                     det2[i][j-1],   det2[i][j],   det2[i][j+1],
+                                     det2[i+1][j-1], det2[i+1][j], det2[i+1][j+1] },
+                                   { det3[i-1][j-1], det3[i-1][j], det3[i-1][j+1],
+                                     det3[i][j-1],   det3[i][j],   det3[i][j+1],
+                                     det3[i+1][j-1], det3[i+1][j], det3[i+1][j+1] } };
+
+                /* Non-maxima suppression. val0 is at N9[1][4]*/
+                if (val0 > N9[0][0] && val0 > N9[0][1] && val0 > N9[0][2] &&
+                    val0 > N9[0][3] && val0 > N9[0][4] && val0 > N9[0][5] &&
+                    val0 > N9[0][6] && val0 > N9[0][7] && val0 > N9[0][8] &&
+                    val0 > N9[1][0] && val0 > N9[1][1] && val0 > N9[1][2] &&
+                    val0 > N9[1][3]                    && val0 > N9[1][5] &&
+                    val0 > N9[1][6] && val0 > N9[1][7] && val0 > N9[1][8] &&
+                    val0 > N9[2][0] && val0 > N9[2][1] && val0 > N9[2][2] &&
+                    val0 > N9[2][3] && val0 > N9[2][4] && val0 > N9[2][5] &&
+                    val0 > N9[2][6] && val0 > N9[2][7] && val0 > N9[2][8] )
+                {
+                    /* Calculate the wavelet center coordinates for the maxima */
                     float center_i = sum_i + (size - 1) * 0.5f;
                     float center_j = sum_j + (size - 1) * 0.5f;
-                    mKeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[i][j] > 0 };
+                    KeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[i][j] > 0 };
 
+                    /* Interpolate maxima location within the 3x3x3 neighbourhood  */
                     int ds = size - sizes[layer - 1];
                     int interp_ok = interpolateKeypoint(N9, sampleStep, sampleStep, ds, kpt);
 
+                    /* Sometimes the interpolation step gives a negative size etc. */
                     if (interp_ok) {
                         keypoints->push_back(kpt);
                     }
@@ -366,6 +391,10 @@ void mfindMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::ima
         }
     }
 }
+
+// --- Large Matrix Inversion ---
+
+// TODO: replace this with a proper solver
 
 template <size_t N, size_t M, typename baseT>
 void swap_rows(gls::Matrix<N, M, baseT>& m, size_t i, size_t j) {
@@ -418,70 +447,59 @@ gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
     return inv;
 }
 
-static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, mKeyPoint& kpt) {
-    gls::Vector<3> B = {
-        -(N9[1][5] - N9[1][3]) / 2, // Negative 1st deriv with respect to x
-        -(N9[1][7] - N9[1][1]) / 2, // Negative 1st deriv with respect to y
-        -(N9[2][4] - N9[0][4]) / 2  // Negative 1st deriv with respect to s
-    };
-    gls::Matrix<3, 3> A = {
-        { N9[1][3] - 2 * N9[1][4] + N9[1][5],                   // 2nd deriv x, x
-          (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
-          (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4 },    // 2nd deriv x, s
-        { (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
-          N9[1][1] - 2 * N9[1][4] + N9[1][7],                   // 2nd deriv y, y
-          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4 },    // 2nd deriv y, s
-        { (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4,      // 2nd deriv x, s
-          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4,      // 2nd deriv y, s
-          N9[0][4] - 2 * N9[1][4] + N9[2][4] }                  // 2nd deriv s, s
-    };
-    gls::Vector<3> x = B * gls::inverse(A);
-    // gls::Vector<3> x = surf::inverse(A) * B;
-
-    bool ok = (x[0] != 0 || x[1] != 0 || x[2] != 0) && std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 &&
-              std::abs(x[2]) <= 1;
-    if (ok) {
-        kpt.pt.x += x[0] * dx;
-        kpt.pt.y += x[1] * dy;
-        kpt.size = (float)(int)(kpt.size + x[2] * ds + 0.5);
-    }
-    return ok;
-}
-
-void mSURFFindInvoker(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+void SURFFindInvoker(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
                       const std::vector<int>& sizes, const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
-                      std::vector<mKeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
+                      std::vector<KeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
     int M = (int) middleIndices.size();
     for (int i = 0; i < M; i++) {
         int layer = middleIndices[i];
         int octave = i / nOctaveLayers;
-        mfindMaximaInLayer(sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
+        findMaximaInLayer(sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
                            sampleSteps[layer]);
     }
 }
 
-void mFastHessianDetector(const gls::image<float>& sum, std::vector<mKeyPoint>* keypoints, int nOctaves,
+struct KeypointGreater {
+    inline bool operator()(const KeyPoint& kp1, const KeyPoint& kp2) const {
+        if (kp1.response > kp2.response) return true;
+        if (kp1.response < kp2.response) return false;
+        if (kp1.size > kp2.size) return true;
+        if (kp1.size < kp2.size) return false;
+        if (kp1.octave > kp2.octave) return true;
+        if (kp1.octave < kp2.octave) return false;
+        if (kp1.pt.y < kp2.pt.y) return false;
+        if (kp1.pt.y > kp2.pt.y) return true;
+        return kp1.pt.x < kp2.pt.x;
+    }
+};
+
+void fastHessianDetector(const gls::image<float>& sum, std::vector<KeyPoint>* keypoints, int nOctaves,
                           int nOctaveLayers, float hessianThreshold) {
+    /* Sampling step along image x and y axes at first octave. This is doubled
+       for each additional octave. WARNING: Increasing this improves speed,
+       however keypoint extraction becomes unreliable. */
     int SAMPLE_SETEPO = 1;
+
     int nTotalLayers = (nOctaveLayers + 2) * nOctaves;
     int nMiddleLayers = nOctaveLayers * nOctaves;
-
-    int SURF_HAAR_SIZE0 = 9;
-    int SURF_HAAR_SIXE_INC = 6;
 
     std::vector<gls::image<float>*> dets(nTotalLayers);
     std::vector<gls::image<float>*> traces(nTotalLayers);
     std::vector<int> sizes(nTotalLayers);
     std::vector<int> sampleSteps(nTotalLayers);
     std::vector<int> middleIndices(nMiddleLayers);
+
     keypoints->clear();
 
+    // Allocate space and calculate properties of each layer
     int index = 0, middleIndex = 0, step = SAMPLE_SETEPO;
+
     for (int octave = 0; octave < nOctaves; octave++) {
         for (int layer = 0; layer < nOctaveLayers + 2; layer++) {
+            /* The integral image sum is one pixel bigger than the source image*/
             dets[index] = new gls::image<float>((sum.width - 1) / step, (sum.height - 1) / step);
             traces[index] = new gls::image<float>((sum.width - 1) / step, (sum.height - 1) / step);
-            sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIXE_INC * layer) << octave;
+            sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIZE_INC * layer) << octave;
             sampleSteps[index] = step;
 
             if (0 < layer && layer <= nOctaveLayers) {
@@ -492,11 +510,15 @@ void mFastHessianDetector(const gls::image<float>& sum, std::vector<mKeyPoint>* 
         step *= 2;
     }
 
-    mSURFBuildInvoker(sum, sizes, sampleSteps, dets, traces);
+    // Calculate hessian determinant and trace samples in each layer
+    SURFBuildInvoker(sum, sizes, sampleSteps, dets, traces);
 
-    mSURFFindInvoker(sum, dets, traces, sizes, sampleSteps, middleIndices, keypoints, nOctaveLayers,
-                     hessianThreshold);
-    sort(keypoints->begin(), keypoints->end(), mKeypointGreater());
+    // Find maxima in the determinant of the hessian
+    SURFFindInvoker(sum, dets, traces, sizes,
+                    sampleSteps, middleIndices, keypoints,
+                    nOctaveLayers, hessianThreshold);
+
+    sort(keypoints->begin(), keypoints->end(), KeypointGreater());
 
     for (int i = 0; i < nTotalLayers; i++) {
         delete dets[i];
@@ -504,13 +526,13 @@ void mFastHessianDetector(const gls::image<float>& sum, std::vector<mKeyPoint>* 
     }
 }
 
-void SURF_detect(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<mKeyPoint>* keypoints, float hessianThreshold) {
+void SURF_detect(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<KeyPoint>* keypoints, float hessianThreshold) {
     int nOctaves = 4;
     int nOctaveLayers = 2;
-    mFastHessianDetector(integralSum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
+    fastHessianDetector(integralSum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
 }
 
-float* mgetGaussianKernel(int n, float sigma) {
+std::vector<float> getGaussianKernel(int n, float sigma) {
     const int SMALL_GAUSSIAN_SIZE = 7;
     static const float small_gaussian_tab[][SMALL_GAUSSIAN_SIZE] = {
         {1.f},
@@ -518,38 +540,28 @@ float* mgetGaussianKernel(int n, float sigma) {
         {0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f},
         {0.03125f, 0.109375f, 0.21875f, 0.28125f, 0.21875f, 0.109375f, 0.03125f}};
 
-    const float* fixed_kernel =
-        n % 2 == 1 && n <= SMALL_GAUSSIAN_SIZE && sigma <= 0 ? small_gaussian_tab[n >> 1] : 0;
-
-    float* kernel = (float*)calloc(n, sizeof(float));
-    // Mat kernel(n, 1, ktype);
-
-    // float* cf = (float*)kernel.data;
-    float* cd = kernel;
+    const float* fixed_kernel = n % 2 == 1 && n <= SMALL_GAUSSIAN_SIZE && sigma <= 0 ? small_gaussian_tab[n >> 1] : nullptr;
 
     float sigmaX = sigma > 0 ? sigma : ((n - 1) * 0.5 - 1) * 0.3 + 0.8;
     float scale2X = -0.5 / (sigmaX * sigmaX);
     float sum = 0;
 
-    int i;
-    for (i = 0; i < n; i++) {
+    std::vector<float> kernel(n);
+    for (int i = 0; i < n; i++) {
         float x = i - (n - 1) * 0.5;
         float t = fixed_kernel ? (float)fixed_kernel[i] : std::exp(scale2X * x * x);
-
-        cd[i] = t;
-        sum += cd[i];
-        //}
+        kernel[i] = t;
+        sum += kernel[i];
     }
 
     sum = 1. / sum;
-    for (i = 0; i < n; i++) {
-        cd[i] *= sum;
+    for (auto& v : kernel) {
+        v *= sum;
     }
 
     return kernel;
-};
+}
 
-// void resizeVV(const std::vector<std::vector<float>>& src, std::vector<std::vector<float>>* dst, int interpolation) {
 void resizeVV(const gls::image<float>& src, gls::image<float>* dst, int interpolation) {
     // Note that src and dst represent square matrices
 
@@ -574,46 +586,50 @@ void resizeVV(const gls::image<float>& src, gls::image<float>* dst, int interpol
     }
 }
 
-void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, std::vector<mKeyPoint>* keypoints, gls::image<float>* descriptors) {
+void SURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, std::vector<KeyPoint>* keypoints, gls::image<float>* descriptors) {
     enum { ORI_RADIUS = 6, ORI_WIN = 60, PATCH_SZ = 20 };
+
+    // Simple bound for number of grid points in circle of radius ORI_RADIUS
     const int nOriSampleBound = (2 * ORI_RADIUS + 1) * (2 * ORI_RADIUS + 1);
-    std::vector<Point2F> apt;
-    std::vector<float> aptw;
-    std::vector<float> DW;
-    apt.resize(nOriSampleBound);
-    aptw.resize(nOriSampleBound);
-    DW.resize(PATCH_SZ * PATCH_SZ);
-    float SURF_ORI_SIGMA = 2.5f;
 
-    float* G_ori = mgetGaussianKernel(2 * ORI_RADIUS + 1, SURF_ORI_SIGMA);
+    // Allocate arrays
+    std::vector<Point2f> apt(nOriSampleBound);
+    std::vector<float> aptw(nOriSampleBound);
+    std::vector<float> DW(PATCH_SZ * PATCH_SZ);
 
+    /* Coordinates and weights of samples used to calculate orientation */
+    const auto G_ori = getGaussianKernel(2 * ORI_RADIUS + 1, SURF_ORI_SIGMA);
     int nOriSamples = 0;
     for (int i = -ORI_RADIUS; i <= ORI_RADIUS; i++) {
         for (int j = -ORI_RADIUS; j <= ORI_RADIUS; j++) {
             if (i * i + j * j <= ORI_RADIUS * ORI_RADIUS) {
-                apt[nOriSamples].x = i;
-                apt[nOriSamples].y = j;
-
+                apt[nOriSamples] = Point2f(i, j);
                 aptw[nOriSamples++] = G_ori[i + ORI_RADIUS] * G_ori[j + ORI_RADIUS];
             }
         }
     }
-    int SURF_DESC_SIGMA = 3.3f;
+    assert( nOriSamples <= nOriSampleBound );
 
-    float* G_desc = mgetGaussianKernel(PATCH_SZ, SURF_DESC_SIGMA);
+    /* Gaussian used to weight descriptor samples */
+    const auto G_desc = getGaussianKernel(PATCH_SZ, SURF_DESC_SIGMA);
     for (int i = 0; i < PATCH_SZ; i++) {
         for (int j = 0; j < PATCH_SZ; j++) DW[i * PATCH_SZ + j] = G_desc[i] * G_desc[j];
     }
 
+    // --- operator() ---
+
+    /* X and Y gradient wavelet data */
     const int NX = 2, NY = 2;
     const int dx_s[NX][5] = {{0, 0, 2, 4, -1}, {2, 0, 4, 4, 1}};
     const int dy_s[NY][5] = {{0, 0, 4, 2, 1}, {0, 2, 4, 4, -1}};
 
     float X[nOriSampleBound], Y[nOriSampleBound], angle[nOriSampleBound];
-    // std::vector<std::vector<float>> mPATCH(PATCH_SZ + 1, std::vector<float>(PATCH_SZ + 1, 0));
-    gls::image<float> mPATCH(PATCH_SZ + 1, PATCH_SZ + 1);
+    gls::image<float> PATCH(PATCH_SZ + 1, PATCH_SZ + 1);
     float DX[PATCH_SZ][PATCH_SZ], DY[PATCH_SZ][PATCH_SZ];
+
+    // TODO: should we also add the extended (dsize = 128) case?
     int dsize = 64;
+
     float maxSize = 0;
     for (int k = 0; k < (int)keypoints->size(); k++) {
         maxSize = std::max(maxSize, (*keypoints)[k].size);
@@ -622,35 +638,53 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
     for (int k = 0; k < (int)keypoints->size(); k++) {
         std::array<SurfHF, NX> dx_t;
         std::array<SurfHF, NY> dy_t;
-        mKeyPoint& kp = (*keypoints)[k];
+        KeyPoint& kp = (*keypoints)[k];
         float size = kp.size;
-        Point2F center = kp.pt;
+        Point2f center = kp.pt;
+        /* The sampling intervals and wavelet sized for selecting an orientation
+         and building the keypoint descriptor are defined relative to 's' */
         float s = size * 1.2f / 9.0f;
-        int grad_wav_size = 2 * round(2 * s);
+        /* To find the dominant orientation, the gradients in x and y are
+         sampled in a circle of radius 6s using wavelets of size 4s.
+         We ensure the gradient wavelet size is even to ensure the
+         wavelet pattern is balanced and symmetric around its center */
+        int grad_wav_size = 2 * (int) lrint(2 * s);
         if (sum.height < grad_wav_size || sum.width < grad_wav_size) {
+            /* when grad_wav_size is too big,
+             * the sampling of gradient will be meaningless
+             * mark keypoint for deletion. */
             kp.size = -1;
             continue;
         }
+
         float descriptor_dir = 360.f - 90.f;
-        mresizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
-        mresizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
+        resizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
+        resizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
         int nangle = 0;
         for (int kk = 0; kk < nOriSamples; kk++) {
-            int x = round(center.x + apt[kk].x * s - (float)(grad_wav_size - 1) / 2);
-            int y = round(center.y + apt[kk].y * s - (float)(grad_wav_size - 1) / 2);
-            if (y < 0 || y >= sum.height - grad_wav_size || x < 0 || x >= sum.width - grad_wav_size) continue;
-            const gls::point p = {x, y};
-            float vx = mcalcHaarPattern(sum, p, dx_t);
-            float vy = mcalcHaarPattern(sum, p, dy_t);
+            // TODO: if we use round instead of lrint the result is slightly different
+
+            int x = (int) lrint(center.x + apt[kk].x * s - (float)(grad_wav_size - 1) / 2);
+            int y = (int) lrint(center.y + apt[kk].y * s - (float)(grad_wav_size - 1) / 2);
+            if (y < 0 || y >= sum.height - grad_wav_size ||
+                x < 0 || x >= sum.width - grad_wav_size)
+                continue;
+            float vx = calcHaarPattern(sum, {x, y}, dx_t);
+            float vy = calcHaarPattern(sum, {x, y}, dy_t);
             X[nangle] = vx * aptw[kk];
             Y[nangle] = vy * aptw[kk];
             nangle++;
         }
         if (nangle == 0) {
+            // No gradient could be sampled because the keypoint is too
+            // near too one or more of the sides of the image. As we
+            // therefore cannot find a dominant direction, we skip this
+            // keypoint and mark it for later deletion from the sequence.
             kp.size = -1;
             continue;
         }
 
+        // phase( Mat(1, nangle, CV_32F, X), Mat(1, nangle, CV_32F, Y), Mat(1, nangle, CV_32F, angle), true );
         for (int i = 0; i < nangle; i++) {
             float temp = atan2(Y[i], X[i]) * (180 / M_PI);
             if (temp < 0)
@@ -660,11 +694,10 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
         }
 
         float bestx = 0, besty = 0, descriptor_mod = 0;
-        int SURF_ORI_SEARCH_INC = 5;
         for (float i = 0; i < 360; i += SURF_ORI_SEARCH_INC) {
             float sumx = 0, sumy = 0, temp_mod;
             for (int j = 0; j < nangle; j++) {
-                float d = std::abs(round(angle[j]) - i);
+                float d = std::abs(lrint(angle[j]) - i);
                 if (d < ORI_WIN / 2 || d > 360 - ORI_WIN / 2) {
                     sumx += X[j];
                     sumy += Y[j];
@@ -681,29 +714,34 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
 
         kp.angle = descriptor_dir;
 
+        if (!descriptors)
+            continue;
+
+        /* Extract a window of pixels around the keypoint of size 20s */
         int win_size = (int)((PATCH_SZ + 1) * s);
-        // std::vector<std::vector<float>> mwin(win_size, std::vector<float>(win_size));
         gls::image<float> mwin(win_size, win_size);
+
+        // !upright
         descriptor_dir *= (float)(M_PI / 180);
         float sin_dir = -std::sin(descriptor_dir);
-        float cos_dir = std::cos(descriptor_dir);
+        float cos_dir =  std::cos(descriptor_dir);
 
         float win_offset = -(float)(win_size - 1) / 2;
         float start_x = center.x + win_offset * cos_dir + win_offset * sin_dir;
         float start_y = center.y - win_offset * sin_dir + win_offset * cos_dir;
+
         int ncols1 = img.width - 1, nrows1 = img.height - 1;
         for (int i = 0; i < win_size; i++, start_x += sin_dir, start_y += cos_dir) {
             float pixel_x = start_x;
             float pixel_y = start_y;
             for (int j = 0; j < win_size; j++, pixel_x += cos_dir, pixel_y -= sin_dir) {
-                float ixf = std::floor(pixel_x);
-                float iyf = std::floor(pixel_y);
-                int ix = (int)ixf;
-                int iy = (int)iyf;
+                int ix = std::floor(pixel_x);
+                int iy = std::floor(pixel_y);
 
-                if ((unsigned)ix < (unsigned)ncols1 && (unsigned)iy < (unsigned)nrows1) {
-                    float a = pixel_x - ixf;
-                    float b = pixel_y - iyf;
+                if ((unsigned)ix < (unsigned)ncols1 &&
+                    (unsigned)iy < (unsigned)nrows1) {
+                    float a = pixel_x - ix;
+                    float b = pixel_y - iy;
 
                     mwin[i][j] = std::round((img[iy][ix] * (1 - a) + img[iy][ix + 1] * a) * (1 - b) +
                                             (img[iy + 1][ix] * (1 - a) + img[iy + 1][ix + 1] * a) * b);
@@ -715,20 +753,27 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
             }
         }
 
-        resizeVV(mwin, &mPATCH, 0);
+        // Scale the window to size PATCH_SZ so each pixel's size is s. This
+        // makes calculating the gradients with wavelets of size 2s easy
+        resizeVV(mwin, &PATCH, 0);
+
+        // Calculate gradients in x and y with wavelets of size 2s
         for (int i = 0; i < PATCH_SZ; i++)
             for (int j = 0; j < PATCH_SZ; j++) {
                 float dw = DW[i * PATCH_SZ + j];
-                float vx = (mPATCH[i][j + 1] - mPATCH[i][j] + mPATCH[i + 1][j + 1] - mPATCH[i + 1][j]) * dw;
-                float vy = (mPATCH[i + 1][j] - mPATCH[i][j] + mPATCH[i + 1][j + 1] - mPATCH[i][j + 1]) * dw;
+                float vx = (PATCH[i][j + 1] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i + 1][j]) * dw;
+                float vy = (PATCH[i + 1][j] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i][j + 1]) * dw;
                 DX[i][j] = vx;
                 DY[i][j] = vy;
             }
+
+        // Construct the descriptor
         for (int kk = 0; kk < dsize; kk++) {
             (*descriptors)[k][kk] = 0;
         }
         float square_mag = 0;
 
+        // 64-bin descriptor
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 int index = 16 * i + 4 * j;
@@ -748,6 +793,8 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
                 }
             }
         }
+
+        // unit vector is essential for contrast invariance
         float scale = (float)(1. / (sqrt(square_mag) + FLT_EPSILON));
         for (int kk = 0; kk < dsize; kk++) {
             (*descriptors)[k][kk] *= scale;
@@ -755,10 +802,10 @@ void mSURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, st
     }
 }
 
-void SURF_descriptor(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<mKeyPoint>* keypoints, gls::image<float>* descriptors) {
+void SURF_descriptor(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<KeyPoint>* keypoints, gls::image<float>* descriptors) {
     int N = (int) keypoints->size();
     if (N > 0) {
-        mSURFInvoker(srcImg, integralSum, keypoints, descriptors);
+        SURFInvoker(srcImg, integralSum, keypoints, descriptors);
     }
 }
 
@@ -770,7 +817,96 @@ float calcDistance(float* p1, float* p2, int n) {
     return distance;
 }
 
-bool mSURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
+void integral(const gls::image<float>& img, gls::image<float>* sum) {
+    for (int j = 0; j < sum->height; j++) {
+        for (int i = 0; i < sum->width; i++) {
+            (*sum)[j][i] = 0;
+        }
+    }
+
+    for (int j = 1; j < sum->height; j++) {
+        for (int i = 1; i < sum->width; i++) {
+            (*sum)[j][i] = img[j - 1][i - 1] + (*sum)[j][i - 1] + (*sum)[j - 1][i] - (*sum)[j - 1][i - 1];
+        }
+    }
+}
+
+void SURF_detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* keypoints, gls::image<float>::unique_ptr* _descriptors) {
+    bool doDescriptors = _descriptors != nullptr;
+
+    gls::image<float> sum(img.width + 1, img.height + 1);
+    integral(img, &sum);
+
+    int nOctaves = 4;
+    int nOctaveLayers = 2;
+    float hessianThreshold = 800;  // hessian threshold 1300
+
+    fastHessianDetector(sum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
+
+    int N = (int)keypoints->size();
+
+    auto descriptors = doDescriptors ? std::make_unique<gls::image<float>>(64, N) : nullptr;
+
+    SURFInvoker(img, sum, keypoints, doDescriptors ? descriptors.get() : nullptr);
+
+    // remove keypoints that were marked for deletion
+    int j = 0;
+    for (int i = 0; i < N; i++) {
+        if ((*keypoints)[i].size > 0) {
+            if (i > j) {
+                (*keypoints)[j] = (*keypoints)[i];
+                if (doDescriptors) memcpy((*descriptors)[j], (*descriptors)[i], 64 * sizeof(float));
+            }
+            j++;
+        }
+    }
+
+    if (N > j) {
+        N = j;
+        keypoints->resize(N);
+        if (doDescriptors) {
+            *_descriptors = std::make_unique<gls::image<float>>(64, N);
+
+            for (int i = 0; i < N; i++) {
+                memcpy((**_descriptors)[i], (*descriptors)[i], 64 * sizeof(float));
+            }
+        }
+    }
+}
+
+class DMatch {
+   public:
+    DMatch() : queryIdx(-1), trainIdx(-1), imgIdx(-1), distance(FLT_MAX) {}
+    DMatch(int _queryIdx, int _trainIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(-1), distance(_distance) {}
+    DMatch(int _queryIdx, int _trainIdx, int _imgIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), imgIdx(_imgIdx), distance(_distance) {}
+
+    int queryIdx;  // query descriptor index
+    int trainIdx;  // train descriptor index
+    int imgIdx;    // train image index
+
+    float distance;
+
+    // less is better
+    bool operator<(const DMatch& m) const { return distance < m.distance; }
+};
+
+struct refineMatch {
+    inline bool operator()(const DMatch& mp1, const DMatch& mp2) const {
+        if (mp1.distance < mp2.distance) return true;
+        if (mp1.distance > mp2.distance) return false;
+        // if (mp1.queryIdx < mp2.queryIdx) return true;
+        // if (mp1.queryIdx > mp2.queryIdx) return false;
+        /*if (mp1.octave > mp2.octave) return true;
+        if (mp1.octave < mp2.octave) return false;
+        if (mp1.pt.y < mp2.pt.y) return false;
+        if (mp1.pt.y > mp2.pt.y) return true;*/
+        return mp1.queryIdx < mp2.queryIdx;
+    }
+};
+
+bool SURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
                      std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
     // (1) Convert the format to IMAGE, and calculate the integral image
     gls::image<float> integralSum1(srcIMAGE1.width + 1, srcIMAGE1.height + 1);
@@ -779,7 +915,7 @@ bool mSURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>
     integral(srcIMAGE2, &integralSum2);                     // Calculate the integral image
 
     // (2) Detect SURF feature points
-    std::vector<mKeyPoint> keypoints1, keypoints2;
+    std::vector<KeyPoint> keypoints1, keypoints2;
     float hessianThreshold = 800;  // hessian threshold 1300
 
     // SURF detects feature points
@@ -854,7 +990,7 @@ bool mSURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>
     SURF_descriptor(srcIMAGE2, integralSum2, &keypoints2, &descriptor2);
 
     // (4) Match feature points
-    std::vector<mDMatch> matchedPoints;
+    std::vector<DMatch> matchedPoints;
     for (int i = 0; i < keypoints1.size(); i++) {
         // start of i line of descriptor1
         float* p1 = descriptor1[i];
@@ -875,7 +1011,7 @@ bool mSURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>
                 j_min = j;
             }
         }
-        matchedPoints.push_back(mDMatch(i_min, j_min, distance_min));
+        matchedPoints.push_back(DMatch(i_min, j_min, distance_min));
     }
 
     std::sort(matchedPoints.begin(), matchedPoints.end(), refineMatch());  // feature point sorting

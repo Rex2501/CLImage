@@ -31,8 +31,8 @@ void testSURF() {
 //    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/3untagged.png");
 //    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/4untagged.png");
 
-    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/CLImage/CLImageTest/ImageRegistration/example/DSCF8601.jpg");
-    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/CLImage/CLImageTest/ImageRegistration/example/DSCF8603.jpg");
+    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8601.jpg");
+    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8603.jpg");
 
     const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
     const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
@@ -55,7 +55,7 @@ void testSURF() {
     std::vector<surf::Point2f> matchpoints1;
     std::vector<surf::Point2f> matchpoints2;
     int matches_num = 150;
-    bool isFeatureDection = surf::mSURF_Detection(srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
+    bool isFeatureDection = surf::SURF_Detection(srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
     printf("isFeatureDection: %d\n", isFeatureDection);
 
     std::vector<float> transParameter;
