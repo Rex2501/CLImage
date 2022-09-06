@@ -272,6 +272,9 @@ class basic_image {
     basic_image(gls::size _dimensions) : width(_dimensions.width), height(_dimensions.height) {}
 };
 
+// std::vector is convenient but it is expensive as it initializes memory
+#define USE_STD_VECTOR_ALLOCATION false
+
 template <typename T>
 class image : public basic_image<T> {
    public:
@@ -279,7 +282,11 @@ class image : public basic_image<T> {
     typedef std::unique_ptr<image<T>> unique_ptr;
 
    protected:
+#if USE_STD_VECTOR_ALLOCATION
     const std::unique_ptr<std::vector<T>> _data_store = nullptr;
+#else
+    T* _data_store = nullptr;
+#endif
     const std::span<T> _data;
 
    public:
@@ -287,8 +294,17 @@ class image : public basic_image<T> {
     image(int _width, int _height, int _stride)
         : basic_image<T>(_width, _height),
           stride(_stride),
+#if USE_STD_VECTOR_ALLOCATION
           _data_store(std::make_unique<std::vector<T>>(_stride * _height)),
           _data(_data_store->data(), _data_store->size()) {}
+#else
+          _data_store(new T[_stride * _height]),
+          _data(_data_store, _stride * _height) {}
+
+    virtual ~image() {
+        delete _data_store;
+    }
+#endif
 
     image(int _width, int _height) : image(_width, _height, _width) {}
 

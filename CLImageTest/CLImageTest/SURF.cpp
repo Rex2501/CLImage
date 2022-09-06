@@ -11,12 +11,14 @@
 
 #include <cmath>
 #include <iostream>
-
+#include <mutex>
 #include <unordered_map>
 
 #include "gls_cl_image.hpp"
 
 #include "feature2d.hpp"
+
+#include "ThreadPool.hpp"
 
 template<>
 struct std::hash<gls::size> {
@@ -43,12 +45,12 @@ static const int SURF_HAAR_SIZE_INC = 6;
 //    Detected feature points: 39254      35185
 //    keypoints1 erase: 300 keypoints2 erase: 300
 //    isFeatureDection: 1
-//    RANSAC interior point ratio - number of loops: 61 150 191
-//     Transformation matrix parameter:
-//    0.987000 0.026489 86.500000
-//    -0.031013 0.990479 122.000000
-//    -0.000002 -0.000002 1
-//    Elapsed Time: 653.417834
+//     RANSAC interior point ratio - number of loops: 64 150 212
+//      Transformation matrix parameter:
+//     0.986206 0.023438 95.500000
+//    -0.030258 0.988525 122.500000
+//    -0.000002 -0.000003 1
+//    Elapsed Time: 683.124542
 
 struct SurfHF {
     gls::point p0, p1, p2, p3;
@@ -105,6 +107,21 @@ struct clSurfHF {
         p2({cpp.p2.x, cpp.p2.y}),
         p3({cpp.p3.x, cpp.p3.y}),
         w(cpp.w) {}
+};
+
+struct SurfClContext {
+    gls::OpenCLContext* glsContext = nullptr;
+
+    std::mutex clMutex;
+    std::mutex findMaximaInLayerMutex;
+
+    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> sumMemory;
+    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
+    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
+
+    SurfClContext() {
+        glsContext = new gls::OpenCLContext("");;
+    }
 };
 
 void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
@@ -176,13 +193,7 @@ void calcDetAndTrace(const gls::image<float>& sum,
     (*trace)[y][x] = dx + dy;
 }
 
-extern gls::OpenCLContext* glsContext;
-
-std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> sumMemory;
-std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
-std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
-
-void calcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep, gls::image<float>* det_full, gls::image<float>* trace_full) {
+void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int size, int sampleStep, gls::image<float>* det_full, gls::image<float>* trace_full) {
     const int NX = 3, NY = 3, NXY = 4;
 
     const int dx_s[NX][5] = {
@@ -224,28 +235,30 @@ void calcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep
     gls::image<float> trace = gls::image<float>(*trace_full, margin_crop);
 
 #if true
-    auto sumImage = sumMemory[sum.size()];
+    std::lock_guard<std::mutex> guard(ctx->clMutex);
+
+    auto sumImage = ctx->sumMemory[sum.size()];
     if (!sumImage) {
-        sumImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), *((gls::image<gls::luma_pixel_fp32>*) &sum));
-        sumMemory[sum.size()] = sumImage;
+        sumImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), *((gls::image<gls::luma_pixel_fp32>*) &sum));
+        ctx->sumMemory[sum.size()] = sumImage;
     } else {
         // TODO: this is unnecessary, add proper per input image context
-        sumImage->copyPixelsFrom(*((gls::image<gls::luma_pixel_fp32>*) &sum));
+        // sumImage->copyPixelsFrom(*((gls::image<gls::luma_pixel_fp32>*) &sum));
     }
 
-    auto detImage = detMemory[{width, height}];
+    auto detImage = ctx->detMemory[{width, height}];
     if (!detImage) {
-        detImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), width, height);
-        detMemory[{width, height}] = detImage;
+        detImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), width, height);
+        ctx->detMemory[{width, height}] = detImage;
     }
 
-    auto traceImage = traceMemory[{width, height}];
+    auto traceImage = ctx->traceMemory[{width, height}];
     if (!traceImage) {
-        traceImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(glsContext->clContext(), width, height);
-        traceMemory[{width, height}] = traceImage;
+        traceImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), width, height);
+        ctx->traceMemory[{width, height}] = traceImage;
     }
 
-    clCalcDetAndTrace(glsContext, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
+    clCalcDetAndTrace(ctx->glsContext, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
 
     detImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &det);
     traceImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &trace);
@@ -309,11 +322,18 @@ static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, KeyPoint&
     return ok;
 }
 
-void SURFBuildInvoker(const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
+void SURFBuildInvoker(SurfClContext *ctx, const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
                       std::vector<gls::image<float>*>& dets, std::vector<gls::image<float>*> traces) {
+    ThreadPool threadPool(8);
+
     int N = (int) sizes.size();
+    std::cout << "enqueueing " << N << " calcLayerDetAndTrace" << std::endl;
+
     for (int i = 0; i < N; i++) {
-        calcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i], traces[i]);
+        // std::cout << "calcLayerDetAndTrace " << i << " of " << N << " @ " << dets[i]->width << ", " << dets[i]->width << std::endl;
+        threadPool.enqueue([&, i]() {
+            calcLayerDetAndTrace(ctx, sum, sizes[i], sampleSteps[i], dets[i], traces[i]);
+        });
     }
 }
 
@@ -322,7 +342,8 @@ void SURFBuildInvoker(const gls::image<float>& sum, std::vector<int>& sizes, std
  * scale-space pyramid
  */
 
-void findMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
+                       const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
                        const std::vector<int>& sizes, std::vector<KeyPoint>* keypoints, int octave,
                        int layer, float hessianThreshold, int sampleStep) {
     int size = sizes[layer];
@@ -384,6 +405,7 @@ void findMaximaInLayer(const gls::image<float>& sum, const std::vector<gls::imag
 
                     /* Sometimes the interpolation step gives a negative size etc. */
                     if (interp_ok) {
+                        std::lock_guard<std::mutex> guard(ctx->findMaximaInLayerMutex);
                         keypoints->push_back(kpt);
                     }
                 }
@@ -447,15 +469,20 @@ gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
     return inv;
 }
 
-void SURFFindInvoker(const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
-                      const std::vector<int>& sizes, const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
-                      std::vector<KeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
+void SURFFindInvoker(SurfClContext *ctx, const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
+                     const std::vector<int>& sizes, const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
+                     std::vector<KeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
+    ThreadPool threadPool(8);
+
     int M = (int) middleIndices.size();
+    std::cout << "enqueueing " << M << " findMaximaInLayer" << std::endl;
     for (int i = 0; i < M; i++) {
-        int layer = middleIndices[i];
-        int octave = i / nOctaveLayers;
-        findMaximaInLayer(sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
-                           sampleSteps[layer]);
+        threadPool.enqueue([&, i](){
+            int layer = middleIndices[i];
+            int octave = i / nOctaveLayers;
+            findMaximaInLayer(ctx, sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
+                              sampleSteps[layer]);
+        });
     }
 }
 
@@ -473,8 +500,8 @@ struct KeypointGreater {
     }
 };
 
-void fastHessianDetector(const gls::image<float>& sum, std::vector<KeyPoint>* keypoints, int nOctaves,
-                          int nOctaveLayers, float hessianThreshold) {
+void fastHessianDetector(SurfClContext *ctx, const gls::image<float>& sum, std::vector<KeyPoint>* keypoints, int nOctaves,
+                         int nOctaveLayers, float hessianThreshold) {
     /* Sampling step along image x and y axes at first octave. This is doubled
        for each additional octave. WARNING: Increasing this improves speed,
        however keypoint extraction becomes unreliable. */
@@ -511,10 +538,10 @@ void fastHessianDetector(const gls::image<float>& sum, std::vector<KeyPoint>* ke
     }
 
     // Calculate hessian determinant and trace samples in each layer
-    SURFBuildInvoker(sum, sizes, sampleSteps, dets, traces);
+    SURFBuildInvoker(ctx, sum, sizes, sampleSteps, dets, traces);
 
     // Find maxima in the determinant of the hessian
-    SURFFindInvoker(sum, dets, traces, sizes,
+    SURFFindInvoker(ctx, sum, dets, traces, sizes,
                     sampleSteps, middleIndices, keypoints,
                     nOctaveLayers, hessianThreshold);
 
@@ -526,10 +553,10 @@ void fastHessianDetector(const gls::image<float>& sum, std::vector<KeyPoint>* ke
     }
 }
 
-void SURF_detect(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<KeyPoint>* keypoints, float hessianThreshold) {
+void SURF_detect(SurfClContext *ctx, const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<KeyPoint>* keypoints, float hessianThreshold) {
     int nOctaves = 4;
     int nOctaveLayers = 2;
-    fastHessianDetector(integralSum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
+    fastHessianDetector(ctx, integralSum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
 }
 
 std::vector<float> getGaussianKernel(int n, float sigma) {
@@ -586,226 +613,264 @@ void resizeVV(const gls::image<float>& src, gls::image<float>* dst, int interpol
     }
 }
 
-void SURFInvoker(const gls::image<float>& img, const gls::image<float>& sum, std::vector<KeyPoint>* keypoints, gls::image<float>* descriptors) {
+struct SURFInvoker {
     enum { ORI_RADIUS = 6, ORI_WIN = 60, PATCH_SZ = 20 };
 
     // Simple bound for number of grid points in circle of radius ORI_RADIUS
     const int nOriSampleBound = (2 * ORI_RADIUS + 1) * (2 * ORI_RADIUS + 1);
 
-    // Allocate arrays
-    std::vector<Point2f> apt(nOriSampleBound);
-    std::vector<float> aptw(nOriSampleBound);
-    std::vector<float> DW(PATCH_SZ * PATCH_SZ);
+    // Parameters
+    const gls::image<float>& img;
+    const gls::image<float>& sum;
+    std::vector<KeyPoint>* keypoints;
+    gls::image<float>* descriptors;
 
-    /* Coordinates and weights of samples used to calculate orientation */
-    const auto G_ori = getGaussianKernel(2 * ORI_RADIUS + 1, SURF_ORI_SIGMA);
-    int nOriSamples = 0;
-    for (int i = -ORI_RADIUS; i <= ORI_RADIUS; i++) {
-        for (int j = -ORI_RADIUS; j <= ORI_RADIUS; j++) {
-            if (i * i + j * j <= ORI_RADIUS * ORI_RADIUS) {
-                apt[nOriSamples] = Point2f(i, j);
-                aptw[nOriSamples++] = G_ori[i + ORI_RADIUS] * G_ori[j + ORI_RADIUS];
+    // Pre-calculated values
+    int nOriSamples;
+    std::vector<Point2f> apt;
+    std::vector<float> aptw;
+    std::vector<float> DW;
+
+    SURFInvoker(const gls::image<float>& _img, const gls::image<float>& _sum, std::vector<KeyPoint>* _keypoints, gls::image<float>* _descriptors) :
+        img(_img), sum(_sum), keypoints(_keypoints), descriptors(_descriptors) {
+        enum { ORI_RADIUS = 6, ORI_WIN = 60, PATCH_SZ = 20 };
+
+        // Simple bound for number of grid points in circle of radius ORI_RADIUS
+        const int nOriSampleBound = (2 * ORI_RADIUS + 1) * (2 * ORI_RADIUS + 1);
+
+        // Allocate arrays
+        apt.resize(nOriSampleBound);
+        aptw.resize(nOriSampleBound);
+        DW.resize(PATCH_SZ * PATCH_SZ);
+
+        /* Coordinates and weights of samples used to calculate orientation */
+        const auto G_ori = getGaussianKernel(2 * ORI_RADIUS + 1, SURF_ORI_SIGMA);
+        nOriSamples = 0;
+        for (int i = -ORI_RADIUS; i <= ORI_RADIUS; i++) {
+            for (int j = -ORI_RADIUS; j <= ORI_RADIUS; j++) {
+                if (i * i + j * j <= ORI_RADIUS * ORI_RADIUS) {
+                    apt[nOriSamples] = Point2f(i, j);
+                    aptw[nOriSamples++] = G_ori[i + ORI_RADIUS] * G_ori[j + ORI_RADIUS];
+                }
             }
         }
-    }
-    assert( nOriSamples <= nOriSampleBound );
+        assert( nOriSamples <= nOriSampleBound );
 
-    /* Gaussian used to weight descriptor samples */
-    const auto G_desc = getGaussianKernel(PATCH_SZ, SURF_DESC_SIGMA);
-    for (int i = 0; i < PATCH_SZ; i++) {
-        for (int j = 0; j < PATCH_SZ; j++) DW[i * PATCH_SZ + j] = G_desc[i] * G_desc[j];
-    }
-
-    // --- operator() ---
-
-    /* X and Y gradient wavelet data */
-    const int NX = 2, NY = 2;
-    const int dx_s[NX][5] = {{0, 0, 2, 4, -1}, {2, 0, 4, 4, 1}};
-    const int dy_s[NY][5] = {{0, 0, 4, 2, 1}, {0, 2, 4, 4, -1}};
-
-    float X[nOriSampleBound], Y[nOriSampleBound], angle[nOriSampleBound];
-    gls::image<float> PATCH(PATCH_SZ + 1, PATCH_SZ + 1);
-    float DX[PATCH_SZ][PATCH_SZ], DY[PATCH_SZ][PATCH_SZ];
-
-    // TODO: should we also add the extended (dsize = 128) case?
-    int dsize = 64;
-
-    float maxSize = 0;
-    for (int k = 0; k < (int)keypoints->size(); k++) {
-        maxSize = std::max(maxSize, (*keypoints)[k].size);
+        /* Gaussian used to weight descriptor samples */
+        const auto G_desc = getGaussianKernel(PATCH_SZ, SURF_DESC_SIGMA);
+        for (int i = 0; i < PATCH_SZ; i++) {
+            for (int j = 0; j < PATCH_SZ; j++) DW[i * PATCH_SZ + j] = G_desc[i] * G_desc[j];
+        }
     }
 
-    for (int k = 0; k < (int)keypoints->size(); k++) {
-        std::array<SurfHF, NX> dx_t;
-        std::array<SurfHF, NY> dy_t;
-        KeyPoint& kp = (*keypoints)[k];
-        float size = kp.size;
-        Point2f center = kp.pt;
-        /* The sampling intervals and wavelet sized for selecting an orientation
-         and building the keypoint descriptor are defined relative to 's' */
-        float s = size * 1.2f / 9.0f;
-        /* To find the dominant orientation, the gradients in x and y are
-         sampled in a circle of radius 6s using wavelets of size 4s.
-         We ensure the gradient wavelet size is even to ensure the
-         wavelet pattern is balanced and symmetric around its center */
-        int grad_wav_size = 2 * (int) lrint(2 * s);
-        if (sum.height < grad_wav_size || sum.width < grad_wav_size) {
-            /* when grad_wav_size is too big,
-             * the sampling of gradient will be meaningless
-             * mark keypoint for deletion. */
-            kp.size = -1;
-            continue;
+    void computeRange(int k1, int k2) {
+        /* X and Y gradient wavelet data */
+        const int NX = 2, NY = 2;
+        const int dx_s[NX][5] = {{0, 0, 2, 4, -1}, {2, 0, 4, 4, 1}};
+        const int dy_s[NY][5] = {{0, 0, 4, 2, 1}, {0, 2, 4, 4, -1}};
+
+        float X[nOriSampleBound], Y[nOriSampleBound], angle[nOriSampleBound];
+        gls::image<float> PATCH(PATCH_SZ + 1, PATCH_SZ + 1);
+        float DX[PATCH_SZ][PATCH_SZ], DY[PATCH_SZ][PATCH_SZ];
+
+        // TODO: should we also add the extended (dsize = 128) case?
+        const int dsize = 64;
+
+        float maxSize = 0;
+        for (int k = k1; k < k2; k++) {
+            maxSize = std::max(maxSize, (*keypoints)[k].size);
         }
 
-        float descriptor_dir = 360.f - 90.f;
-        resizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
-        resizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
-        int nangle = 0;
-        for (int kk = 0; kk < nOriSamples; kk++) {
-            // TODO: if we use round instead of lrint the result is slightly different
-
-            int x = (int) lrint(center.x + apt[kk].x * s - (float)(grad_wav_size - 1) / 2);
-            int y = (int) lrint(center.y + apt[kk].y * s - (float)(grad_wav_size - 1) / 2);
-            if (y < 0 || y >= sum.height - grad_wav_size ||
-                x < 0 || x >= sum.width - grad_wav_size)
+        for (int k = k1; k < k2; k++) {
+            std::array<SurfHF, NX> dx_t;
+            std::array<SurfHF, NY> dy_t;
+            KeyPoint& kp = (*keypoints)[k];
+            float size = kp.size;
+            Point2f center = kp.pt;
+            /* The sampling intervals and wavelet sized for selecting an orientation
+             and building the keypoint descriptor are defined relative to 's' */
+            float s = size * 1.2f / 9.0f;
+            /* To find the dominant orientation, the gradients in x and y are
+             sampled in a circle of radius 6s using wavelets of size 4s.
+             We ensure the gradient wavelet size is even to ensure the
+             wavelet pattern is balanced and symmetric around its center */
+            int grad_wav_size = 2 * (int) lrint(2 * s);
+            if (sum.height < grad_wav_size || sum.width < grad_wav_size) {
+                /* when grad_wav_size is too big,
+                 * the sampling of gradient will be meaningless
+                 * mark keypoint for deletion. */
+                kp.size = -1;
                 continue;
-            float vx = calcHaarPattern(sum, {x, y}, dx_t);
-            float vy = calcHaarPattern(sum, {x, y}, dy_t);
-            X[nangle] = vx * aptw[kk];
-            Y[nangle] = vy * aptw[kk];
-            nangle++;
-        }
-        if (nangle == 0) {
-            // No gradient could be sampled because the keypoint is too
-            // near too one or more of the sides of the image. As we
-            // therefore cannot find a dominant direction, we skip this
-            // keypoint and mark it for later deletion from the sequence.
-            kp.size = -1;
-            continue;
-        }
-
-        // phase( Mat(1, nangle, CV_32F, X), Mat(1, nangle, CV_32F, Y), Mat(1, nangle, CV_32F, angle), true );
-        for (int i = 0; i < nangle; i++) {
-            float temp = atan2(Y[i], X[i]) * (180 / M_PI);
-            if (temp < 0)
-                angle[i] = temp + 360;
-            else
-                angle[i] = temp;
-        }
-
-        float bestx = 0, besty = 0, descriptor_mod = 0;
-        for (float i = 0; i < 360; i += SURF_ORI_SEARCH_INC) {
-            float sumx = 0, sumy = 0, temp_mod;
-            for (int j = 0; j < nangle; j++) {
-                float d = std::abs(lrint(angle[j]) - i);
-                if (d < ORI_WIN / 2 || d > 360 - ORI_WIN / 2) {
-                    sumx += X[j];
-                    sumy += Y[j];
-                }
-            }
-            temp_mod = sumx * sumx + sumy * sumy;
-            if (temp_mod > descriptor_mod) {
-                descriptor_mod = temp_mod;
-                bestx = sumx;
-                besty = sumy;
-            }
-        }
-        descriptor_dir = atan2(-besty, bestx);
-
-        kp.angle = descriptor_dir;
-
-        if (!descriptors)
-            continue;
-
-        /* Extract a window of pixels around the keypoint of size 20s */
-        int win_size = (int)((PATCH_SZ + 1) * s);
-        gls::image<float> mwin(win_size, win_size);
-
-        // !upright
-        descriptor_dir *= (float)(M_PI / 180);
-        float sin_dir = -std::sin(descriptor_dir);
-        float cos_dir =  std::cos(descriptor_dir);
-
-        float win_offset = -(float)(win_size - 1) / 2;
-        float start_x = center.x + win_offset * cos_dir + win_offset * sin_dir;
-        float start_y = center.y - win_offset * sin_dir + win_offset * cos_dir;
-
-        int ncols1 = img.width - 1, nrows1 = img.height - 1;
-        for (int i = 0; i < win_size; i++, start_x += sin_dir, start_y += cos_dir) {
-            float pixel_x = start_x;
-            float pixel_y = start_y;
-            for (int j = 0; j < win_size; j++, pixel_x += cos_dir, pixel_y -= sin_dir) {
-                int ix = std::floor(pixel_x);
-                int iy = std::floor(pixel_y);
-
-                if ((unsigned)ix < (unsigned)ncols1 &&
-                    (unsigned)iy < (unsigned)nrows1) {
-                    float a = pixel_x - ix;
-                    float b = pixel_y - iy;
-
-                    mwin[i][j] = std::round((img[iy][ix] * (1 - a) + img[iy][ix + 1] * a) * (1 - b) +
-                                            (img[iy + 1][ix] * (1 - a) + img[iy + 1][ix + 1] * a) * b);
-                } else {
-                    int x = std::clamp((int)std::round(pixel_x), 0, ncols1);
-                    int y = std::clamp((int)std::round(pixel_y), 0, nrows1);
-                    mwin[i][j] = img[y][x];
-                }
-            }
-        }
-
-        // Scale the window to size PATCH_SZ so each pixel's size is s. This
-        // makes calculating the gradients with wavelets of size 2s easy
-        resizeVV(mwin, &PATCH, 0);
-
-        // Calculate gradients in x and y with wavelets of size 2s
-        for (int i = 0; i < PATCH_SZ; i++)
-            for (int j = 0; j < PATCH_SZ; j++) {
-                float dw = DW[i * PATCH_SZ + j];
-                float vx = (PATCH[i][j + 1] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i + 1][j]) * dw;
-                float vy = (PATCH[i + 1][j] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i][j + 1]) * dw;
-                DX[i][j] = vx;
-                DY[i][j] = vy;
             }
 
-        // Construct the descriptor
-        for (int kk = 0; kk < dsize; kk++) {
-            (*descriptors)[k][kk] = 0;
-        }
-        float square_mag = 0;
+            float descriptor_dir = 360.f - 90.f;
+            resizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
+            resizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
+            int nangle = 0;
+            for (int kk = 0; kk < nOriSamples; kk++) {
+                // TODO: if we use round instead of lrint the result is slightly different
 
-        // 64-bin descriptor
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                int index = 16 * i + 4 * j;
+                int x = (int) lrint(center.x + apt[kk].x * s - (float)(grad_wav_size - 1) / 2);
+                int y = (int) lrint(center.y + apt[kk].y * s - (float)(grad_wav_size - 1) / 2);
+                if (y < 0 || y >= sum.height - grad_wav_size ||
+                    x < 0 || x >= sum.width - grad_wav_size)
+                    continue;
+                float vx = calcHaarPattern(sum, {x, y}, dx_t);
+                float vy = calcHaarPattern(sum, {x, y}, dy_t);
+                X[nangle] = vx * aptw[kk];
+                Y[nangle] = vy * aptw[kk];
+                nangle++;
+            }
+            if (nangle == 0) {
+                // No gradient could be sampled because the keypoint is too
+                // near too one or more of the sides of the image. As we
+                // therefore cannot find a dominant direction, we skip this
+                // keypoint and mark it for later deletion from the sequence.
+                kp.size = -1;
+                continue;
+            }
 
-                for (int y = i * 5; y < i * 5 + 5; y++) {
-                    for (int x = j * 5; x < j * 5 + 5; x++) {
-                        float tx = DX[y][x], ty = DY[y][x];
-                        (*descriptors)[k][index + 0] += tx;
-                        (*descriptors)[k][index + 1] += ty;
-                        (*descriptors)[k][index + 2] += (float)fabs(tx);
-                        (*descriptors)[k][index + 3] += (float)fabs(ty);
+            // phase( Mat(1, nangle, CV_32F, X), Mat(1, nangle, CV_32F, Y), Mat(1, nangle, CV_32F, angle), true );
+            for (int i = 0; i < nangle; i++) {
+                float temp = atan2(Y[i], X[i]) * (180 / M_PI);
+                if (temp < 0)
+                    angle[i] = temp + 360;
+                else
+                    angle[i] = temp;
+            }
+
+            float bestx = 0, besty = 0, descriptor_mod = 0;
+            for (float i = 0; i < 360; i += SURF_ORI_SEARCH_INC) {
+                float sumx = 0, sumy = 0, temp_mod;
+                for (int j = 0; j < nangle; j++) {
+                    float d = std::abs(lrint(angle[j]) - i);
+                    if (d < ORI_WIN / 2 || d > 360 - ORI_WIN / 2) {
+                        sumx += X[j];
+                        sumy += Y[j];
                     }
                 }
-                for (int kk = 0; kk < 4; kk++) {
-                    float v = (*descriptors)[k][index + kk];
-                    square_mag += v * v;
+                temp_mod = sumx * sumx + sumy * sumy;
+                if (temp_mod > descriptor_mod) {
+                    descriptor_mod = temp_mod;
+                    bestx = sumx;
+                    besty = sumy;
                 }
             }
-        }
+            descriptor_dir = atan2(-besty, bestx);
 
-        // unit vector is essential for contrast invariance
-        float scale = (float)(1. / (sqrt(square_mag) + FLT_EPSILON));
-        for (int kk = 0; kk < dsize; kk++) {
-            (*descriptors)[k][kk] *= scale;
+            kp.angle = descriptor_dir;
+
+            if (!descriptors)
+                continue;
+
+            /* Extract a window of pixels around the keypoint of size 20s */
+            int win_size = (int)((PATCH_SZ + 1) * s);
+            gls::image<float> mwin(win_size, win_size);
+
+            // !upright
+            descriptor_dir *= (float)(M_PI / 180);
+            float sin_dir = -std::sin(descriptor_dir);
+            float cos_dir =  std::cos(descriptor_dir);
+
+            float win_offset = -(float)(win_size - 1) / 2;
+            float start_x = center.x + win_offset * cos_dir + win_offset * sin_dir;
+            float start_y = center.y - win_offset * sin_dir + win_offset * cos_dir;
+
+            int ncols1 = img.width - 1, nrows1 = img.height - 1;
+            for (int i = 0; i < win_size; i++, start_x += sin_dir, start_y += cos_dir) {
+                float pixel_x = start_x;
+                float pixel_y = start_y;
+                for (int j = 0; j < win_size; j++, pixel_x += cos_dir, pixel_y -= sin_dir) {
+                    int ix = std::floor(pixel_x);
+                    int iy = std::floor(pixel_y);
+
+                    if ((unsigned)ix < (unsigned)ncols1 &&
+                        (unsigned)iy < (unsigned)nrows1) {
+                        float a = pixel_x - ix;
+                        float b = pixel_y - iy;
+
+                        mwin[i][j] = std::round((img[iy][ix] * (1 - a) + img[iy][ix + 1] * a) * (1 - b) +
+                                                (img[iy + 1][ix] * (1 - a) + img[iy + 1][ix + 1] * a) * b);
+                    } else {
+                        int x = std::clamp((int)std::round(pixel_x), 0, ncols1);
+                        int y = std::clamp((int)std::round(pixel_y), 0, nrows1);
+                        mwin[i][j] = img[y][x];
+                    }
+                }
+            }
+
+            // Scale the window to size PATCH_SZ so each pixel's size is s. This
+            // makes calculating the gradients with wavelets of size 2s easy
+            resizeVV(mwin, &PATCH, 0);
+
+            // Calculate gradients in x and y with wavelets of size 2s
+            for (int i = 0; i < PATCH_SZ; i++)
+                for (int j = 0; j < PATCH_SZ; j++) {
+                    float dw = DW[i * PATCH_SZ + j];
+                    float vx = (PATCH[i][j + 1] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i + 1][j]) * dw;
+                    float vy = (PATCH[i + 1][j] - PATCH[i][j] + PATCH[i + 1][j + 1] - PATCH[i][j + 1]) * dw;
+                    DX[i][j] = vx;
+                    DY[i][j] = vy;
+                }
+
+            // Construct the descriptor
+            for (int kk = 0; kk < dsize; kk++) {
+                (*descriptors)[k][kk] = 0;
+            }
+            float square_mag = 0;
+
+            // 64-bin descriptor
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    int index = 16 * i + 4 * j;
+
+                    for (int y = i * 5; y < i * 5 + 5; y++) {
+                        for (int x = j * 5; x < j * 5 + 5; x++) {
+                            float tx = DX[y][x], ty = DY[y][x];
+                            (*descriptors)[k][index + 0] += tx;
+                            (*descriptors)[k][index + 1] += ty;
+                            (*descriptors)[k][index + 2] += (float)fabs(tx);
+                            (*descriptors)[k][index + 3] += (float)fabs(ty);
+                        }
+                    }
+                    for (int kk = 0; kk < 4; kk++) {
+                        float v = (*descriptors)[k][index + kk];
+                        square_mag += v * v;
+                    }
+                }
+            }
+
+            // unit vector is essential for contrast invariance
+            float scale = (float)(1. / (sqrt(square_mag) + FLT_EPSILON));
+            for (int kk = 0; kk < dsize; kk++) {
+                (*descriptors)[k][kk] *= scale;
+            }
         }
     }
-}
+
+    void run() {
+        const int threads = 8;
+        ThreadPool threadPool(threads);
+
+        const int K = (int) keypoints->size();
+        const int ranges = (int) std::ceil((float) K / threads);
+
+        std::cout << "enqueueing " << threads << " computeRange" << std::endl;
+        for (int rr = 0; rr < ranges; rr++) {
+            int k1 = ranges * rr;
+            int k2 = std::min(ranges * (rr + 1), K);
+
+            threadPool.enqueue([this, k1, k2](){
+                computeRange(k1, k2);
+            });
+        }
+    }
+};
 
 void SURF_descriptor(const gls::image<float>& srcImg, const gls::image<float>& integralSum, std::vector<KeyPoint>* keypoints, gls::image<float>* descriptors) {
     int N = (int) keypoints->size();
     if (N > 0) {
-        SURFInvoker(srcImg, integralSum, keypoints, descriptors);
+        SURFInvoker(srcImg, integralSum, keypoints, descriptors).run();
     }
 }
 
@@ -831,7 +896,7 @@ void integral(const gls::image<float>& img, gls::image<float>* sum) {
     }
 }
 
-void SURF_detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* keypoints, gls::image<float>::unique_ptr* _descriptors) {
+void SURF_detectAndCompute(SurfClContext *ctx, const gls::image<float>& img, std::vector<KeyPoint>* keypoints, gls::image<float>::unique_ptr* _descriptors) {
     bool doDescriptors = _descriptors != nullptr;
 
     gls::image<float> sum(img.width + 1, img.height + 1);
@@ -841,13 +906,15 @@ void SURF_detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* 
     int nOctaveLayers = 2;
     float hessianThreshold = 800;  // hessian threshold 1300
 
-    fastHessianDetector(sum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
+    fastHessianDetector(ctx, sum, keypoints, nOctaves, nOctaveLayers, hessianThreshold);
 
     int N = (int)keypoints->size();
 
     auto descriptors = doDescriptors ? std::make_unique<gls::image<float>>(64, N) : nullptr;
 
-    SURFInvoker(img, sum, keypoints, doDescriptors ? descriptors.get() : nullptr);
+    // we call SURFInvoker in any case, even if we do not need descriptors,
+    // since it computes orientation of each feature.
+    SURFInvoker(img, sum, keypoints, doDescriptors ? descriptors.get() : nullptr).run();
 
     // remove keypoints that were marked for deletion
     int j = 0;
@@ -918,9 +985,14 @@ bool SURF_Detection(const gls::image<float>& srcIMAGE1, const gls::image<float>&
     std::vector<KeyPoint> keypoints1, keypoints2;
     float hessianThreshold = 800;  // hessian threshold 1300
 
+    SurfClContext ctx;
+
     // SURF detects feature points
-    SURF_detect(srcIMAGE1, integralSum1, &keypoints1, hessianThreshold);
-    SURF_detect(srcIMAGE2, integralSum2, &keypoints2, hessianThreshold);
+    SURF_detect(&ctx, srcIMAGE1, integralSum1, &keypoints1, hessianThreshold);
+
+    ctx.sumMemory.clear();
+
+    SURF_detect(&ctx, srcIMAGE2, integralSum2, &keypoints2, hessianThreshold);
     printf(" ---------- \n Detected feature points: %ld \t %ld \n", keypoints1.size(),
            keypoints2.size());
 
