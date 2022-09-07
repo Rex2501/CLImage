@@ -74,26 +74,20 @@ float calcHaarPattern(const gls::image<float>& img, const gls::point& p, const s
 }
 
 template <size_t N>
-void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>& dst, int oldSize, int newSize, int widthStep) {
+void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>* dst, int oldSize, int newSize, int widthStep) {
     float ratio = (float) newSize / oldSize;
     for (int k = 0; k < N; k++) {
         int dx1 = (int)lrint(ratio * src[k][0]);
         int dy1 = (int)lrint(ratio * src[k][1]);
         int dx2 = (int)lrint(ratio * src[k][2]);
         int dy2 = (int)lrint(ratio * src[k][3]);
-        dst[k].p0 = { dx1, dy1 };
-        dst[k].p1 = { dx1, dy2 };
-        dst[k].p2 = { dx2, dy1 };
-        dst[k].p3 = { dx2, dy2 };
-        dst[k].w = src[k][4] / ((float)(dx2 - dx1) * (dy2 - dy1));
+        (*dst)[k].p0 = { dx1, dy1 };
+        (*dst)[k].p1 = { dx1, dy2 };
+        (*dst)[k].p2 = { dx2, dy1 };
+        (*dst)[k].p3 = { dx2, dy2 };
+        (*dst)[k].w = src[k][4] / ((float)(dx2 - dx1) * (dy2 - dy1));
     }
 }
-
-struct cl_context {
-    cl::Buffer DxBuffer;
-    cl::Buffer DyBuffer;
-    cl::Buffer DxyBuffer;
-} *cl_context_ptr = nullptr;
 
 struct clSurfHF {
     cl_int2 p0, p1, p2, p3;
@@ -119,21 +113,25 @@ struct SurfClContext {
     std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
     std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
 
+    cl::Buffer DxBuffer;
+    cl::Buffer DyBuffer;
+    cl::Buffer DxyBuffer;
+
     SurfClContext() {
-        glsContext = new gls::OpenCLContext("");;
+        glsContext = new gls::OpenCLContext("");
     }
 };
 
-void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
+void clCalcDetAndTrace(SurfClContext *ctx,
                        const gls::cl_image_2d<gls::luma_pixel_fp32>& sumImage,
                        gls::cl_image_2d<gls::luma_pixel_fp32>* detImage,
                        gls::cl_image_2d<gls::luma_pixel_fp32>* traceImage,
                        int sampleStep,
-                       std::array<SurfHF, 3>& Dx,
-                       std::array<SurfHF, 3>& Dy,
-                       std::array<SurfHF, 4>& Dxy) {
+                       const std::array<SurfHF, 3>& Dx,
+                       const std::array<SurfHF, 3>& Dy,
+                       const std::array<SurfHF, 4>& Dxy) {
     // Load the shader source
-    const auto program = glsContext->loadProgram("SURF");
+    const auto program = ctx->glsContext->loadProgram("SURF");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
@@ -145,35 +143,23 @@ void clCalcDetAndTrace(gls::OpenCLContext* glsContext,
                                     cl::Buffer    // Dxy
                                     >(program, "calcDetAndTrace");
 
-    std::array<clSurfHF, 3> clDx;
-    for (int i = 0; i < Dx.size(); i++) {
-        clDx[i] = Dx[i];
-    }
-    std::array<clSurfHF, 3> clDy;
-    for (int i = 0; i < Dy.size(); i++) {
-        clDy[i] = Dy[i];
-    }
-    std::array<clSurfHF, 4> clDxy;
-    for (int i = 0; i < Dxy.size(); i++) {
-        clDxy[i] = Dxy[i];
-    }
+    const std::array<clSurfHF, 3> clDx = { Dx[0], Dx[1], Dx[2] };
+    const std::array<clSurfHF, 3> clDy = { Dy[0], Dy[1], Dy[2] };
+    const std::array<clSurfHF, 4> clDxy = { Dxy[0], Dxy[1], Dxy[2], Dxy[3] };
 
-    if (!cl_context_ptr) {
-        cl_context_ptr = new cl_context {
-            .DxBuffer = cl::Buffer(clDx.begin(), clDx.end(), /* readOnly */ true),
-            .DyBuffer = cl::Buffer(clDy.begin(), clDy.end(), /* readOnly */ true),
-            .DxyBuffer = cl::Buffer(clDxy.begin(), clDxy.end(), /* readOnly */ true)
-        };
-    } else {
-        cl::copy(clDx.begin(), clDx.end(), cl_context_ptr->DxBuffer);
-        cl::copy(clDy.begin(), clDy.end(), cl_context_ptr->DyBuffer);
-        cl::copy(clDxy.begin(), clDxy.end(), cl_context_ptr->DxyBuffer);
+    if (ctx->DxBuffer.get() == 0) {
+        ctx->DxBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDx);
+        ctx->DyBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDy);
+        ctx->DxyBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDxy);
     }
+    cl::copy(clDx.begin(), clDx.end(), ctx->DxBuffer);
+    cl::copy(clDy.begin(), clDy.end(), ctx->DyBuffer);
+    cl::copy(clDxy.begin(), clDxy.end(), ctx->DxyBuffer);
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(detImage->width, detImage->height),
            sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
-           sampleStep, cl_context_ptr->DxBuffer, cl_context_ptr->DyBuffer, cl_context_ptr->DxyBuffer);
+           sampleStep, ctx->DxBuffer, ctx->DyBuffer, ctx->DxyBuffer);
 }
 
 void calcDetAndTrace(const gls::image<float>& sum,
@@ -219,9 +205,9 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
     if (size > (sum.height - 1) || size > (sum.width - 1))
         return;
 
-    resizeHaarPattern(dx_s, Dx, 9, size, sum.width);
-    resizeHaarPattern(dy_s, Dy, 9, size, sum.width);
-    resizeHaarPattern(dxy_s, Dxy, 9, size, sum.width);
+    resizeHaarPattern(dx_s, &Dx, 9, size, sum.width);
+    resizeHaarPattern(dy_s, &Dy, 9, size, sum.width);
+    resizeHaarPattern(dxy_s, &Dxy, 9, size, sum.width);
 
     /* The integral image 'sum' is one pixel bigger than the source image */
     int height = 1 + (sum.height - 1 - size) / sampleStep;
@@ -258,7 +244,7 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
         ctx->traceMemory[{width, height}] = traceImage;
     }
 
-    clCalcDetAndTrace(ctx->glsContext, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
+    clCalcDetAndTrace(ctx, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
 
     detImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &det);
     traceImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &trace);
@@ -291,22 +277,22 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
  * Return value is 1 if interpolation was successful, 0 on failure.
  */
 
-static int interpolateKeypoint(const gls::image<float>* N9[3], int dx, int dy, int ds, KeyPoint& kpt) {
+static int interpolateKeypoint(const std::array<gls::image<float>, 3>& N9, int dx, int dy, int ds, KeyPoint* kpt) {
     gls::Vector<3> B = {
-        -((*N9[1])[ 0][ 1] - (*N9[1])[ 0][-1]) / 2, // Negative 1st deriv with respect to x
-        -((*N9[1])[ 1][ 0] - (*N9[1])[-1][ 0]) / 2, // Negative 1st deriv with respect to y
-        -((*N9[2])[ 0][ 0] - (*N9[0])[ 0][ 0]) / 2  // Negative 1st deriv with respect to s
+        -(N9[1][ 0][ 1] - N9[1][ 0][-1]) / 2, // Negative 1st deriv with respect to x
+        -(N9[1][ 1][ 0] - N9[1][-1][ 0]) / 2, // Negative 1st deriv with respect to y
+        -(N9[2][ 0][ 0] - N9[0][ 0][ 0]) / 2  // Negative 1st deriv with respect to s
     };
     gls::Matrix<3, 3> A = {
-        {  (*N9[1])[ 0][-1] - 2 * (*N9[1])[ 0][ 0] + (*N9[1])[ 0][ 1],                              // 2nd deriv x, x
-          ((*N9[1])[ 1][ 1] -     (*N9[1])[ 1][-1] - (*N9[1])[-1][ 1] + (*N9[1])[-1][-1]) / 4,      // 2nd deriv x, y
-          ((*N9[2])[ 0][ 1] -     (*N9[2])[ 0][-1] - (*N9[0])[ 0][ 1] + (*N9[0])[ 0][-1]) / 4 },    // 2nd deriv x, s
-        { ((*N9[1])[ 1][ 1] -     (*N9[1])[ 1][-1] - (*N9[1])[-1][ 1] + (*N9[1])[-1][-1]) / 4,      // 2nd deriv x, y
-           (*N9[1])[-1][ 0] - 2 * (*N9[1])[ 0][ 0] + (*N9[1])[ 1][ 0],                              // 2nd deriv y, y
-          ((*N9[2])[ 1][ 0] -     (*N9[2])[-1][ 0] - (*N9[0])[ 1][ 0] + (*N9[0])[-1][ 0]) / 4 },    // 2nd deriv y, s
-        { ((*N9[2])[ 0][ 1] -     (*N9[2])[ 0][-1] - (*N9[0])[ 0][ 1] + (*N9[0])[ 0][-1]) / 4,      // 2nd deriv x, s
-          ((*N9[2])[ 1][ 0] -     (*N9[2])[-1][ 0] - (*N9[0])[ 1][ 0] + (*N9[0])[-1][ 0]) / 4,      // 2nd deriv y, s
-           (*N9[0])[ 0][ 0] - 2 * (*N9[1])[ 0][ 0] + (*N9[2])[ 0][ 0] }                             // 2nd deriv s, s
+        {  N9[1][ 0][-1] - 2 * N9[1][ 0][ 0] + N9[1][ 0][ 1],                              // 2nd deriv x, x
+          (N9[1][ 1][ 1] -     N9[1][ 1][-1] - N9[1][-1][ 1] + N9[1][-1][-1]) / 4,      // 2nd deriv x, y
+          (N9[2][ 0][ 1] -     N9[2][ 0][-1] - N9[0][ 0][ 1] + N9[0][ 0][-1]) / 4 },    // 2nd deriv x, s
+        { (N9[1][ 1][ 1] -     N9[1][ 1][-1] - N9[1][-1][ 1] + N9[1][-1][-1]) / 4,      // 2nd deriv x, y
+           N9[1][-1][ 0] - 2 * N9[1][ 0][ 0] + N9[1][ 1][ 0],                              // 2nd deriv y, y
+          (N9[2][ 1][ 0] -     N9[2][-1][ 0] - N9[0][ 1][ 0] + N9[0][-1][ 0]) / 4 },    // 2nd deriv y, s
+        { (N9[2][ 0][ 1] -     N9[2][ 0][-1] - N9[0][ 0][ 1] + N9[0][ 0][-1]) / 4,      // 2nd deriv x, s
+          (N9[2][ 1][ 0] -     N9[2][-1][ 0] - N9[0][ 1][ 0] + N9[0][-1][ 0]) / 4,      // 2nd deriv y, s
+           N9[0][ 0][ 0] - 2 * N9[1][ 0][ 0] + N9[2][ 0][ 0] }                             // 2nd deriv s, s
     };
     // gls::Vector<3> x = B * gls::inverse(A);
     gls::Vector<3> x = surf::inverse(A) * B;
@@ -315,15 +301,15 @@ static int interpolateKeypoint(const gls::image<float>* N9[3], int dx, int dy, i
         std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 && std::abs(x[2]) <= 1;
 
     if (ok) {
-        kpt.pt.x += x[0] * dx;
-        kpt.pt.y += x[1] * dy;
-        kpt.size = (float) lrint(kpt.size + x[2] * ds);
+        kpt->pt.x += x[0] * dx;
+        kpt->pt.y += x[1] * dy;
+        kpt->size = (float) lrint(kpt->size + x[2] * ds);
     }
     return ok;
 }
 
 void SURFBuildInvoker(SurfClContext *ctx, const gls::image<float>& sum, std::vector<int>& sizes, std::vector<int>& sampleSteps,
-                      std::vector<gls::image<float>*>& dets, std::vector<gls::image<float>*> traces) {
+                      const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*> traces) {
     ThreadPool threadPool(8);
 
     int N = (int) sizes.size();
@@ -359,46 +345,45 @@ void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
     const gls::image<float>& det2 = *dets[layer];
     const gls::image<float>& det3 = *dets[layer + 1];
 
-    for (int i = margin; i < layer_height - margin; i++) {
-        for (int j = margin; j < layer_width - margin; j++) {
-            const float val0 = (*dets[layer])[i][j];
+    for (int y = margin; y < layer_height - margin; y++) {
+        for (int x = margin; x < layer_width - margin; x++) {
+            const float val0 = (*dets[layer])[y][x];
 
             if (val0 > hessianThreshold) {
                 /* Coordinates for the start of the wavelet in the sum image. There
                    is some integer division involved, so don't try to simplify this
                    (cancel out sampleStep) without checking the result is the same */
-                int sum_i = sampleStep * (i - (size / 2) / sampleStep);
-                int sum_j = sampleStep * (j - (size / 2) / sampleStep);
+                int sum_y = sampleStep * (y - (size / 2) / sampleStep);
+                int sum_x = sampleStep * (x - (size / 2) / sampleStep);
 
                 /* The 3x3x3 neighbouring samples around the maxima.
-                   The maxima is included at (*N9[1])[0][0] */
+                   The maxima is included at N9[1][0][0] */
 
-                const gls::image<float> D1(det1, {j, i, 3, 3});
-                const gls::image<float> D2(det2, {j, i, 3, 3});
-                const gls::image<float> D3(det3, {j, i, 3, 3});
-                const gls::image<float>* N9[3] = {&D1, &D2, &D3};
+                const std::array<gls::image<float>, 3> N9 = {
+                    gls::image<float>(det1, {x, y, 1, 1}),
+                    gls::image<float>(det2, {x, y, 1, 1}),
+                    gls::image<float>(det3, {x, y, 1, 1}),
+                };
 
-                /* Non-maxima suppression. val0 is at (*N9[1])[0][0]*/
-                if (val0 > (*N9[0])[-1][-1] && val0 > (*N9[0])[-1][0] && val0 > (*N9[0])[-1][1] &&
-                    val0 > (*N9[0])[ 0][-1] && val0 > (*N9[0])[ 0][0] && val0 > (*N9[0])[ 0][1] &&
-                    val0 > (*N9[0])[ 1][-1] && val0 > (*N9[0])[ 1][0] && val0 > (*N9[0])[ 1][1] &&
-
-                    val0 > (*N9[1])[-1][-1] && val0 > (*N9[1])[-1][0] && val0 > (*N9[1])[-1][1] &&
-                    val0 > (*N9[1])[ 0][-1]                           && val0 > (*N9[1])[ 0][1] &&
-                    val0 > (*N9[1])[ 1][-1] && val0 > (*N9[1])[ 1][0] && val0 > (*N9[1])[ 1][1] &&
-
-                    val0 > (*N9[2])[-1][-1] && val0 > (*N9[2])[-1][0] && val0 > (*N9[2])[-1][1] &&
-                    val0 > (*N9[2])[ 0][-1] && val0 > (*N9[2])[ 0][0] && val0 > (*N9[2])[ 0][1] &&
-                    val0 > (*N9[2])[ 1][-1] && val0 > (*N9[2])[ 1][0] && val0 > (*N9[2])[ 1][1])
+                /* Non-maxima suppression. val0 is at N9[1][0][0] */
+                if (val0 > N9[0][-1][-1] && val0 > N9[0][-1][0] && val0 > N9[0][-1][1] &&
+                    val0 > N9[0][ 0][-1] && val0 > N9[0][ 0][0] && val0 > N9[0][ 0][1] &&
+                    val0 > N9[0][ 1][-1] && val0 > N9[0][ 1][0] && val0 > N9[0][ 1][1] &&
+                    val0 > N9[1][-1][-1] && val0 > N9[1][-1][0] && val0 > N9[1][-1][1] &&
+                    val0 > N9[1][ 0][-1]                        && val0 > N9[1][ 0][1] &&
+                    val0 > N9[1][ 1][-1] && val0 > N9[1][ 1][0] && val0 > N9[1][ 1][1] &&
+                    val0 > N9[2][-1][-1] && val0 > N9[2][-1][0] && val0 > N9[2][-1][1] &&
+                    val0 > N9[2][ 0][-1] && val0 > N9[2][ 0][0] && val0 > N9[2][ 0][1] &&
+                    val0 > N9[2][ 1][-1] && val0 > N9[2][ 1][0] && val0 > N9[2][ 1][1])
                 {
                     /* Calculate the wavelet center coordinates for the maxima */
-                    float center_i = sum_i + (size - 1) * 0.5f;
-                    float center_j = sum_j + (size - 1) * 0.5f;
-                    KeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[i][j] > 0 };
+                    float center_i = sum_y + (size - 1) * 0.5f;
+                    float center_j = sum_x + (size - 1) * 0.5f;
+                    KeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[y][x] > 0 };
 
                     /* Interpolate maxima location within the 3x3x3 neighbourhood  */
                     int ds = size - sizes[layer - 1];
-                    int interp_ok = interpolateKeypoint(N9, sampleStep, sampleStep, ds, kpt);
+                    int interp_ok = interpolateKeypoint(N9, sampleStep, sampleStep, ds, &kpt);
 
                     /* Sometimes the interpolation step gives a negative size etc. */
                     if (interp_ok) {
@@ -474,9 +459,10 @@ void SURFFindInvoker(SurfClContext *ctx, const gls::image<float>& sum, const std
     int M = (int) middleIndices.size();
     std::cout << "enqueueing " << M << " findMaximaInLayer" << std::endl;
     for (int i = 0; i < M; i++) {
-        threadPool.enqueue([&, i](){
-            int layer = middleIndices[i];
-            int octave = i / nOctaveLayers;
+        const int layer = middleIndices[i];
+        const int octave = i / nOctaveLayers;
+
+        threadPool.enqueue([&, layer, octave]() {
             findMaximaInLayer(ctx, sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
                               sampleSteps[layer]);
         });
@@ -698,8 +684,8 @@ struct SURFInvoker {
             }
 
             float descriptor_dir = 360.f - 90.f;
-            resizeHaarPattern(dx_s, dx_t, 4, grad_wav_size, sum.width);
-            resizeHaarPattern(dy_s, dy_t, 4, grad_wav_size, sum.width);
+            resizeHaarPattern(dx_s, &dx_t, 4, grad_wav_size, sum.width);
+            resizeHaarPattern(dy_s, &dy_t, 4, grad_wav_size, sum.width);
             int nangle = 0;
             for (int kk = 0; kk < nOriSamples; kk++) {
                 // TODO: if we use round instead of lrint the result is slightly different
