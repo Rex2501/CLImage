@@ -291,22 +291,22 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
  * Return value is 1 if interpolation was successful, 0 on failure.
  */
 
-static int interpolateKeypoint(float N9[3][9], int dx, int dy, int ds, KeyPoint& kpt) {
+static int interpolateKeypoint(const gls::image<float>* N9[3], int dx, int dy, int ds, KeyPoint& kpt) {
     gls::Vector<3> B = {
-        -(N9[1][5] - N9[1][3]) / 2, // Negative 1st deriv with respect to x
-        -(N9[1][7] - N9[1][1]) / 2, // Negative 1st deriv with respect to y
-        -(N9[2][4] - N9[0][4]) / 2  // Negative 1st deriv with respect to s
+        -((*N9[1])[ 0][ 1] - (*N9[1])[ 0][-1]) / 2, // Negative 1st deriv with respect to x
+        -((*N9[1])[ 1][ 0] - (*N9[1])[-1][ 0]) / 2, // Negative 1st deriv with respect to y
+        -((*N9[2])[ 0][ 0] - (*N9[0])[ 0][ 0]) / 2  // Negative 1st deriv with respect to s
     };
     gls::Matrix<3, 3> A = {
-        { N9[1][3] - 2 * N9[1][4] + N9[1][5],                   // 2nd deriv x, x
-          (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
-          (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4 },    // 2nd deriv x, s
-        { (N9[1][8] - N9[1][6] - N9[1][2] + N9[1][0]) / 4,      // 2nd deriv x, y
-          N9[1][1] - 2 * N9[1][4] + N9[1][7],                   // 2nd deriv y, y
-          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4 },    // 2nd deriv y, s
-        { (N9[2][5] - N9[2][3] - N9[0][5] + N9[0][3]) / 4,      // 2nd deriv x, s
-          (N9[2][7] - N9[2][1] - N9[0][7] + N9[0][1]) / 4,      // 2nd deriv y, s
-          N9[0][4] - 2 * N9[1][4] + N9[2][4] }                  // 2nd deriv s, s
+        {  (*N9[1])[ 0][-1] - 2 * (*N9[1])[ 0][ 0] + (*N9[1])[ 0][ 1],                              // 2nd deriv x, x
+          ((*N9[1])[ 1][ 1] -     (*N9[1])[ 1][-1] - (*N9[1])[-1][ 1] + (*N9[1])[-1][-1]) / 4,      // 2nd deriv x, y
+          ((*N9[2])[ 0][ 1] -     (*N9[2])[ 0][-1] - (*N9[0])[ 0][ 1] + (*N9[0])[ 0][-1]) / 4 },    // 2nd deriv x, s
+        { ((*N9[1])[ 1][ 1] -     (*N9[1])[ 1][-1] - (*N9[1])[-1][ 1] + (*N9[1])[-1][-1]) / 4,      // 2nd deriv x, y
+           (*N9[1])[-1][ 0] - 2 * (*N9[1])[ 0][ 0] + (*N9[1])[ 1][ 0],                              // 2nd deriv y, y
+          ((*N9[2])[ 1][ 0] -     (*N9[2])[-1][ 0] - (*N9[0])[ 1][ 0] + (*N9[0])[-1][ 0]) / 4 },    // 2nd deriv y, s
+        { ((*N9[2])[ 0][ 1] -     (*N9[2])[ 0][-1] - (*N9[0])[ 0][ 1] + (*N9[0])[ 0][-1]) / 4,      // 2nd deriv x, s
+          ((*N9[2])[ 1][ 0] -     (*N9[2])[-1][ 0] - (*N9[0])[ 1][ 0] + (*N9[0])[-1][ 0]) / 4,      // 2nd deriv y, s
+           (*N9[0])[ 0][ 0] - 2 * (*N9[1])[ 0][ 0] + (*N9[2])[ 0][ 0] }                             // 2nd deriv s, s
     };
     // gls::Vector<3> x = B * gls::inverse(A);
     gls::Vector<3> x = surf::inverse(A) * B;
@@ -371,28 +371,25 @@ void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
                 int sum_j = sampleStep * (j - (size / 2) / sampleStep);
 
                 /* The 3x3x3 neighbouring samples around the maxima.
-                   The maxima is included at N9[1][4] */
+                   The maxima is included at (*N9[1])[0][0] */
 
-                float N9[3][9] = { { det1[i-1][j-1], det1[i-1][j], det1[i-1][j+1],
-                                     det1[i][j-1],   det1[i][j],   det1[i][j+1],
-                                     det1[i+1][j-1], det1[i+1][j], det1[i+1][j+1] },
-                                   { det2[i-1][j-1], det2[i-1][j], det2[i-1][j+1],
-                                     det2[i][j-1],   det2[i][j],   det2[i][j+1],
-                                     det2[i+1][j-1], det2[i+1][j], det2[i+1][j+1] },
-                                   { det3[i-1][j-1], det3[i-1][j], det3[i-1][j+1],
-                                     det3[i][j-1],   det3[i][j],   det3[i][j+1],
-                                     det3[i+1][j-1], det3[i+1][j], det3[i+1][j+1] } };
+                const gls::image<float> D1(det1, {j, i, 3, 3});
+                const gls::image<float> D2(det2, {j, i, 3, 3});
+                const gls::image<float> D3(det3, {j, i, 3, 3});
+                const gls::image<float>* N9[3] = {&D1, &D2, &D3};
 
-                /* Non-maxima suppression. val0 is at N9[1][4]*/
-                if (val0 > N9[0][0] && val0 > N9[0][1] && val0 > N9[0][2] &&
-                    val0 > N9[0][3] && val0 > N9[0][4] && val0 > N9[0][5] &&
-                    val0 > N9[0][6] && val0 > N9[0][7] && val0 > N9[0][8] &&
-                    val0 > N9[1][0] && val0 > N9[1][1] && val0 > N9[1][2] &&
-                    val0 > N9[1][3]                    && val0 > N9[1][5] &&
-                    val0 > N9[1][6] && val0 > N9[1][7] && val0 > N9[1][8] &&
-                    val0 > N9[2][0] && val0 > N9[2][1] && val0 > N9[2][2] &&
-                    val0 > N9[2][3] && val0 > N9[2][4] && val0 > N9[2][5] &&
-                    val0 > N9[2][6] && val0 > N9[2][7] && val0 > N9[2][8] )
+                /* Non-maxima suppression. val0 is at (*N9[1])[0][0]*/
+                if (val0 > (*N9[0])[-1][-1] && val0 > (*N9[0])[-1][0] && val0 > (*N9[0])[-1][1] &&
+                    val0 > (*N9[0])[ 0][-1] && val0 > (*N9[0])[ 0][0] && val0 > (*N9[0])[ 0][1] &&
+                    val0 > (*N9[0])[ 1][-1] && val0 > (*N9[0])[ 1][0] && val0 > (*N9[0])[ 1][1] &&
+
+                    val0 > (*N9[1])[-1][-1] && val0 > (*N9[1])[-1][0] && val0 > (*N9[1])[-1][1] &&
+                    val0 > (*N9[1])[ 0][-1]                           && val0 > (*N9[1])[ 0][1] &&
+                    val0 > (*N9[1])[ 1][-1] && val0 > (*N9[1])[ 1][0] && val0 > (*N9[1])[ 1][1] &&
+
+                    val0 > (*N9[2])[-1][-1] && val0 > (*N9[2])[-1][0] && val0 > (*N9[2])[-1][1] &&
+                    val0 > (*N9[2])[ 0][-1] && val0 > (*N9[2])[ 0][0] && val0 > (*N9[2])[ 0][1] &&
+                    val0 > (*N9[2])[ 1][-1] && val0 > (*N9[2])[ 1][0] && val0 > (*N9[2])[ 1][1])
                 {
                     /* Calculate the wavelet center coordinates for the maxima */
                     float center_i = sum_i + (size - 1) * 0.5f;
@@ -600,13 +597,10 @@ void resizeVV(const gls::image<float>& src, gls::image<float>* dst, int interpol
                 float _idec = i * dsize - _i;  // fractional part
                 int _j = (int)j * dsize;
                 float _jdec = j * dsize - _j;
-                if (_j >= 0 && _j < (src.height - 1) && _i >= 0 &&
-                    _i < (src.height - 1))  // Bilinear interpolation
-                {
-                    (*dst)[i][j] = (1 - _idec) * (1 - _jdec) * src[_i][_j] +
-                                    _idec * (1 - _jdec) * src[_i + 1][_j] +
-                                    _jdec * (1 - _idec) * src[_j][_j + 1] +
-                                    _idec * _jdec * src[_i + 1][_j + 1];
+                if (_j >= 0 && _j < (src.height - 1) && _i >= 0 && _i < (src.height - 1)) {
+                    // Bilinear interpolation
+                    (*dst)[i][j] = (1 - _idec) * (1 - _jdec) * src[_i][_j] + _idec * (1 - _jdec) * src[_i + 1][_j] +
+                                   _jdec * (1 - _idec) * src[_j][_j + 1] + _idec * _jdec * src[_i + 1][_j + 1];
                 }
             }
         }
