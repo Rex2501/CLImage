@@ -29,8 +29,6 @@ void testSURF() {
     const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
     const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
 
-    auto t_start = std::chrono::high_resolution_clock::now();
-
     gls::image<float> srcImg1(srcImg1_->width, srcImg1_->height);
     gls::image<float> srcImg2(srcImg2_->width, srcImg2_->height);
 
@@ -46,6 +44,9 @@ void testSURF() {
 
     std::vector<surf::Point2f> matchpoints1;
     std::vector<surf::Point2f> matchpoints2;
+
+    auto t_start = std::chrono::high_resolution_clock::now();
+
     int matches_num = 150;
     bool isFeatureDection = surf::SURF_Detection(srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
     printf("isFeatureDection: %d\n", isFeatureDection);

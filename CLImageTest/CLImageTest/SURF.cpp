@@ -109,13 +109,15 @@ struct SurfClContext {
     std::mutex clMutex;
     std::mutex findMaximaInLayerMutex;
 
-    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> sumMemory;
-    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> detMemory;
-    std::unordered_map<gls::size, gls::cl_image_2d<gls::luma_pixel_fp32>*> traceMemory;
+    std::unordered_map<gls::size, gls::cl_image_2d<float>*> sumMemory;
+    std::unordered_map<gls::size, gls::cl_image_2d<float>*> detMemory;
+    std::unordered_map<gls::size, gls::cl_image_2d<float>*> traceMemory;
 
     cl::Buffer DxBuffer;
     cl::Buffer DyBuffer;
     cl::Buffer DxyBuffer;
+
+    cl::Buffer keyPointsBuffer;
 
     SurfClContext() {
         glsContext = new gls::OpenCLContext("");
@@ -123,9 +125,9 @@ struct SurfClContext {
 };
 
 void clCalcDetAndTrace(SurfClContext *ctx,
-                       const gls::cl_image_2d<gls::luma_pixel_fp32>& sumImage,
-                       gls::cl_image_2d<gls::luma_pixel_fp32>* detImage,
-                       gls::cl_image_2d<gls::luma_pixel_fp32>* traceImage,
+                       const gls::cl_image_2d<float>& sumImage,
+                       gls::cl_image_2d<float>* detImage,
+                       gls::cl_image_2d<float>* traceImage,
                        int sampleStep,
                        const std::array<SurfHF, 3>& Dx,
                        const std::array<SurfHF, 3>& Dy,
@@ -225,29 +227,29 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
 
     auto sumImage = ctx->sumMemory[sum.size()];
     if (!sumImage) {
-        sumImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), *((gls::image<gls::luma_pixel_fp32>*) &sum));
+        sumImage = new gls::cl_image_2d<float>(ctx->glsContext->clContext(), sum);
         ctx->sumMemory[sum.size()] = sumImage;
     } else {
         // TODO: this is unnecessary, add proper per input image context
-        // sumImage->copyPixelsFrom(*((gls::image<gls::luma_pixel_fp32>*) &sum));
+        // sumImage->copyPixelsFrom(*((gls::image<float>*) &sum));
     }
 
     auto detImage = ctx->detMemory[{width, height}];
     if (!detImage) {
-        detImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), width, height);
+        detImage = new gls::cl_image_2d<float>(ctx->glsContext->clContext(), width, height);
         ctx->detMemory[{width, height}] = detImage;
     }
 
     auto traceImage = ctx->traceMemory[{width, height}];
     if (!traceImage) {
-        traceImage = new gls::cl_image_2d<gls::luma_pixel_fp32>(ctx->glsContext->clContext(), width, height);
+        traceImage = new gls::cl_image_2d<float>(ctx->glsContext->clContext(), width, height);
         ctx->traceMemory[{width, height}] = traceImage;
     }
 
     clCalcDetAndTrace(ctx, *sumImage, detImage, traceImage, sampleStep, Dx, Dy, Dxy);
 
-    detImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &det);
-    traceImage->copyPixelsTo((gls::image<gls::luma_pixel_fp32>*) &trace);
+    detImage->copyPixelsTo((gls::image<float>*) &det);
+    traceImage->copyPixelsTo((gls::image<float>*) &trace);
 #else
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -277,33 +279,61 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::image<float>& sum, int 
  * Return value is 1 if interpolation was successful, 0 on failure.
  */
 
-static int interpolateKeypoint(const std::array<gls::image<float>, 3>& N9, int dx, int dy, int ds, KeyPoint* kpt) {
+inline bool solve3x3(const gls::Matrix<3, 3>& A, const gls::Vector<3>& b, gls::Vector<3>* x) {
+    float det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
+                A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+                A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+
+    if (det != 0) {
+        float invdet = 1.0f / det;
+        (*x)[0] = invdet *
+               (b[0]    * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
+                A[0][1] * (b[1]    * A[2][2] - A[1][2] * b[2]   ) +
+                A[0][2] * (b[1]    * A[2][1] - A[1][1] * b[2]   ));
+
+        (*x)[1] = invdet *
+               (A[0][0] * (b[1]    * A[2][2] - A[1][2] * b[2]   ) -
+                b[0]    * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+                A[0][2] * (A[1][0] * b[2]    - b[1]    * A[2][0]));
+
+        (*x)[2] = invdet *
+               (A[0][0] * (A[1][1] * b[2]    - b[1]    * A[2][1]) -
+                A[0][1] * (A[1][0] * b[2]    - b[1]    * A[2][0]) +
+                b[0]    * (A[1][0] * A[2][1] - A[1][1] * A[2][0]));
+
+        return true;
+    }
+    return false;
+}
+
+static bool interpolateKeypoint(const std::array<gls::image<float>, 3>& N9, int dx, int dy, int ds, KeyPoint* kpt) {
     gls::Vector<3> B = {
         -(N9[1][ 0][ 1] - N9[1][ 0][-1]) / 2, // Negative 1st deriv with respect to x
         -(N9[1][ 1][ 0] - N9[1][-1][ 0]) / 2, // Negative 1st deriv with respect to y
         -(N9[2][ 0][ 0] - N9[0][ 0][ 0]) / 2  // Negative 1st deriv with respect to s
     };
     gls::Matrix<3, 3> A = {
-        {  N9[1][ 0][-1] - 2 * N9[1][ 0][ 0] + N9[1][ 0][ 1],                              // 2nd deriv x, x
+        {  N9[1][ 0][-1] - 2 * N9[1][ 0][ 0] + N9[1][ 0][ 1],                           // 2nd deriv x, x
           (N9[1][ 1][ 1] -     N9[1][ 1][-1] - N9[1][-1][ 1] + N9[1][-1][-1]) / 4,      // 2nd deriv x, y
           (N9[2][ 0][ 1] -     N9[2][ 0][-1] - N9[0][ 0][ 1] + N9[0][ 0][-1]) / 4 },    // 2nd deriv x, s
         { (N9[1][ 1][ 1] -     N9[1][ 1][-1] - N9[1][-1][ 1] + N9[1][-1][-1]) / 4,      // 2nd deriv x, y
-           N9[1][-1][ 0] - 2 * N9[1][ 0][ 0] + N9[1][ 1][ 0],                              // 2nd deriv y, y
+           N9[1][-1][ 0] - 2 * N9[1][ 0][ 0] + N9[1][ 1][ 0],                           // 2nd deriv y, y
           (N9[2][ 1][ 0] -     N9[2][-1][ 0] - N9[0][ 1][ 0] + N9[0][-1][ 0]) / 4 },    // 2nd deriv y, s
         { (N9[2][ 0][ 1] -     N9[2][ 0][-1] - N9[0][ 0][ 1] + N9[0][ 0][-1]) / 4,      // 2nd deriv x, s
           (N9[2][ 1][ 0] -     N9[2][-1][ 0] - N9[0][ 1][ 0] + N9[0][-1][ 0]) / 4,      // 2nd deriv y, s
-           N9[0][ 0][ 0] - 2 * N9[1][ 0][ 0] + N9[2][ 0][ 0] }                             // 2nd deriv s, s
+           N9[0][ 0][ 0] - 2 * N9[1][ 0][ 0] + N9[2][ 0][ 0] }                          // 2nd deriv s, s
     };
     // gls::Vector<3> x = B * gls::inverse(A);
-    gls::Vector<3> x = surf::inverse(A) * B;
-
-    bool ok = (x[0] != 0 || x[1] != 0 || x[2] != 0) &&
-        std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 && std::abs(x[2]) <= 1;
+    // gls::Vector<3> x = surf::inverse(A) * B;
+    gls::Vector<3> x;
+    bool ok = solve3x3(A, B, &x);
+    ok = ok && (x[0] != 0 || x[1] != 0 || x[2] != 0) &&
+         std::abs(x[0]) <= 1 && std::abs(x[1]) <= 1 && std::abs(x[2]) <= 1;
 
     if (ok) {
         kpt->pt.x += x[0] * dx;
         kpt->pt.y += x[1] * dy;
-        kpt->size = (float) lrint(kpt->size + x[2] * ds);
+        kpt->size = rint(kpt->size + x[2] * ds);
     }
     return ok;
 }
@@ -328,26 +358,82 @@ void SURFBuildInvoker(SurfClContext *ctx, const gls::image<float>& sum, std::vec
  * scale-space pyramid
  */
 
-void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
-                       const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
-                       const std::vector<int>& sizes, std::vector<KeyPoint>* keypoints, int octave,
-                       int layer, float hessianThreshold, int sampleStep) {
-    int size = sizes[layer];
+typedef struct KeyPointMaxima {
+    int count;
+    KeyPoint keyPoints[20000];
+} KeyPointMaxima;
+
+void clFindMaximaInLayer(SurfClContext *ctx, const gls::cl_image_2d<float>& sumImage,
+                         const std::array<const gls::cl_image_2d<float>, 3>& dets,
+                         const gls::cl_image_2d<float>& traceImage,
+                         const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
+                         float hessianThreshold, int sampleStep) {
+    // Load the shader source
+    const auto program = ctx->glsContext->loadProgram("SURF");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
+                                    cl::Image2D,  // detImage0
+                                    cl::Image2D,  // detImage1
+                                    cl::Image2D,  // detImage2
+                                    cl::Image2D,  // traceImage
+                                    cl_int3,      // sizes
+                                    cl::Buffer,   // keypoints
+                                    int,          // margin
+                                    int,          // octave
+                                    float,        // hessianThreshold
+                                    int           // sampleStep
+                                    >(program, "findMaximaInLayer");
+
+    const auto keyPointsBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(KeyPointMaxima));
 
     // The integral image 'sum' is one pixel bigger than the source image
-    int layer_height = (sum.height - 1) / sampleStep;
-    int layer_width = (sum.width - 1) / sampleStep;
+    const int layer_height = (sumImage.height - 1) / sampleStep;
+    const int layer_width = (sumImage.width - 1) / sampleStep;
 
     // Ignore pixels without a 3x3x3 neighbourhood in the layer above
-    int margin = (sizes[layer + 1] / 2) / sampleStep + 1;
+    const int margin = (sizes[2] / 2) / sampleStep + 1;
 
-    const gls::image<float>& det1 = *dets[layer - 1];
-    const gls::image<float>& det2 = *dets[layer];
-    const gls::image<float>& det3 = *dets[layer + 1];
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(layer_width - 2 * margin, layer_height - 2 * margin),
+           sumImage.getImage2D(),
+           dets[0].getImage2D(), dets[1].getImage2D(), dets[2].getImage2D(),
+           traceImage.getImage2D(),
+           { sizes[0], sizes[1], sizes[2] }, keyPointsBuffer,
+           margin, octave, hessianThreshold, sampleStep);
 
+    const auto keyPointMaxima = (KeyPointMaxima *) cl::enqueueMapBuffer(keyPointsBuffer, true, CL_MAP_READ, 0, sizeof(KeyPointMaxima));
+
+    std::cout << "keyPointMaxima: " << keyPointMaxima->count << std::endl;
+
+    for (int i = 0; i < std::min(keyPointMaxima->count, 20000); i++) {
+        keypoints->push_back(keyPointMaxima->keyPoints[i]);
+    }
+
+    cl::enqueueUnmapMemObject(keyPointsBuffer, (void*)keyPointMaxima);
+}
+
+void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
+                       const std::array<gls::image<float>*, 3>& dets, const gls::image<float>& trace,
+                       const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
+                       float hessianThreshold, int sampleStep) {
+    const int size = sizes[1];
+
+    // The integral image 'sum' is one pixel bigger than the source image
+    const int layer_height = (sum.height - 1) / sampleStep;
+    const int layer_width = (sum.width - 1) / sampleStep;
+
+    // Ignore pixels without a 3x3x3 neighbourhood in the layer above
+    const int margin = (sizes[2] / 2) / sampleStep + 1;
+
+    const gls::image<float>& det0 = *dets[0];
+    const gls::image<float>& det1 = *dets[1];
+    const gls::image<float>& det2 = *dets[2];
+
+    int keyPointMaxima = 0;
     for (int y = margin; y < layer_height - margin; y++) {
         for (int x = margin; x < layer_width - margin; x++) {
-            const float val0 = (*dets[layer])[y][x];
+            const float val0 = (*dets[1])[y][x];
 
             if (val0 > hessianThreshold) {
                 /* Coordinates for the start of the wavelet in the sum image. There
@@ -360,9 +446,9 @@ void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
                    The maxima is included at N9[1][0][0] */
 
                 const std::array<gls::image<float>, 3> N9 = {
+                    gls::image<float>(det0, {x, y, 1, 1}),
                     gls::image<float>(det1, {x, y, 1, 1}),
                     gls::image<float>(det2, {x, y, 1, 1}),
-                    gls::image<float>(det3, {x, y, 1, 1}),
                 };
 
                 /* Non-maxima suppression. val0 is at N9[1][0][0] */
@@ -377,23 +463,25 @@ void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
                     val0 > N9[2][ 1][-1] && val0 > N9[2][ 1][0] && val0 > N9[2][ 1][1])
                 {
                     /* Calculate the wavelet center coordinates for the maxima */
-                    float center_i = sum_y + (size - 1) * 0.5f;
-                    float center_j = sum_x + (size - 1) * 0.5f;
-                    KeyPoint kpt = {{center_j, center_i}, (float)sizes[layer], -1, val0, octave, (*traces[layer])[y][x] > 0 };
+                    float center_y = sum_y + (size - 1) * 0.5f;
+                    float center_x = sum_x + (size - 1) * 0.5f;
+                    KeyPoint kpt = {{center_x, center_y}, (float)sizes[1], -1, val0, octave, trace[y][x] > 0 };
 
                     /* Interpolate maxima location within the 3x3x3 neighbourhood  */
-                    int ds = size - sizes[layer - 1];
+                    int ds = size - sizes[0];
                     int interp_ok = interpolateKeypoint(N9, sampleStep, sampleStep, ds, &kpt);
 
                     /* Sometimes the interpolation step gives a negative size etc. */
                     if (interp_ok) {
                         std::lock_guard<std::mutex> guard(ctx->findMaximaInLayerMutex);
                         keypoints->push_back(kpt);
+                        keyPointMaxima++;
                     }
                 }
             }
         }
     }
+    std::cout << "keyPointMaxima: " << keyPointMaxima << std::endl;
 }
 
 // --- Large Matrix Inversion ---
@@ -451,8 +539,9 @@ gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
     return inv;
 }
 
-void SURFFindInvoker(SurfClContext *ctx, const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets, const std::vector<gls::image<float>*>& traces,
-                     const std::vector<int>& sizes, const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
+void SURFFindInvoker(SurfClContext *ctx, const gls::image<float>& sum, const std::vector<gls::image<float>*>& dets,
+                     const std::vector<gls::image<float>*>& traces, const std::vector<int>& sizes,
+                     const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
                      std::vector<KeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold) {
     ThreadPool threadPool(8);
 
@@ -462,10 +551,25 @@ void SURFFindInvoker(SurfClContext *ctx, const gls::image<float>& sum, const std
         const int layer = middleIndices[i];
         const int octave = i / nOctaveLayers;
 
-        threadPool.enqueue([&, layer, octave]() {
-            findMaximaInLayer(ctx, sum, dets, traces, sizes, keypoints, octave, layer, hessianThreshold,
-                              sampleSteps[layer]);
-        });
+//        threadPool.enqueue([&, layer, octave]() {
+//            findMaximaInLayer(ctx, sum, { dets[layer-1], dets[layer], dets[layer+1] },
+//                              *traces[layer], { sizes[layer-1], sizes[layer], sizes[layer+1] },
+//                              keypoints, octave, hessianThreshold, sampleSteps[layer]);
+//        });
+
+        const std::array<const gls::cl_image_2d<float>, 3> detImages = {
+            gls::cl_image_2d<float>(ctx->glsContext->clContext(), *dets[layer-1]),
+            gls::cl_image_2d<float>(ctx->glsContext->clContext(), *dets[layer]),
+            gls::cl_image_2d<float>(ctx->glsContext->clContext(), *dets[layer+1])
+        };
+
+        const auto traceImage = gls::cl_image_2d<float>(ctx->glsContext->clContext(), *traces[layer]);
+
+        const auto sumImage = ctx->sumMemory[sum.size()];
+
+        clFindMaximaInLayer(ctx, *sumImage, detImages, traceImage,
+                            { sizes[layer-1], sizes[layer], sizes[layer+1] },
+                            keypoints, octave, hessianThreshold, sampleSteps[layer]);
     }
 }
 
