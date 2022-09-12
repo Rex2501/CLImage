@@ -18,6 +18,7 @@ float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant Sur
 kernel void calcDetAndTrace(read_only image2d_t sumImage,
                             write_only image2d_t detImage,
                             write_only image2d_t traceImage,
+                            int2 margin,
                             int sampleStep,
                             constant SurfHF Dx[3],
                             constant SurfHF Dy[3],
@@ -29,8 +30,8 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
     const float dy = calcHaarPattern(sumImage, p, Dy, 3);
     const float dxy = calcHaarPattern(sumImage, p, Dxy, 4);
 
-    write_imagef(detImage, imageCoordinates, dx * dy - 0.81f * dxy * dxy);
-    write_imagef(traceImage, imageCoordinates, dx + dy);
+    write_imagef(detImage, imageCoordinates + margin, dx * dy - 0.81f * dxy * dxy);
+    write_imagef(traceImage, imageCoordinates + margin, dx + dy);
 }
 
 typedef struct KeyPoint {
