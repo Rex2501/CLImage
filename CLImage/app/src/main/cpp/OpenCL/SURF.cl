@@ -44,9 +44,11 @@ typedef struct KeyPoint {
     int class_id;
 } KeyPoint;
 
+const constant int KeyPointMaxima_MaxCount = 20000;
+
 typedef struct KeyPointMaxima {
     int count;
-    KeyPoint keyPoints[20000];
+    KeyPoint keyPoints[KeyPointMaxima_MaxCount];
 } KeyPointMaxima;
 
 inline bool solve3x3(const float3 A[3], const float b[3], float x[3]) {
@@ -152,7 +154,7 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
             /* Sometimes the interpolation step gives a negative size etc. */
             if (interp_ok) {
                 int ind = atomic_inc(&keypoints->count);
-                if (ind < 20000) {
+                if (ind < KeyPointMaxima_MaxCount) {
                     keypoints->keyPoints[ind] = kpt;
                 }
             }

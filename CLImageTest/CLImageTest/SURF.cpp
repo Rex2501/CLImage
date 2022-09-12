@@ -359,8 +359,9 @@ void SURFBuildInvoker(SurfClContext *ctx, const gls::image<float>& sum, std::vec
  */
 
 typedef struct KeyPointMaxima {
+    static const constexpr int MaxCount = 20000;
     int count;
-    KeyPoint keyPoints[20000];
+    KeyPoint keyPoints[MaxCount];
 } KeyPointMaxima;
 
 void clFindMaximaInLayer(SurfClContext *ctx, const gls::cl_image_2d<float>& sumImage,
@@ -385,7 +386,10 @@ void clFindMaximaInLayer(SurfClContext *ctx, const gls::cl_image_2d<float>& sumI
                                     int           // sampleStep
                                     >(program, "findMaximaInLayer");
 
-    const auto keyPointsBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(KeyPointMaxima));
+
+    if (ctx->keyPointsBuffer.get() == 0) {
+        ctx->keyPointsBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(KeyPointMaxima));
+    }
 
     // The integral image 'sum' is one pixel bigger than the source image
     const int layer_height = (sumImage.height - 1) / sampleStep;
@@ -399,18 +403,21 @@ void clFindMaximaInLayer(SurfClContext *ctx, const gls::cl_image_2d<float>& sumI
            sumImage.getImage2D(),
            dets[0].getImage2D(), dets[1].getImage2D(), dets[2].getImage2D(),
            traceImage.getImage2D(),
-           { sizes[0], sizes[1], sizes[2] }, keyPointsBuffer,
+           { sizes[0], sizes[1], sizes[2] }, ctx->keyPointsBuffer,
            margin, octave, hessianThreshold, sampleStep);
 
-    const auto keyPointMaxima = (KeyPointMaxima *) cl::enqueueMapBuffer(keyPointsBuffer, true, CL_MAP_READ, 0, sizeof(KeyPointMaxima));
+    const auto keyPointMaxima = (KeyPointMaxima *) cl::enqueueMapBuffer(ctx->keyPointsBuffer, true, CL_MAP_READ, 0, sizeof(KeyPointMaxima));
 
     std::cout << "keyPointMaxima: " << keyPointMaxima->count << std::endl;
 
-    for (int i = 0; i < std::min(keyPointMaxima->count, 20000); i++) {
-        keypoints->push_back(keyPointMaxima->keyPoints[i]);
-    }
+    std::span<KeyPoint> newElements(keyPointMaxima->keyPoints, std::min(keyPointMaxima->count, KeyPointMaxima::MaxCount));
 
-    cl::enqueueUnmapMemObject(keyPointsBuffer, (void*)keyPointMaxima);
+    keypoints->insert(end(*keypoints), begin(newElements), end(newElements));
+
+    // Reset count
+    keyPointMaxima->count = 0;
+
+    cl::enqueueUnmapMemObject(ctx->keyPointsBuffer, (void*)keyPointMaxima);
 }
 
 void findMaximaInLayer(SurfClContext *ctx, const gls::image<float>& sum,
