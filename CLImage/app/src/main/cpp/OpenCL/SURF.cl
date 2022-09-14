@@ -1,3 +1,18 @@
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 typedef struct SurfHF {
     int2 p0, p1, p2, p3;
     float w;
@@ -122,6 +137,7 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
 
     const float val0 = N9(1, 0, 0);
 
+    
     if (val0 > hessianThreshold) {
         /* Coordinates for the start of the wavelet in the sum image. There
            is some integer division involved, so don't try to simplify this
@@ -160,5 +176,222 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
                 }
             }
         }
+    }
+}
+
+kernel void rowIntegral(global float* src, global float* dst, local float* temp, int w) {
+    int lid = get_local_id(0);
+    int wid = get_group_id(0);
+    int n = get_local_size(0) * 2;
+
+    int chunks = (w + n - 1) / n;
+
+    for (int c = 0; c < chunks; c++) {
+        int offset = 1;
+
+        if (c > 0) {
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        temp[2 * lid] = (c * n + 2 * lid < w) ? src[c * n + 2 * lid + wid * w] : 0;
+        temp[2 * lid + 1] = (c * n + 2 * lid + 1 < w) ? src[c * n + 2 * lid + 1 + wid * w] : 0;
+
+        for (int d = n >> 1; d > 0; d >>= 1) {
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < d) {
+                int ai = offset * (2 * lid + 1) - 1;
+                int bi = offset * (2 * lid + 2) - 1;
+                temp[bi] += temp[ai];
+            }
+            offset *= 2;
+        }
+
+        if (lid == 0) {
+            temp[n - 1] = 0.f;
+        }
+
+        // down-sweep
+        for (int d = 1; d < n; d *= 2) {
+            offset >>= 1;
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            if (lid < d) {
+                int ai = offset * (2 * lid + 1) - 1;
+                int bi = offset * (2 * lid + 2) - 1;
+
+                float t = temp[ai];
+                temp[ai] = temp[bi];
+                temp[bi] += t;
+            }
+        }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        if (c * n + 2 * lid < w) {
+            dst[c * n + 2 * lid + wid * w] = dst[c * n - 2 + wid * w] + temp[2 * lid] + src[c * n + 2 * lid + wid * w];
+        }
+        if (c * n + 2 * lid + 1 < w) {
+            dst[c * n + 2 * lid + 1 + wid * w] = dst[c * n - 1 + wid * w] + temp[2 * lid + 1] + src[c * n + 2 * lid + 1 + wid * w];
+        }
+    }
+}
+
+kernel void colIntegral(global float* src, global float* dst, __local float* temp, int h, int w) {
+    int lid = get_local_id(0);
+    int wid = get_group_id(0);
+    int n = get_local_size(0) * 2;
+
+    int chunks = (w + n - 1) / n;
+
+    for (int c = 0; c < chunks; c++) {
+        int offset = 1;
+
+        if (c > 0) {
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        temp[2 * lid] = (c * n + 2 * lid < h) ? src[(c * n + 2 * lid) * w + wid] : 0;
+        temp[2 * lid + 1] = (c * n + 2 * lid + 1 < h) ? src[(c * n + 2 * lid + 1) * w + wid] : 0;
+
+        for (int d = n >> 1; d > 0; d >>= 1) {
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < d) {
+                int ai = offset * (2 * lid + 1) - 1;
+                int bi = offset * (2 * lid + 2) - 1;
+                temp[bi] += temp[ai];
+            }
+            offset *= 2;
+        }
+
+        if (lid == 0) {
+            temp[n - 1] = 0;
+        }
+
+        // down-sweep
+        for (int d = 1; d < n; d *= 2) {
+            offset >>= 1;
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            if (lid < d) {
+                int ai = offset * (2 * lid + 1) - 1;
+                int bi = offset * (2 * lid + 2) - 1;
+
+                float t = temp[ai];
+                temp[ai] = temp[bi];
+                temp[bi] += t;
+            }
+        }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        if (c * n + 2 * lid < h) {
+            dst[(c * n + 2 * lid) * w + wid] = dst[(c * n - 2) * w + wid] + temp[2 * lid] + src[2 * lid * w + wid];
+        }
+        if (c * n + 2 * lid + 1 < h) {
+            dst[(c * n + 2 * lid + 1) * w + wid] = dst[(c * n - 1) * w + wid] + temp[2 * lid + 1] + src[(2 * lid + 1) * w + wid];
+        }
+    }
+}
+
+#define LOCAL_SUM_SIZE      16
+#define LOCAL_SUM_STRIDE    (LOCAL_SUM_SIZE + 1)
+
+
+kernel void integral_sum_cols(__global const float *src_ptr, int src_step, int src_offset, int rows, int cols,
+                              __global uchar *buf_ptr, int buf_step, int buf_offset)
+{
+    __local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
+    int lid = get_local_id(0);
+    int gid = get_group_id(0);
+
+    int x = get_global_id(0);
+    int src_index = x + src_offset;
+
+    float accum = 0;
+    for (int y = 0; y < rows; y += LOCAL_SUM_SIZE)
+    {
+        int lsum_index = lid;
+        #pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, src_index+=src_step, lsum_index += LOCAL_SUM_STRIDE)
+        {
+            if ((x < cols) && (y + yin < rows))
+            {
+                __global const float *src = src_ptr + src_index;
+                accum += src[0];
+            }
+            lm_sum[lsum_index] = accum;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        //int buf_index = buf_offset + buf_step * LOCAL_SUM_COLS * gid + sizeof(float) * y + sizeof(float) * lid;
+        int buf_index = mad24(buf_step, LOCAL_SUM_SIZE * gid, mad24((int)sizeof(float), y + lid, buf_offset));
+
+        lsum_index = LOCAL_SUM_STRIDE * lid;
+        #pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index ++)
+        {
+            __global float *buf = (__global float *)(buf_ptr + buf_index);
+            buf[0] = lm_sum[lsum_index];
+            buf_index += buf_step;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
+kernel void integral_sum_rows(__global const uchar *buf_ptr, int buf_step, int buf_offset,
+                              __global uchar *dst_ptr, int dst_step, int dst_offset, int rows, int cols)
+{
+    __local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
+    int lid = get_local_id(0);
+    int gid = get_group_id(0);
+
+    int gs = get_global_size(0);
+
+    int x = get_global_id(0);
+
+    __global float *dst = (__global float *)(dst_ptr + dst_offset);
+    for (int xin = x; xin < cols; xin += gs)
+    {
+        dst[xin] = 0;
+    }
+    dst_offset += dst_step;
+
+    if (x < rows - 1)
+    {
+        dst = (__global float *)(dst_ptr + mad24(x, dst_step, dst_offset));
+        dst[0] = 0;
+    }
+
+    int buf_index = mad24((int)sizeof(float), x, buf_offset);
+    float accum = 0;
+
+    for (int y = 1; y < cols; y += LOCAL_SUM_SIZE)
+    {
+        int lsum_index = lid;
+        #pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index += LOCAL_SUM_STRIDE)
+        {
+            __global const float *buf = (__global const float *)(buf_ptr + buf_index);
+            accum += buf[0];
+            lm_sum[lsum_index] = accum;
+            buf_index += buf_step;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        if (y + lid < cols)
+        {
+            //int dst_index = dst_offset + dst_step *  LOCAL_SUM_COLS * gid + sizeof(float) * y + sizeof(float) * lid;
+            int dst_index = mad24(dst_step, LOCAL_SUM_SIZE * gid, mad24((int)sizeof(float), y + lid, dst_offset));
+            lsum_index = LOCAL_SUM_STRIDE * lid;
+            int yin_max = min(rows - 1 -  LOCAL_SUM_SIZE * gid, LOCAL_SUM_SIZE);
+            #pragma unroll
+            for (int yin = 0; yin < yin_max; yin++, lsum_index++)
+            {
+                dst = (__global float *)(dst_ptr + dst_index);
+                dst[0] = lm_sum[lsum_index];
+                dst_index += dst_step;
+            }
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
 }

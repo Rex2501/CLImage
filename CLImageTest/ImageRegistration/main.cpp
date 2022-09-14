@@ -1,9 +1,17 @@
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
 //
-//  main.cpp
-//  ImageRegistration
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//  Created by Fabio Riccardi on 8/26/22.
+//    http://www.apache.org/licenses/LICENSE-2.0
 //
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <iostream>
 
@@ -13,13 +21,15 @@
 #include <chrono>
 
 #include "gls_logging.h"
-#include "gls_cl_image.hpp"
+#include "gls_image.hpp"
 
 #include "gls_linalg.hpp"
 
 #include "SURF.hpp"
 
 void testSURF() {
+    auto glsContext = new gls::OpenCLContext("");
+
 //    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/3untagged.png");
 //    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/4untagged.png");
 
@@ -42,13 +52,36 @@ void testSURF() {
         *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
     });
 
+//    {
+//        gls::cl_image_2d<gls::luma_alpha_pixel_fp32> input(glsContext->clContext(), srcImg1.width, srcImg1.height);
+//        gls::cl_image_2d<gls::luma_pixel_fp32> output(glsContext->clContext(), srcImg1.width, srcImg1.height);
+//
+//        auto inputCpu = input.mapImage();
+//        inputCpu.apply([&srcImg1](gls::luma_alpha_pixel_fp32 *p, int x, int y) {
+//            *p = { srcImg1[y][x], 1 };
+//        });
+//        input.unmapImage(inputCpu);
+//
+//        boxBlurScan(glsContext, input, &output, 10);
+//
+//        const auto blurredImage = output.mapImage();
+//        gls::image<gls::luma_pixel> blurredImageLuma(blurredImage.width, blurredImage.height);
+//
+//        blurredImageLuma.apply([&blurredImage](gls::luma_pixel* p, int x, int y){
+//            *p = std::clamp(blurredImage[y][x].luma, 0.0f, 255.0f);
+//        });
+//
+//        blurredImageLuma.write_png_file("/Users/fabio/blurred.png");
+//        output.unmapImage(blurredImage);
+//    }
+
     std::vector<surf::Point2f> matchpoints1;
     std::vector<surf::Point2f> matchpoints2;
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
     int matches_num = 150;
-    bool isFeatureDection = surf::SURF_Detection(srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
+    bool isFeatureDection = surf::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
     printf("isFeatureDection: %d\n", isFeatureDection);
 
     std::vector<float> transParameter;
