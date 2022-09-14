@@ -186,17 +186,20 @@ void clCalcDetAndTrace(SurfClContext *ctx,
            { margin_crop.x, margin_crop.y }, sampleStep, ctx->DxBuffer, ctx->DyBuffer, ctx->DxyBuffer);
 }
 
+#define INTEGRAL_USE_BUFFERS true
+
 void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img, gls::image<float>* sum) {
     static const int tileSize = 16;
 
     gls::size bufsize(((img.height + tileSize - 1) / tileSize) * tileSize, ((img.width + tileSize - 1) / tileSize) * tileSize);
-
-    cl::Buffer imgBuffer(img.pixels().begin(), img.pixels().end(), true);
     cl::Buffer tmpBuffer(CL_MEM_READ_WRITE, bufsize.width * bufsize.height * sizeof(float));
-    cl::Buffer sumBuffer(CL_MEM_READ_WRITE, sum->width * sum->height * sizeof(float));
 
     // Load the shader source
     const auto program = glsContext->loadProgram("SURF");
+
+#if INTEGRAL_USE_BUFFERS
+    cl::Buffer imgBuffer(img.pixels().begin(), img.pixels().end(), true);
+    cl::Buffer sumBuffer(CL_MEM_READ_WRITE, sum->width * sum->height * sizeof(float));
 
     // Bind the kernel parameters
     auto integral_sum_cols = cl::KernelFunctor<cl::Buffer,  // src_ptr
@@ -228,6 +231,34 @@ void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img, gl
                       sum->height);
 
     cl::copy(sumBuffer, sum->pixels().begin(), sum->pixels().end());
+#else
+    const auto image = gls::cl_image_2d<float>(glsContext->clContext(), img);
+    auto sumImage = gls::cl_image_2d<float>(glsContext->clContext(), sum->width, sum->height);
+
+    auto integral_sum_cols = cl::KernelFunctor<cl::Image2D, // src_ptr
+                                               cl::Buffer,  // buf_ptr
+                                               int          // buf_width
+                                               >(program, "integral_sum_cols_image");
+
+    integral_sum_cols(cl::EnqueueArgs(cl::NDRange(img.width), cl::NDRange(tileSize)),
+                      image.getImage2D(),
+                      tmpBuffer,
+                      bufsize.width);
+
+    auto integral_sum_rows = cl::KernelFunctor<cl::Buffer,  // buf_ptr
+                                               int,         // buf_width
+                                               cl::Image2D  // dst_ptr
+                                               >(program, "integral_sum_rows_image");
+
+    integral_sum_rows(cl::EnqueueArgs(cl::NDRange(img.height), cl::NDRange(tileSize)),
+                      tmpBuffer,
+                      bufsize.width,
+                      sumImage.getImage2D());
+
+    const auto sumImageCpu = sumImage.mapImage();
+    std::copy(sumImageCpu.pixels().begin(), sumImageCpu.pixels().end(), sum->pixels().begin());
+    sumImage.unmapImage(sumImageCpu);
+#endif
 }
 
 void calcDetAndTrace(const gls::image<float>& sum,

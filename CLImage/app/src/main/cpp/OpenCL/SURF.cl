@@ -97,7 +97,7 @@ inline bool solve3x3(const float3 A[3], const float b[3], float x[3]) {
 #define N9(_idx, _off_y, _off_x) read_imagef(detImage ## _idx, p + (int2) (_off_x, _off_y)).x
 
 bool interpolateKeypoint(read_only image2d_t detImage0, read_only image2d_t detImage1, read_only image2d_t detImage2,
-                                int2 p, int dx, int dy, int ds, KeyPoint* kpt) {
+                         int2 p, int dx, int dy, int ds, KeyPoint* kpt) {
     float B[3] = {
         -(N9(1, 0, 1) - N9(1,  0, -1)) / 2, // Negative 1st deriv with respect to x
         -(N9(1, 1, 0) - N9(1, -1,  0)) / 2, // Negative 1st deriv with respect to y
@@ -185,71 +185,132 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
 #define LOCAL_SUM_STRIDE    (LOCAL_SUM_SIZE + 1)
 
 kernel void integral_sum_cols(global const float *src_ptr, int src_width, int src_height,
-                              global float *buf_ptr, int buf_width)
-{
+                              global float *buf_ptr, int buf_width) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int x = get_global_id(0);
 
-    local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
+    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
 
     int src_index = x;
     float accum = 0;
     for (int y = 0; y < src_height; y += LOCAL_SUM_SIZE) {
 #pragma unroll
-        for (int yin = 0, lsum_index = lid; yin < LOCAL_SUM_SIZE; yin++, src_index += src_width, lsum_index += LOCAL_SUM_STRIDE) {
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, src_index += src_width) {
             if ((x < src_width) && (y + yin < src_height)) {
                 accum += src_ptr[src_index];
             }
-            lm_sum[lsum_index] = accum;
+            lm_sum[yin][lid] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
 
         int buf_index = buf_width * LOCAL_SUM_SIZE * gid + (lid + y);
-        int lsum_index = LOCAL_SUM_STRIDE * lid;
 #pragma unroll
-        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index++, buf_index += buf_width) {
-            buf_ptr[buf_index] = lm_sum[lsum_index];
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width) {
+            buf_ptr[buf_index] = lm_sum[lid][yin];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
+kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width) {
+    const int lid = get_local_id(0);
+    const int gid = get_group_id(0);
+    const int x = get_global_id(0);
+
+    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
+
+    float accum = 0;
+    for (int y = 0; y < get_image_height(sourceImage); y += LOCAL_SUM_SIZE) {
+#pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++) {
+            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x;
+            lm_sum[yin][lid] = accum;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        int buf_index = buf_width * LOCAL_SUM_SIZE * gid + (lid + y);
+#pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width) {
+            buf_ptr[buf_index] = lm_sum[lid][yin];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 }
 
 kernel void integral_sum_rows(global const float *buf_ptr, int buf_width,
-                              global float *dst_ptr, int dts_width, int dst_height)
-{
+                              global float *dst_ptr, int dst_width, int dst_height) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int gs = get_global_size(0);
     const int x = get_global_id(0);
 
-    local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
+    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
 
-    for (int xin = x; xin < dts_width; xin += gs) {
+    for (int xin = x; xin < dst_width; xin += gs) {
         dst_ptr[xin] = 0;
     }
 
     if (x < dst_height - 1) {
-        dst_ptr[x * dts_width + dts_width] = 0;
+        dst_ptr[(x + 1) * dst_width] = 0;
     }
 
     int buf_index = x;
     float accum = 0;
-    for (int y = 1; y < dts_width; y += LOCAL_SUM_SIZE) {
+    for (int y = 1; y < dst_width; y += LOCAL_SUM_SIZE) {
 #pragma unroll
-        for (int yin = 0, lsum_index = lid; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width, lsum_index += LOCAL_SUM_STRIDE) {
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width) {
             accum += buf_ptr[buf_index];
-            lm_sum[lsum_index] = accum;
+            lm_sum[yin][lid] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
 
-        if (y + lid < dts_width) {
-            int dst_index = dts_width + dts_width * LOCAL_SUM_SIZE * gid + (y + lid);
-            int lsum_index = LOCAL_SUM_STRIDE * lid;
+        if (y + lid < dst_width) {
+            int dst_index = dst_width * (LOCAL_SUM_SIZE * gid + 1) + (y + lid);
             int yin_max = min(dst_height - 1 - LOCAL_SUM_SIZE * gid, LOCAL_SUM_SIZE);
 #pragma unroll
-            for (int yin = 0; yin < yin_max; yin++, lsum_index++, dst_index += dts_width) {
-                dst_ptr[dst_index] = lm_sum[lsum_index];
+            for (int yin = 0; yin < yin_max; yin++, dst_index += dst_width) {
+                dst_ptr[dst_index] = lm_sum[lid][yin];
+            }
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
+kernel void integral_sum_rows_image(global const float *buf_ptr, int buf_width, write_only image2d_t dstImage) {
+    const int lid = get_local_id(0);
+    const int gid = get_group_id(0);
+    const int gs = get_global_size(0);
+    const int x = get_global_id(0);
+
+    int dst_width = get_image_width(dstImage);
+    int dst_height = get_image_height(dstImage);
+
+    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
+
+    for (int xin = x; xin < dst_width; xin += gs) {
+        write_imagef(dstImage, (int2)(xin, 0), 0);
+    }
+
+    if (x < dst_height - 1) {
+        write_imagef(dstImage, (int2)(0, x + 1), 0);
+    }
+
+    int buf_index = x;
+    float accum = 0;
+    for (int y = 1; y < dst_width; y += LOCAL_SUM_SIZE) {
+#pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width) {
+            accum += buf_ptr[buf_index];
+            lm_sum[yin][lid] = accum;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        if (y + lid < dst_width) {
+            int yin_max = min(dst_height - 1 - LOCAL_SUM_SIZE * gid, LOCAL_SUM_SIZE);
+#pragma unroll
+            for (int yin = 0; yin < yin_max; yin++) {
+                write_imagef(dstImage, (int2)(y + lid, yin + LOCAL_SUM_SIZE * gid + 1), lm_sum[lid][yin]);
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
