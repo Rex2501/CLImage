@@ -50,6 +50,7 @@ static const int SURF_HAAR_SIZE0 = 9;
 // above and below are aligned correctly.
 static const int SURF_HAAR_SIZE_INC = 6;
 
+// CPU Integral Image
 //    Detected feature points: 39254      35185
 //    keypoints1 erase: 300 keypoints2 erase: 300
 //    isFeatureDection: 1
@@ -59,6 +60,17 @@ static const int SURF_HAAR_SIZE_INC = 6;
 //    -0.030258 0.988525 122.500000
 //    -0.000002 -0.000003 1
 //    Elapsed Time: 683.124542
+
+// GPU Integral Image
+//   Detected feature points: 18969      16850
+//   keypoints1 erase: 300 keypoints2 erase: 300
+//   isFeatureDection: 1
+//    RANSAC interior point ratio - number of loops: 134 150 54
+//     Transformation matrix parameter:
+//    0.989563 0.027374 84.250000
+//   -0.030563 0.992737 120.375000
+//   -0.000002 -0.000002 1
+//   Elapsed Time: 230.310834
 
 struct SurfHF {
     gls::point p0, p1, p2, p3;
@@ -175,55 +187,6 @@ void clCalcDetAndTrace(SurfClContext *ctx,
 }
 
 void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img, gls::image<float>* sum) {
-    cl::Buffer imgBuffer(img.pixels().begin(), img.pixels().end(), true);
-    cl::Buffer tmpBuffer(CL_MEM_READ_WRITE, img.width * img.height * sizeof(float));
-    cl::Buffer sumBuffer(CL_MEM_READ_WRITE, img.width * img.height * sizeof(float));
-
-    // Load the shader source
-    const auto program = glsContext->loadProgram("SURF");
-
-    // Bind the kernel parameters
-    auto rowIntegralKernel = cl::KernelFunctor<cl::Buffer,         // src
-                                               cl::Buffer,         // dst
-                                               cl::LocalSpaceArg,  // temp
-                                               int                 // w
-                                               >(program, "rowIntegral");
-
-    auto colIntegralKernel = cl::KernelFunctor<cl::Buffer,         // src
-                                               cl::Buffer,         // dst
-                                               cl::LocalSpaceArg,  // temp
-                                               int,                // h
-                                               int                 // w
-                                               >(program, "colIntegral");
-
-    unsigned int blockSize = 256; // max size of the thread blocks
-    // unsigned int numBlocks = std::max(1, (int)ceil((float) (img.width * img.height) / (2.f * blockSize)));
-    unsigned int sharedMemSize = 2 * blockSize;
-
-    size_t rowLocalWorkSize = blockSize;
-    size_t rowGlobalWorkSize = img.height * blockSize;
-
-    rowIntegralKernel(cl::EnqueueArgs(cl::NDRange(rowGlobalWorkSize), cl::NDRange(rowLocalWorkSize)), imgBuffer, tmpBuffer, cl::Local(sharedMemSize * sizeof(float)), img.width);
-
-    size_t colLocalWorkSize = blockSize;
-    size_t colGlobalWorkSize = img.width * blockSize;
-
-    colIntegralKernel(cl::EnqueueArgs(cl::NDRange(colGlobalWorkSize), cl::NDRange(colLocalWorkSize)), tmpBuffer, sumBuffer, cl::Local(sharedMemSize * sizeof(float)), img.height, img.width);
-
-    const float* sumData = (float*) cl::enqueueMapBuffer(sumBuffer, true, CL_MAP_READ, 0, img.width * img.height * sizeof(float));
-
-    // Zero the first row and the first column of the sum
-    for (int i = 0; i < sum->width; i++) {
-        (*sum)[0][i] = 0;
-    }
-    for (int j = 1; j < sum->height; j++) {
-        (*sum)[j][0] = 0;
-        std::memcpy(&(*sum)[j][1], &sumData[(j - 1) * img.width], img.width * sizeof(float));
-    }
-    cl::enqueueUnmapMemObject(sumBuffer, (void *) sumData, 0);
-}
-
-void clIntegral2(gls::OpenCLContext* glsContext, const gls::image<float>& img, gls::image<float>* sum) {
     static const int tileSize = 16;
 
     gls::size bufsize(((img.height + tileSize - 1) / tileSize) * tileSize, ((img.width + tileSize - 1) / tileSize) * tileSize);
@@ -237,47 +200,32 @@ void clIntegral2(gls::OpenCLContext* glsContext, const gls::image<float>& img, g
 
     // Bind the kernel parameters
     auto integral_sum_cols = cl::KernelFunctor<cl::Buffer,  // src_ptr
-                                               int,         // src_step
-                                               int,         // src_offset
-                                               int,         // rows
-											   int,         // cols
+                                               int,         // src_width
+											   int,         // src_height
                                                cl::Buffer,  // buf_ptr
-                                               int,         // buf_step
-                                               int          // buf_offset
+                                               int          // buf_width
                                                >(program, "integral_sum_cols");
 
-    size_t gt = img.width;
-    size_t lt = tileSize;
-    integral_sum_cols(cl::EnqueueArgs(cl::NDRange(gt), cl::NDRange(lt)),
+    integral_sum_cols(cl::EnqueueArgs(cl::NDRange(img.width), cl::NDRange(tileSize)),
                       imgBuffer,
-                      img.width, // * sizeof(float),
-                      0,
-                      img.height,
                       img.width,
+                      img.height,
                       tmpBuffer,
-                      bufsize.width * sizeof(float),
-                      0);
+                      bufsize.width);
 
     auto integral_sum_rows = cl::KernelFunctor<cl::Buffer,  // buf_ptr
-                                               int,         // buf_step
-                                               int,         // buf_offset
+                                               int,         // buf_width
                                                cl::Buffer,  // dst_ptr
-                                               int,         // dst_step
-                                               int,         // dst_offset
-                                               int,         // rows
-                                               int          // cols
+                                               int,         // dst_width
+                                               int          // dst_height
                                                >(program, "integral_sum_rows");
 
-    gt = img.height;
-    integral_sum_rows(cl::EnqueueArgs(cl::NDRange(gt), cl::NDRange(lt)),
+    integral_sum_rows(cl::EnqueueArgs(cl::NDRange(img.height), cl::NDRange(tileSize)),
                       tmpBuffer,
-                      bufsize.width * sizeof(float),
-                      0,
+                      bufsize.width,
                       sumBuffer,
-                      sum->width * sizeof(float),
-                      0,
-                      sum->height,
-                      sum->width);
+                      sum->width,
+                      sum->height);
 
     cl::copy(sumBuffer, sum->pixels().begin(), sum->pixels().end());
 }
@@ -1176,8 +1124,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
 //    integral(srcIMAGE1, &integralSum1);                     // Calculate the integral image
 //    integral(srcIMAGE2, &integralSum2);                     // Calculate the integral image
 
-    clIntegral2(cLContext, srcIMAGE1, &integralSum1);                     // Calculate the integral image
-    clIntegral2(cLContext, srcIMAGE2, &integralSum2);                     // Calculate the integral image
+    clIntegral(cLContext, srcIMAGE1, &integralSum1);          // Calculate the integral image
+    clIntegral(cLContext, srcIMAGE2, &integralSum2);          // Calculate the integral image
 
 //    gls::image<float> refIntegralSum1(srcIMAGE1.width + 1, srcIMAGE1.height + 1);
 //    integral(srcIMAGE1, &refIntegralSum1);                     // Calculate the integral image

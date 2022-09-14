@@ -179,217 +179,77 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
     }
 }
 
-kernel void rowIntegral(global float* src, global float* dst, local float* temp, int w) {
-    int lid = get_local_id(0);
-    int wid = get_group_id(0);
-    int n = get_local_size(0) * 2;
-
-    int chunks = (w + n - 1) / n;
-
-    for (int c = 0; c < chunks; c++) {
-        int offset = 1;
-
-        if (c > 0) {
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-
-        temp[2 * lid] = (c * n + 2 * lid < w) ? src[c * n + 2 * lid + wid * w] : 0;
-        temp[2 * lid + 1] = (c * n + 2 * lid + 1 < w) ? src[c * n + 2 * lid + 1 + wid * w] : 0;
-
-        for (int d = n >> 1; d > 0; d >>= 1) {
-            barrier(CLK_LOCAL_MEM_FENCE);
-            if (lid < d) {
-                int ai = offset * (2 * lid + 1) - 1;
-                int bi = offset * (2 * lid + 2) - 1;
-                temp[bi] += temp[ai];
-            }
-            offset *= 2;
-        }
-
-        if (lid == 0) {
-            temp[n - 1] = 0.f;
-        }
-
-        // down-sweep
-        for (int d = 1; d < n; d *= 2) {
-            offset >>= 1;
-            barrier(CLK_LOCAL_MEM_FENCE);
-
-            if (lid < d) {
-                int ai = offset * (2 * lid + 1) - 1;
-                int bi = offset * (2 * lid + 2) - 1;
-
-                float t = temp[ai];
-                temp[ai] = temp[bi];
-                temp[bi] += t;
-            }
-        }
-
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        if (c * n + 2 * lid < w) {
-            dst[c * n + 2 * lid + wid * w] = dst[c * n - 2 + wid * w] + temp[2 * lid] + src[c * n + 2 * lid + wid * w];
-        }
-        if (c * n + 2 * lid + 1 < w) {
-            dst[c * n + 2 * lid + 1 + wid * w] = dst[c * n - 1 + wid * w] + temp[2 * lid + 1] + src[c * n + 2 * lid + 1 + wid * w];
-        }
-    }
-}
-
-kernel void colIntegral(global float* src, global float* dst, __local float* temp, int h, int w) {
-    int lid = get_local_id(0);
-    int wid = get_group_id(0);
-    int n = get_local_size(0) * 2;
-
-    int chunks = (w + n - 1) / n;
-
-    for (int c = 0; c < chunks; c++) {
-        int offset = 1;
-
-        if (c > 0) {
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-
-        temp[2 * lid] = (c * n + 2 * lid < h) ? src[(c * n + 2 * lid) * w + wid] : 0;
-        temp[2 * lid + 1] = (c * n + 2 * lid + 1 < h) ? src[(c * n + 2 * lid + 1) * w + wid] : 0;
-
-        for (int d = n >> 1; d > 0; d >>= 1) {
-            barrier(CLK_LOCAL_MEM_FENCE);
-            if (lid < d) {
-                int ai = offset * (2 * lid + 1) - 1;
-                int bi = offset * (2 * lid + 2) - 1;
-                temp[bi] += temp[ai];
-            }
-            offset *= 2;
-        }
-
-        if (lid == 0) {
-            temp[n - 1] = 0;
-        }
-
-        // down-sweep
-        for (int d = 1; d < n; d *= 2) {
-            offset >>= 1;
-            barrier(CLK_LOCAL_MEM_FENCE);
-
-            if (lid < d) {
-                int ai = offset * (2 * lid + 1) - 1;
-                int bi = offset * (2 * lid + 2) - 1;
-
-                float t = temp[ai];
-                temp[ai] = temp[bi];
-                temp[bi] += t;
-            }
-        }
-
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        if (c * n + 2 * lid < h) {
-            dst[(c * n + 2 * lid) * w + wid] = dst[(c * n - 2) * w + wid] + temp[2 * lid] + src[2 * lid * w + wid];
-        }
-        if (c * n + 2 * lid + 1 < h) {
-            dst[(c * n + 2 * lid + 1) * w + wid] = dst[(c * n - 1) * w + wid] + temp[2 * lid + 1] + src[(2 * lid + 1) * w + wid];
-        }
-    }
-}
+// Integral Image
 
 #define LOCAL_SUM_SIZE      16
 #define LOCAL_SUM_STRIDE    (LOCAL_SUM_SIZE + 1)
 
-
-kernel void integral_sum_cols(__global const float *src_ptr, int src_step, int src_offset, int rows, int cols,
-                              __global uchar *buf_ptr, int buf_step, int buf_offset)
+kernel void integral_sum_cols(global const float *src_ptr, int src_width, int src_height,
+                              global float *buf_ptr, int buf_width)
 {
-    __local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
-    int lid = get_local_id(0);
-    int gid = get_group_id(0);
+    const int lid = get_local_id(0);
+    const int gid = get_group_id(0);
+    const int x = get_global_id(0);
 
-    int x = get_global_id(0);
-    int src_index = x + src_offset;
+    local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
 
+    int src_index = x;
     float accum = 0;
-    for (int y = 0; y < rows; y += LOCAL_SUM_SIZE)
-    {
-        int lsum_index = lid;
-        #pragma unroll
-        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, src_index+=src_step, lsum_index += LOCAL_SUM_STRIDE)
-        {
-            if ((x < cols) && (y + yin < rows))
-            {
-                __global const float *src = src_ptr + src_index;
-                accum += src[0];
+    for (int y = 0; y < src_height; y += LOCAL_SUM_SIZE) {
+#pragma unroll
+        for (int yin = 0, lsum_index = lid; yin < LOCAL_SUM_SIZE; yin++, src_index += src_width, lsum_index += LOCAL_SUM_STRIDE) {
+            if ((x < src_width) && (y + yin < src_height)) {
+                accum += src_ptr[src_index];
             }
             lm_sum[lsum_index] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
 
-        //int buf_index = buf_offset + buf_step * LOCAL_SUM_COLS * gid + sizeof(float) * y + sizeof(float) * lid;
-        int buf_index = mad24(buf_step, LOCAL_SUM_SIZE * gid, mad24((int)sizeof(float), y + lid, buf_offset));
-
-        lsum_index = LOCAL_SUM_STRIDE * lid;
-        #pragma unroll
-        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index ++)
-        {
-            __global float *buf = (__global float *)(buf_ptr + buf_index);
-            buf[0] = lm_sum[lsum_index];
-            buf_index += buf_step;
+        int buf_index = buf_width * LOCAL_SUM_SIZE * gid + (lid + y);
+        int lsum_index = LOCAL_SUM_STRIDE * lid;
+#pragma unroll
+        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index++, buf_index += buf_width) {
+            buf_ptr[buf_index] = lm_sum[lsum_index];
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 }
 
-kernel void integral_sum_rows(__global const uchar *buf_ptr, int buf_step, int buf_offset,
-                              __global uchar *dst_ptr, int dst_step, int dst_offset, int rows, int cols)
+kernel void integral_sum_rows(global const float *buf_ptr, int buf_width,
+                              global float *dst_ptr, int dts_width, int dst_height)
 {
-    __local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
-    int lid = get_local_id(0);
-    int gid = get_group_id(0);
+    const int lid = get_local_id(0);
+    const int gid = get_group_id(0);
+    const int gs = get_global_size(0);
+    const int x = get_global_id(0);
 
-    int gs = get_global_size(0);
+    local float lm_sum[LOCAL_SUM_STRIDE * LOCAL_SUM_SIZE];
 
-    int x = get_global_id(0);
-
-    __global float *dst = (__global float *)(dst_ptr + dst_offset);
-    for (int xin = x; xin < cols; xin += gs)
-    {
-        dst[xin] = 0;
-    }
-    dst_offset += dst_step;
-
-    if (x < rows - 1)
-    {
-        dst = (__global float *)(dst_ptr + mad24(x, dst_step, dst_offset));
-        dst[0] = 0;
+    for (int xin = x; xin < dts_width; xin += gs) {
+        dst_ptr[xin] = 0;
     }
 
-    int buf_index = mad24((int)sizeof(float), x, buf_offset);
+    if (x < dst_height - 1) {
+        dst_ptr[x * dts_width + dts_width] = 0;
+    }
+
+    int buf_index = x;
     float accum = 0;
-
-    for (int y = 1; y < cols; y += LOCAL_SUM_SIZE)
-    {
-        int lsum_index = lid;
-        #pragma unroll
-        for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, lsum_index += LOCAL_SUM_STRIDE)
-        {
-            __global const float *buf = (__global const float *)(buf_ptr + buf_index);
-            accum += buf[0];
+    for (int y = 1; y < dts_width; y += LOCAL_SUM_SIZE) {
+#pragma unroll
+        for (int yin = 0, lsum_index = lid; yin < LOCAL_SUM_SIZE; yin++, buf_index += buf_width, lsum_index += LOCAL_SUM_STRIDE) {
+            accum += buf_ptr[buf_index];
             lm_sum[lsum_index] = accum;
-            buf_index += buf_step;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
 
-        if (y + lid < cols)
-        {
-            //int dst_index = dst_offset + dst_step *  LOCAL_SUM_COLS * gid + sizeof(float) * y + sizeof(float) * lid;
-            int dst_index = mad24(dst_step, LOCAL_SUM_SIZE * gid, mad24((int)sizeof(float), y + lid, dst_offset));
-            lsum_index = LOCAL_SUM_STRIDE * lid;
-            int yin_max = min(rows - 1 -  LOCAL_SUM_SIZE * gid, LOCAL_SUM_SIZE);
-            #pragma unroll
-            for (int yin = 0; yin < yin_max; yin++, lsum_index++)
-            {
-                dst = (__global float *)(dst_ptr + dst_index);
-                dst[0] = lm_sum[lsum_index];
-                dst_index += dst_step;
+        if (y + lid < dts_width) {
+            int dst_index = dts_width + dts_width * LOCAL_SUM_SIZE * gid + (y + lid);
+            int lsum_index = LOCAL_SUM_STRIDE * lid;
+            int yin_max = min(dst_height - 1 - LOCAL_SUM_SIZE * gid, LOCAL_SUM_SIZE);
+#pragma unroll
+            for (int yin = 0; yin < yin_max; yin++, lsum_index++, dst_index += dts_width) {
+                dst_ptr[dst_index] = lm_sum[lsum_index];
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
