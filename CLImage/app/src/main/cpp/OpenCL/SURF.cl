@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+static const constant float SURF_INTEGRAL_BIAS  = 255;
+
 typedef struct SurfHF {
     int2 p0, p1, p2, p3;
     float w;
@@ -22,10 +24,10 @@ float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant Sur
     float d = 0;
     for (int k = 0; k < N; k++) {
         constant SurfHF* fk = &f[k];
-        d += (read_imagef(inputImage, p + fk->p0).x +
-              read_imagef(inputImage, p + fk->p3).x -
-              read_imagef(inputImage, p + fk->p1).x -
-              read_imagef(inputImage, p + fk->p2).x) * fk->w;
+        d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + fk->p0).x +
+                                   read_imagef(inputImage, p + fk->p3).x -
+                                   read_imagef(inputImage, p + fk->p1).x -
+                                   read_imagef(inputImage, p + fk->p2).x) * fk->w;
     }
     return d;
 }
@@ -127,8 +129,7 @@ bool interpolateKeypoint(read_only image2d_t detImage0, read_only image2d_t detI
     return ok;
 }
 
-kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t detImage0,
-                              read_only image2d_t detImage1, read_only image2d_t detImage2,
+kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t detImage1, read_only image2d_t detImage2,
                               read_only image2d_t traceImage, int3 sizes, global KeyPointMaxima* keypoints,
                               int margin, int octave, float hessianThreshold, int sampleStep) {
     const int2 p = (int2) (get_global_id(0), get_global_id(1)) + margin;
@@ -136,7 +137,6 @@ kernel void findMaximaInLayer(read_only image2d_t sumImage, read_only image2d_t 
     const int size = sizes.y;
 
     const float val0 = N9(1, 0, 0);
-
     
     if (val0 > hessianThreshold) {
         /* Coordinates for the start of the wavelet in the sum image. There
@@ -198,7 +198,7 @@ kernel void integral_sum_cols(global const float *src_ptr, int src_width, int sr
 #pragma unroll
         for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, src_index += src_width) {
             if ((x < src_width) && (y + yin < src_height)) {
-                accum += src_ptr[src_index];
+                accum += src_ptr[src_index] / SURF_INTEGRAL_BIAS;
             }
             lm_sum[yin][lid] = accum;
         }
@@ -224,7 +224,7 @@ kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global floa
     for (int y = 0; y < get_image_height(sourceImage); y += LOCAL_SUM_SIZE) {
 #pragma unroll
         for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++) {
-            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x;
+            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x / SURF_INTEGRAL_BIAS;
             lm_sum[yin][lid] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);

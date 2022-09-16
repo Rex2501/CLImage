@@ -112,28 +112,32 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
         const cl::Buffer buffer;
     };
 
+    cl_image_buffer_2d(cl::Context context, int _width, int _height, int _stride)
+        : stride(_stride), cl_image_2d<T>(context, _width, _height, buildPayload(context, _width, _height, _stride)) {}
+
    public:
+    const int stride;
+
     cl_image_buffer_2d(cl::Context context, int _width, int _height)
-        : cl_image_2d<T>(context, _width, _height, buildPayload(context, _width, _height)) {}
+        : cl_image_buffer_2d<T>(context, _width, _height, compute_stride(_width)) {}
 
-    static inline std::unique_ptr<payload> buildPayload(cl::Context context, int width, int height) {
+    static int compute_stride(int width) {
         const int pitch_alignment = cl::Device::getDefault().getInfo<CL_DEVICE_IMAGE_PITCH_ALIGNMENT>();
-        const int pitch = pitch_alignment * ((width * sizeof(T) + pitch_alignment - 1) / pitch_alignment) / sizeof(T);
+        return pitch_alignment * ((width + pitch_alignment - 1) / pitch_alignment);
+    }
 
-        // TODO: this is too strong of an assumption
-        assert(width == pitch);
-
-        auto buffer = cl::Buffer(context, CL_MEM_READ_WRITE, pitch * height * sizeof(T));
-        auto image = cl::Image2D(context, cl_image<T>::ImageFormat(), buffer, width, height, pitch * sizeof(T));
+    static inline std::unique_ptr<payload> buildPayload(cl::Context context, int width, int height, int stride) {
+        auto buffer = cl::Buffer(context, CL_MEM_READ_WRITE, stride * height * sizeof(T));
+        auto image = cl::Image2D(context, cl_image<T>::ImageFormat(), buffer, width, height, stride * sizeof(T));
         return std::make_unique<payload>(payload{{image}, buffer});
     }
 
-    image<T> mapImage() override {
-        size_t pixel_count = image<T>::width * image<T>::height;
+    image<T> mapImage() const override {
+        size_t pixel_count = stride * image<T>::height;
         T* image_data =
-            cl::enqueueMapBuffer(getBuffer(), true, CL_MAP_READ | CL_MAP_WRITE, 0, image<T>::pixel_size * pixel_count);
+            (T *) cl::enqueueMapBuffer(getBuffer(), true, CL_MAP_READ | CL_MAP_WRITE, 0, image<T>::pixel_size * pixel_count);
 
-        return gls::image(image<T>::width, image<T>::height, std::span<T>(image_data, pixel_count));
+        return gls::image(image<T>::width, image<T>::height, stride, std::span<T>(image_data, pixel_count));
     }
 
     cl::Buffer getBuffer() const { return static_cast<const payload*>(this->_payload.get())->buffer; }
