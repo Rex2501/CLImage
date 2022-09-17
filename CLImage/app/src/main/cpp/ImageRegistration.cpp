@@ -33,14 +33,21 @@ void testSURF() {
 //    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/3untagged.png");
 //    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/4untagged.png");
 
+#if __APPLE__
     const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8601.jpg");
     const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8603.jpg");
+#else
+    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/data/local/tmp/DSCF8601.jpg");
+    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/data/local/tmp/DSCF8603.jpg");
+#endif
 
     const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
     const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
 
     gls::image<float> srcImg1(srcImg1_->width, srcImg1_->height);
     gls::image<float> srcImg2(srcImg2_->width, srcImg2_->height);
+
+    std::cout << "image size: " << srcImg1_->width << "x" << srcImg1_->height << std::endl;
 
     srcImg1.apply([&](float *p, int x, int y) {
         const gls::rgb_pixel& pIn = (*srcImg1_)[y][x];
@@ -51,6 +58,9 @@ void testSURF() {
         const gls::rgb_pixel& pIn = (*srcImg2_)[y][x];
         *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
     });
+
+    const auto test = gls::cl_image_buffer_2d<float>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
+    test.copyPixelsFrom(srcImg1);
 
 //    {
 //        gls::cl_image_2d<gls::luma_alpha_pixel_fp32> input(glsContext->clContext(), srcImg1.width, srcImg1.height);
@@ -108,7 +118,11 @@ void testSURF() {
 int main(int argc, const char * argv[]) {
     std::cout << "ImageRegistration Tests!\n";
 
-    testSURF();
+    try {
+        testSURF();
+    } catch (const cl::Error& e) {
+        std::cout << "cl::Error " << e.what() << " - " << gls::clStatusToString(e.err()) << std::endl;
+    }
 
     return 0;
 }

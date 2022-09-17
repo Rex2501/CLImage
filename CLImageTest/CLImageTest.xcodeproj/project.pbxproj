@@ -30,7 +30,8 @@
 		E5188C7827EA63A700F2332C /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E5188C7927EA63A700F2332C /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
 		E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
-		E52922C728AB10B7000879D3 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E52922C528AB10B7000879D3 /* SURF.cpp */; };
+		E5345EE428D4F8A100FC57FA /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE128D4F8A100FC57FA /* SURF.cpp */; };
+		E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -57,7 +58,6 @@
 		E5AD6294276179630055F712 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
 		E5DC9B6027DFBA9300399222 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
 		E5E9EA8928B8D8230079A5C0 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
-		E5E9EA9128B8D86E0079A5C0 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5E9EA9028B8D86E0079A5C0 /* main.cpp */; };
 		E5E9EA9528B8D9030079A5C0 /* gls_linalg.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A927F2E9E8008B3D30 /* gls_linalg.hpp */; };
 		E5E9EA9628B8D9030079A5C0 /* gls_cl_error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627C276174FC0055F712 /* gls_cl_error.cpp */; };
 		E5E9EA9728B8D9030079A5C0 /* gls_cl_image.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627A276174FC0055F712 /* gls_cl_image.hpp */; };
@@ -84,12 +84,9 @@
 		E5E9EAAC28B8D94C0079A5C0 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E5E9EAAD28B8D94C0079A5C0 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
 		E5E9EAAE28B8D94C0079A5C0 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
-		E5E9EAB128B8DAC90079A5C0 /* feature2d.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E5E9EA8428AFF7310079A5C0 /* feature2d.hpp */; };
-		E5E9EAB228B8DAC90079A5C0 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E52922C528AB10B7000879D3 /* SURF.cpp */; };
-		E5E9EAB328B8DAC90079A5C0 /* SURF.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E52922C628AB10B7000879D3 /* SURF.hpp */; };
-		E5E9EABD28B90D630079A5C0 /* demosaic_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2528282DB504003305E9 /* demosaic_cl.cpp */; };
-		E5E9EABE28B90D630079A5C0 /* demosaic_cl.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2527282DB504003305E9 /* demosaic_cl.hpp */; };
 		E5E9EABF28B915D80079A5C0 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
+		E5FDDCCD28C7E9310010A980 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2531282DB5BB003305E9 /* ThreadPool.cpp */; };
+		E5FDDCCE28C7E9310010A980 /* ThreadPool.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2530282DB5BB003305E9 /* ThreadPool.hpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -148,8 +145,10 @@
 		E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_tiff.cpp; path = ../../src/gls_image_tiff.cpp; sourceTree = "<group>"; };
 		E51AACE627E1548400E99B58 /* gls_image_tiff.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = gls_image_tiff.h; path = ../../src/gls_image_tiff.h; sourceTree = "<group>"; };
 		E51AACE827E1AA1500E99B58 /* gls_auto_ptr.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_auto_ptr.hpp; path = ../../src/gls_auto_ptr.hpp; sourceTree = "<group>"; };
-		E52922C528AB10B7000879D3 /* SURF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SURF.cpp; sourceTree = "<group>"; };
-		E52922C628AB10B7000879D3 /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = SURF.hpp; sourceTree = "<group>"; };
+		E5345EE128D4F8A100FC57FA /* SURF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SURF.cpp; path = ../../CLImage/app/src/main/cpp/SURF.cpp; sourceTree = "<group>"; };
+		E5345EE228D4F8A100FC57FA /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = SURF.hpp; path = ../../CLImage/app/src/main/cpp/SURF.hpp; sourceTree = "<group>"; };
+		E5345EE328D4F8A100FC57FA /* feature2d.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = feature2d.hpp; path = ../../CLImage/app/src/main/cpp/feature2d.hpp; sourceTree = "<group>"; };
+		E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ImageRegistration.cpp; path = ../../CLImage/app/src/main/cpp/ImageRegistration.cpp; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -185,9 +184,7 @@
 		E5AD628B276176BB0055F712 /* OpenCL */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OpenCL; path = ../../CLImage/app/src/main/cpp/OpenCL; sourceTree = "<group>"; };
 		E5AD628C276178580055F712 /* OpenCL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenCL.framework; path = System/Library/Frameworks/OpenCL.framework; sourceTree = SDKROOT; };
 		E5DC9B5F27DFBA9300399222 /* libtiff.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtiff.dylib; path = CLImageTest/libs/libtiff.dylib; sourceTree = "<group>"; };
-		E5E9EA8428AFF7310079A5C0 /* feature2d.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = feature2d.hpp; sourceTree = "<group>"; };
 		E5E9EA8E28B8D86E0079A5C0 /* ImageRegistration */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ImageRegistration; sourceTree = BUILT_PRODUCTS_DIR; };
-		E5E9EA9028B8D86E0079A5C0 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		E5E9EAB028B8DA7C0079A5C0 /* ImageRegistration.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = ImageRegistration.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -260,9 +257,9 @@
 				E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */,
 				E50D253D2837FB53003305E9 /* CameraCalibration.hpp */,
 				E5AB797F27EAD0D7008B3D30 /* raw_pipeline.cpp */,
-				E5E9EA8428AFF7310079A5C0 /* feature2d.hpp */,
-				E52922C528AB10B7000879D3 /* SURF.cpp */,
-				E52922C628AB10B7000879D3 /* SURF.hpp */,
+				E5345EE328D4F8A100FC57FA /* feature2d.hpp */,
+				E5345EE128D4F8A100FC57FA /* SURF.cpp */,
+				E5345EE228D4F8A100FC57FA /* SURF.hpp */,
 			);
 			name = App;
 			sourceTree = "<group>";
@@ -343,7 +340,7 @@
 			isa = PBXGroup;
 			children = (
 				E5E9EAB028B8DA7C0079A5C0 /* ImageRegistration.entitlements */,
-				E5E9EA9028B8D86E0079A5C0 /* main.cpp */,
+				E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */,
 			);
 			path = ImageRegistration;
 			sourceTree = "<group>";
@@ -490,7 +487,6 @@
 				E5188C6D27EA63A700F2332C /* gls_cl.cpp in Sources */,
 				E50D253E2837FB53003305E9 /* LeicaQ2Calibration.cpp in Sources */,
 				E5AB79A627F21A44008B3D30 /* gls_color_science.cpp in Sources */,
-				E52922C728AB10B7000879D3 /* SURF.cpp in Sources */,
 				E50D2536282ED766003305E9 /* guided_filter.cpp in Sources */,
 				E50D252D282DB505003305E9 /* demosaic_cl.cpp in Sources */,
 				E50D25392832D41F003305E9 /* raw_converter.cpp in Sources */,
@@ -535,11 +531,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E5E9EABD28B90D630079A5C0 /* demosaic_cl.cpp in Sources */,
-				E5E9EABE28B90D630079A5C0 /* demosaic_cl.hpp in Sources */,
-				E5E9EAB128B8DAC90079A5C0 /* feature2d.hpp in Sources */,
-				E5E9EAB228B8DAC90079A5C0 /* SURF.cpp in Sources */,
-				E5E9EAB328B8DAC90079A5C0 /* SURF.hpp in Sources */,
+				E5FDDCCD28C7E9310010A980 /* ThreadPool.cpp in Sources */,
+				E5FDDCCE28C7E9310010A980 /* ThreadPool.hpp in Sources */,
 				E5E9EA9528B8D9030079A5C0 /* gls_linalg.hpp in Sources */,
 				E5E9EA9628B8D9030079A5C0 /* gls_cl_error.cpp in Sources */,
 				E5E9EA9728B8D9030079A5C0 /* gls_cl_image.hpp in Sources */,
@@ -549,9 +542,11 @@
 				E5E9EA9B28B8D9030079A5C0 /* gls_image_jpeg.cpp in Sources */,
 				E5E9EA9C28B8D9030079A5C0 /* gls_image_jpeg.h in Sources */,
 				E5E9EA9D28B8D9030079A5C0 /* gls_image_png.cpp in Sources */,
+				E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */,
 				E5E9EA9E28B8D9030079A5C0 /* gls_image_png.h in Sources */,
 				E5E9EA9F28B8D9030079A5C0 /* gls_image_tiff.cpp in Sources */,
 				E5E9EAA028B8D9030079A5C0 /* gls_image_tiff.h in Sources */,
+				E5345EE428D4F8A100FC57FA /* SURF.cpp in Sources */,
 				E5E9EAA128B8D9030079A5C0 /* gls_tiff_metadata.cpp in Sources */,
 				E5E9EAA228B8D9030079A5C0 /* gls_tiff_metadata.hpp in Sources */,
 				E5E9EAA328B8D9030079A5C0 /* gls_logging.cpp in Sources */,
@@ -561,7 +556,6 @@
 				E5E9EAA728B8D9030079A5C0 /* gls_dng_lossless_jpeg.cpp in Sources */,
 				E5E9EAA828B8D9030079A5C0 /* gls_color_science.cpp in Sources */,
 				E5E9EAA928B8D9030079A5C0 /* gls_color_science.hpp in Sources */,
-				E5E9EA9128B8D86E0079A5C0 /* main.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

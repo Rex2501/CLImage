@@ -37,9 +37,21 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
                             write_only image2d_t traceImage,
                             int2 margin,
                             int sampleStep,
-                            constant SurfHF Dx[3],
-                            constant SurfHF Dy[3],
-                            constant SurfHF Dxy[4]) {
+                            constant SurfHF Dx[3]
+#ifndef __APPLE__
+                            __attribute__ ((max_constant_size(3 * sizeof(SurfHF))))
+#endif
+                            ,
+                            constant SurfHF Dy[3]
+#ifndef __APPLE__
+                            __attribute__ ((max_constant_size(3 * sizeof(SurfHF))))
+#endif
+                            ,
+                            constant SurfHF Dxy[4]
+#ifndef __APPLE__
+                            __attribute__ ((max_constant_size(4 * sizeof(SurfHF))))
+#endif
+                            ) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
@@ -62,7 +74,7 @@ typedef struct KeyPoint {
     int class_id;
 } KeyPoint;
 
-const constant int KeyPointMaxima_MaxCount = 20000;
+#define KeyPointMaxima_MaxCount 20000
 
 typedef struct KeyPointMaxima {
     int count;
@@ -277,7 +289,7 @@ kernel void integral_sum_rows(global const float *buf_ptr, int buf_width,
     }
 }
 
-kernel void integral_sum_rows_image(global const float *buf_ptr, int buf_width, write_only image2d_t dstImage) {
+kernel void integral_sum_rows_image(global const float* buf_ptr, int buf_width, write_only image2d_t dstImage) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int gs = get_global_size(0);

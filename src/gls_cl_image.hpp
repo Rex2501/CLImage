@@ -100,7 +100,7 @@ class cl_image_2d : public cl_image<T> {
         return gls::image(image<T>::width, image<T>::height, (int) stride, std::span<T>(image_data, data_size));
     }
 
-    void unmapImage(const image<T>& mappedImage) const { cl::enqueueUnmapMemObject(_payload->image, (void*)mappedImage[0]); }
+    virtual void unmapImage(const image<T>& mappedImage) const { cl::enqueueUnmapMemObject(_payload->image, (void*)mappedImage[0]); }
 
     cl::Image2D getImage2D() const { return _payload->image; }
 };
@@ -113,7 +113,7 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
     };
 
     cl_image_buffer_2d(cl::Context context, int _width, int _height, int _stride)
-        : stride(_stride), cl_image_2d<T>(context, _width, _height, buildPayload(context, _width, _height, _stride)) {}
+        : cl_image_2d<T>(context, _width, _height, buildPayload(context, _width, _height, _stride)), stride(_stride) {}
 
    public:
     const int stride;
@@ -139,6 +139,8 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
 
         return gls::image(image<T>::width, image<T>::height, stride, std::span<T>(image_data, pixel_count));
     }
+
+    void unmapImage(const image<T>& mappedImage) const override { cl::enqueueUnmapMemObject(getBuffer(), (void*)mappedImage[0]); }
 
     cl::Buffer getBuffer() const { return static_cast<const payload*>(this->_payload.get())->buffer; }
 };
