@@ -1185,7 +1185,7 @@ struct refineMatch {
 };
 
 bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
-                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
+                    std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
     // (1) Convert the format to IMAGE, and calculate the integral image
     // Calculate the integral image
     gls::cl_image_buffer_2d<float> integralSum1(cLContext->clContext(), srcIMAGE1.width + 1, srcIMAGE1.height + 1);
@@ -1582,5 +1582,36 @@ std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<
     return homoV;
 }
 
-} // namespace surf
+void clRegisterAndFuse(gls::OpenCLContext* cLContext,
+                       const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,
+                       const gls::cl_image_2d<gls::rgba_pixel>& inputImage1,
+                       gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                       const gls::Matrix<3, 3>& homography) {
+    // Load the shader source
+    const auto program = cLContext->loadProgram("SURF");
 
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage0
+                                    cl::Image2D,  // inputImage1
+                                    cl::Image2D,  // outputImage
+                                    cl::Buffer,   // homography
+                                    cl::Sampler   // linear_sampler
+                                    >(program, "registerAndFuse");
+
+    std::cout << "Homography Matrix:\n" << homography << "\n ptr: " << homography.data() << std::endl;
+
+    const auto linear_sampler = cl::Sampler(cLContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
+    const auto homographyBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(float[3][3]));
+    cl::enqueueWriteBuffer(homographyBuffer, false, 0, sizeof(float[3][3]), homography);
+
+    kernel(
+#if __APPLE__
+           gls::OpenCLContext::buildEnqueueArgs(inputImage0.width, inputImage0.height),
+#else
+           cl::EnqueueArgs(cl::NDRange(inputImage0.width, inputImage0.height), cl::NDRange(32, 32)),
+#endif
+           inputImage0.getImage2D(), inputImage1.getImage2D(), outputImage->getImage2D(), homographyBuffer, linear_sampler);
+}
+
+} // namespace surf

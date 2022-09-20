@@ -31,6 +31,12 @@ std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<
 template <size_t N, typename baseT>
 gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m);
 
+void clRegisterAndFuse(gls::OpenCLContext* cLContext,
+                       const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,
+                       const gls::cl_image_2d<gls::rgba_pixel>& inputImage1,
+                       gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                       const gls::Matrix<3, 3>& homography);
+
 } // namespace surf
 
 #endif /* SURF_hpp */

@@ -59,32 +59,6 @@ void testSURF() {
         *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
     });
 
-    const auto test = gls::cl_image_buffer_2d<float>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
-    test.copyPixelsFrom(srcImg1);
-
-//    {
-//        gls::cl_image_2d<gls::luma_alpha_pixel_fp32> input(glsContext->clContext(), srcImg1.width, srcImg1.height);
-//        gls::cl_image_2d<gls::luma_pixel_fp32> output(glsContext->clContext(), srcImg1.width, srcImg1.height);
-//
-//        auto inputCpu = input.mapImage();
-//        inputCpu.apply([&srcImg1](gls::luma_alpha_pixel_fp32 *p, int x, int y) {
-//            *p = { srcImg1[y][x], 1 };
-//        });
-//        input.unmapImage(inputCpu);
-//
-//        boxBlurScan(glsContext, input, &output, 10);
-//
-//        const auto blurredImage = output.mapImage();
-//        gls::image<gls::luma_pixel> blurredImageLuma(blurredImage.width, blurredImage.height);
-//
-//        blurredImageLuma.apply([&blurredImage](gls::luma_pixel* p, int x, int y){
-//            *p = std::clamp(blurredImage[y][x].luma, 0.0f, 255.0f);
-//        });
-//
-//        blurredImageLuma.write_png_file("/Users/fabio/blurred.png");
-//        output.unmapImage(blurredImage);
-//    }
-
     std::vector<surf::Point2f> matchpoints1;
     std::vector<surf::Point2f> matchpoints2;
 
@@ -113,6 +87,35 @@ void testSURF() {
     }
     printf("1\n");
     printf("Elapsed Time: %f\n", elapsed_time_ms);
+
+    auto inputImage1 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
+    auto inputImage1Cpu = inputImage1.mapImage();
+    inputImage1Cpu.apply([&srcImg1_](gls::rgba_pixel* p, int x, int y) {
+        const auto& pIn = (*srcImg1_)[y][x];
+        *p = { pIn.red, pIn.green, pIn.blue, 255 };
+    });
+    inputImage1.unmapImage(inputImage1Cpu);
+
+    auto inputImage2 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg2_->width, srcImg2_->height);
+    auto inputImage2Cpu = inputImage2.mapImage();
+    inputImage2Cpu.apply([&srcImg2_](gls::rgba_pixel* p, int x, int y) {
+        const auto& pIn = (*srcImg2_)[y][x];
+        *p = { pIn.red, pIn.green, pIn.blue, 255 };
+    });
+    inputImage2.unmapImage(inputImage2Cpu);
+
+    auto outputImage = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
+
+    gls::Matrix<3, 3> homography = {
+        { transParameter[0], transParameter[1], transParameter[2] },
+        { transParameter[3], transParameter[4], transParameter[5] },
+        { transParameter[6], transParameter[7], 1 }
+    };
+
+    surf::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
+
+    auto outputImageCpu = outputImage.mapImage();
+    outputImageCpu.write_png_file("/Users/fabio/work/ImageRegistration/fused.png", /*skip_alpha=*/ true);
 }
 
 int main(int argc, const char * argv[]) {
