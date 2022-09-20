@@ -31,6 +31,7 @@
 #define USE_OPENCL true
 #define USE_OPENCL_INTEGRAL true
 #define INTEGRAL_USE_BUFFERS false
+#define USE_SCATTERED_SURF_PARAMS true
 
 template<>
 struct std::hash<gls::size> {
@@ -79,7 +80,7 @@ float calcHaarPattern(const gls::image<float>& sum, const gls::point& p, const s
 }
 
 template <size_t N>
-void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>* dst, int oldSize, int newSize, int widthStep) {
+void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>* dst, int oldSize, int newSize) {
     float ratio = (float) newSize / oldSize;
     for (int k = 0; k < N; k++) {
         int dx1 = (int)lrint(ratio * src[k][0]);
@@ -94,11 +95,11 @@ void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>* dst, int oldSi
     }
 }
 
+#if USE_SCATTERED_SURF_PARAMS
+
 struct clSurfHF {
     cl_int2 p0, p1, p2, p3;
     cl_float w;
-
-    clSurfHF() {}
 
     clSurfHF(const SurfHF& cpp) :
         p0({cpp.p0.x, cpp.p0.y}),
@@ -118,8 +119,8 @@ struct SurfClContext {
     cl::Buffer DxyBuffer;
     cl::Buffer keyPointsBuffer;
 
-    std::vector<gls::cl_image_2d<float>::unique_ptr> dets;
-    std::vector<gls::cl_image_2d<float>::unique_ptr> traces;
+    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> dets;
+    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> traces;
 
     SurfClContext(gls::OpenCLContext* cLContext) {
         glsContext = cLContext;
@@ -172,6 +173,95 @@ void clCalcDetAndTrace(SurfClContext *ctx,
            sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
            { margin_crop.x, margin_crop.y }, sampleStep, ctx->DxBuffer, ctx->DyBuffer, ctx->DxyBuffer);
 }
+
+#else
+
+struct clSurfHF {
+    cl_int8 p_dx[3];
+    cl_int8 p_dy[3];
+    cl_int8 p_dxy[4];
+
+    cl_float4 w_dx;
+    cl_float4 w_dy;
+    cl_float4 w_dxy;
+
+    clSurfHF(const std::array<SurfHF, 3>& Dx, const std::array<SurfHF, 3>& Dy, const std::array<SurfHF, 4>& Dxy) {
+        for (int i = 0; i < 3; i++) {
+            p_dx[i] = { Dx[i].p0.x, Dx[i].p0.y, Dx[i].p1.x, Dx[i].p1.y, Dx[i].p2.x, Dx[i].p2.y, Dx[i].p3.x, Dx[i].p3.y };
+        }
+        w_dx = { Dx[0].w, Dx[1].w, Dx[2].w, 0 };
+
+        for (int i = 0; i < 3; i++) {
+            p_dy[i] = { Dy[i].p0.x, Dy[i].p0.y, Dy[i].p1.x, Dy[i].p1.y, Dy[i].p2.x, Dy[i].p2.y, Dy[i].p3.x, Dy[i].p3.y };
+        }
+        w_dy = { Dy[0].w, Dy[1].w, Dy[2].w, 0 };
+
+        for (int i = 0; i < 4; i++) {
+            p_dy[i] = { Dxy[i].p0.x, Dxy[i].p0.y, Dxy[i].p1.x, Dxy[i].p1.y, Dxy[i].p2.x, Dxy[i].p2.y, Dxy[i].p3.x, Dxy[i].p3.y };
+        }
+        w_dy = { Dxy[0].w, Dxy[1].w, Dxy[2].w, Dxy[3].w };
+    }
+};
+
+
+struct SurfClContext {
+    gls::OpenCLContext* glsContext = nullptr;
+
+    std::mutex findMaximaInLayerMutex;
+
+    cl::Buffer surfHFDataBuffer;
+    cl::Buffer keyPointsBuffer;
+
+    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> dets;
+    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> traces;
+
+    SurfClContext(gls::OpenCLContext* cLContext) {
+        glsContext = cLContext;
+    }
+};
+
+void clCalcDetAndTrace(SurfClContext *ctx,
+                       const gls::cl_image_2d<float>& sumImage,
+                       gls::cl_image_2d<float>* detImage,
+                       gls::cl_image_2d<float>* traceImage,
+                       const gls::rectangle& margin_crop,
+                       const int sampleStep,
+                       const std::array<SurfHF, 3>& Dx,
+                       const std::array<SurfHF, 3>& Dy,
+                       const std::array<SurfHF, 4>& Dxy) {
+    // std::cout << "clCalcDetAndTrace - margin_crop: { " << margin_crop.x << ", " << margin_crop.y << ", " << margin_crop.width << ", " << margin_crop.height << " }, sampleStep: " << sampleStep << std::endl;
+
+    // Load the shader source
+    const auto program = ctx->glsContext->loadProgram("SURF");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
+                                    cl::Image2D,  // detImage
+                                    cl::Image2D,  // traceImage
+                                    cl_int2,      // margin
+                                    int,          // sampleStep
+                                    cl::Buffer    // surfHFData
+                                    >(program, "calcDetAndTrace");
+
+    const clSurfHF surfHFData(Dx, Dy, Dxy);
+
+    if (ctx->surfHFDataBuffer.get() == 0) {
+        ctx->surfHFDataBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof(clSurfHF));
+    }
+    cl::enqueueWriteBuffer(ctx->surfHFDataBuffer, false, 0, sizeof(clSurfHF), &surfHFData);
+
+    // Schedule the kernel on the GPU
+    kernel(
+#if __APPLE__
+           gls::OpenCLContext::buildEnqueueArgs(margin_crop.width, margin_crop.height),
+#else
+           cl::EnqueueArgs(cl::NDRange(margin_crop.width, margin_crop.height), cl::NDRange(32, 32)),
+#endif
+           sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
+           { margin_crop.x, margin_crop.y }, sampleStep, ctx->surfHFDataBuffer);
+}
+
+#endif
 
 void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img,
 #if INTEGRAL_USE_BUFFERS
@@ -294,9 +384,9 @@ void calcLayerDetAndTrace(SurfClContext *ctx, const gls::cl_image_2d<float>& sum
     if (size > (sum.height - 1) || size > (sum.width - 1))
         return;
 
-    resizeHaarPattern(dx_s, &Dx, 9, size, sum.width);
-    resizeHaarPattern(dy_s, &Dy, 9, size, sum.width);
-    resizeHaarPattern(dxy_s, &Dxy, 9, size, sum.width);
+    resizeHaarPattern(dx_s, &Dx, 9, size);
+    resizeHaarPattern(dy_s, &Dy, 9, size);
+    resizeHaarPattern(dxy_s, &Dxy, 9, size);
 
     /* The integral image 'sum' is one pixel bigger than the source image */
     int height = 1 + (sum.height - 1 - size) / sampleStep;
@@ -653,6 +743,7 @@ void SURFFindInvoker(SurfClContext *ctx, const gls::cl_image_2d<float>& sum,
 #endif
     }
 
+#if USE_OPENCL
     // Collect results
     const auto keyPointMaxima = (KeyPointMaxima *) cl::enqueueMapBuffer(ctx->keyPointsBuffer, true, CL_MAP_READ | CL_MAP_WRITE, 0, sizeof(KeyPointMaxima));
 
@@ -664,6 +755,7 @@ void SURFFindInvoker(SurfClContext *ctx, const gls::cl_image_2d<float>& sum,
     keyPointMaxima->count = 0;
 
     cl::enqueueUnmapMemObject(ctx->keyPointsBuffer, (void*)keyPointMaxima);
+#endif
 }
 
 struct KeypointGreater {
@@ -710,8 +802,8 @@ void fastHessianDetector(SurfClContext *ctx, const gls::cl_image_2d<float>& sum,
         for (int layer = 0; layer < nOctaveLayers + 2; layer++) {
             /* The integral image sum is one pixel bigger than the source image*/
             if (ctx->dets[index] == nullptr) {
-                ctx->dets[index] = std::make_unique<gls::cl_image_2d<float>>(ctx->glsContext->clContext(), (sum.width - 1) / step, (sum.height - 1) / step);
-                ctx->traces[index] = std::make_unique<gls::cl_image_2d<float>>(ctx->glsContext->clContext(), (sum.width - 1) / step, (sum.height - 1) / step);
+                ctx->dets[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(ctx->glsContext->clContext(), (sum.width - 1) / step, (sum.height - 1) / step);
+                ctx->traces[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(ctx->glsContext->clContext(), (sum.width - 1) / step, (sum.height - 1) / step);
             }
             sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIZE_INC * layer) << octave;
             sampleSteps[index] = step;
@@ -894,8 +986,8 @@ struct SURFInvoker {
             }
 
             float descriptor_dir = 360.f - 90.f;
-            resizeHaarPattern(dx_s, &dx_t, 4, grad_wav_size, sum.width);
-            resizeHaarPattern(dy_s, &dy_t, 4, grad_wav_size, sum.width);
+            resizeHaarPattern(dx_s, &dx_t, 4, grad_wav_size);
+            resizeHaarPattern(dy_s, &dy_t, 4, grad_wav_size);
             int nangle = 0;
             for (int kk = 0; kk < nOriSamples; kk++) {
                 // TODO: if we use round instead of lrint the result is slightly different
@@ -1185,13 +1277,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
                      std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
     // (1) Convert the format to IMAGE, and calculate the integral image
     // Calculate the integral image
-#if INTEGRAL_USE_BUFFERS
     gls::cl_image_buffer_2d<float> integralSum1(cLContext->clContext(), srcIMAGE1.width + 1, srcIMAGE1.height + 1);
     gls::cl_image_buffer_2d<float> integralSum2(cLContext->clContext(), srcIMAGE2.width + 1, srcIMAGE2.height + 1);
-#else
-    gls::cl_image_2d<float> integralSum1(cLContext->clContext(), srcIMAGE1.width + 1, srcIMAGE1.height + 1);
-    gls::cl_image_2d<float> integralSum2(cLContext->clContext(), srcIMAGE2.width + 1, srcIMAGE2.height + 1);
-#endif
 
 #if USE_OPENCL_INTEGRAL
     clIntegral(cLContext, srcIMAGE1, &integralSum1);
