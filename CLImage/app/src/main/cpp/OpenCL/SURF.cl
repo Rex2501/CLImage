@@ -13,67 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define USE_SCATTERED_SURF_PARAMS true
-
-static const constant float SURF_INTEGRAL_BIAS  = 255;
-
-#if USE_SCATTERED_SURF_PARAMS
-
-typedef struct SurfHF {
-    int2 p0, p1, p2, p3;
-    float w;
-} SurfHF;
-
-float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant SurfHF f[], int N) {
-    float d = 0;
-    for (int k = 0; k < N; k++) {
-        constant SurfHF* fk = &f[k];
-        d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + fk->p0).x +
-                                   read_imagef(inputImage, p + fk->p3).x -
-                                   read_imagef(inputImage, p + fk->p1).x -
-                                   read_imagef(inputImage, p + fk->p2).x) * fk->w;
-    }
-    return d;
-}
-
-kernel void calcDetAndTrace(read_only image2d_t sumImage,
-                            write_only image2d_t detImage,
-                            write_only image2d_t traceImage,
-                            int2 margin,
-                            int sampleStep,
-                            constant SurfHF Dx[3],
-                            constant SurfHF Dy[3],
-                            constant SurfHF Dxy[4]) {
-    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-    const int2 p = imageCoordinates * sampleStep;
-
-    const float dx = calcHaarPattern(sumImage, p, Dx, 3);
-    const float dy = calcHaarPattern(sumImage, p, Dy, 3);
-    const float dxy = calcHaarPattern(sumImage, p, Dxy, 4);
-
-    write_imagef(detImage, imageCoordinates + margin, dx * dy - 0.81f * dxy * dxy);
-    write_imagef(traceImage, imageCoordinates + margin, dx + dy);
-}
-
-#else
+#define SURF_INTEGRAL_BIAS 255.0f
 
 typedef struct SurfHF {
     int8 p_dx[3];
-    int8 p_dy[3];
-    int8 p_dxy[4];
-
     float4 w_dx;
+
+    int8 p_dy[3];
     float4 w_dy;
+
+    int8 p_dxy[4];
     float4 w_dxy;
 } SurfHF;
 
-float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float w[], int N) {
+float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw, int N) {
+    const float w[4] = { dw.x, dw.y, dw.z, dw.w };
     float d = 0;
     for (int k = 0; k < N; k++) {
-        d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + dp[k].s01).x +
-                                   read_imagef(inputImage, p + dp[k].s67).x -
-                                   read_imagef(inputImage, p + dp[k].s23).x -
-                                   read_imagef(inputImage, p + dp[k].s45).x) * w[k];
+        int8 v = dp[k];
+        d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
+                                   read_imagef(inputImage, p + v.hi.hi /* p3 */).x -
+                                   read_imagef(inputImage, p + v.lo.hi /* p1 */).x -
+                                   read_imagef(inputImage, p + v.hi.lo /* p2 */).x) * w[k];
     }
     return d;
 }
@@ -87,20 +48,13 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
-    const float w_dx[3] = { surfHFData->w_dx.x, surfHFData->w_dx.y, surfHFData->w_dx.z };
-    const float dx = calcHaarPattern(sumImage, p, surfHFData->p_dx, w_dx, 3);
-
-    const float w_dy[3] = { surfHFData->w_dy.x, surfHFData->w_dy.y, surfHFData->w_dy.z };
-    const float dy = calcHaarPattern(sumImage, p, surfHFData->p_dy, w_dy, 3);
-
-    const float w_dxy[4] = { surfHFData->w_dxy.x, surfHFData->w_dxy.y, surfHFData->w_dxy.z, surfHFData->w_dxy.w };
-    const float dxy = calcHaarPattern(sumImage, p, surfHFData->p_dxy, w_dxy, 4);
+    const float dx = calcHaarPattern(sumImage, p, surfHFData->p_dx, surfHFData->w_dx, 3);
+    const float dy = calcHaarPattern(sumImage, p, surfHFData->p_dy, surfHFData->w_dy, 3);
+    const float dxy = calcHaarPattern(sumImage, p, surfHFData->p_dxy, surfHFData->w_dxy, 4);
 
     write_imagef(detImage, imageCoordinates + margin, dx * dy - 0.81f * dxy * dxy);
     write_imagef(traceImage, imageCoordinates + margin, dx + dy);
 }
-
-#endif
 
 typedef struct KeyPoint {
     struct {

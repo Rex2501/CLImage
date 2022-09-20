@@ -31,7 +31,6 @@
 #define USE_OPENCL true
 #define USE_OPENCL_INTEGRAL true
 #define INTEGRAL_USE_BUFFERS false
-#define USE_SCATTERED_SURF_PARAMS true
 
 template<>
 struct std::hash<gls::size> {
@@ -95,94 +94,14 @@ void resizeHaarPattern(const int src[][5], std::array<SurfHF, N>* dst, int oldSi
     }
 }
 
-#if USE_SCATTERED_SURF_PARAMS
-
-struct clSurfHF {
-    cl_int2 p0, p1, p2, p3;
-    cl_float w;
-
-    clSurfHF(const SurfHF& cpp) :
-        p0({cpp.p0.x, cpp.p0.y}),
-        p1({cpp.p1.x, cpp.p1.y}),
-        p2({cpp.p2.x, cpp.p2.y}),
-        p3({cpp.p3.x, cpp.p3.y}),
-        w(cpp.w) {}
-};
-
-struct SurfClContext {
-    gls::OpenCLContext* glsContext = nullptr;
-
-    std::mutex findMaximaInLayerMutex;
-
-    cl::Buffer DxBuffer;
-    cl::Buffer DyBuffer;
-    cl::Buffer DxyBuffer;
-    cl::Buffer keyPointsBuffer;
-
-    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> dets;
-    std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> traces;
-
-    SurfClContext(gls::OpenCLContext* cLContext) {
-        glsContext = cLContext;
-    }
-};
-
-void clCalcDetAndTrace(SurfClContext *ctx,
-                       const gls::cl_image_2d<float>& sumImage,
-                       gls::cl_image_2d<float>* detImage,
-                       gls::cl_image_2d<float>* traceImage,
-                       const gls::rectangle& margin_crop,
-                       const int sampleStep,
-                       const std::array<SurfHF, 3>& Dx,
-                       const std::array<SurfHF, 3>& Dy,
-                       const std::array<SurfHF, 4>& Dxy) {
-    // Load the shader source
-    const auto program = ctx->glsContext->loadProgram("SURF");
-
-    // Bind the kernel parameters
-    auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
-                                    cl::Image2D,  // detImage
-                                    cl::Image2D,  // traceImage
-                                    cl_int2,      // margin
-                                    int,          // sampleStep
-                                    cl::Buffer,   // Dx
-                                    cl::Buffer,   // Dy
-                                    cl::Buffer    // Dxy
-                                    >(program, "calcDetAndTrace");
-
-    const std::array<clSurfHF, 3> clDx = { Dx[0], Dx[1], Dx[2] };
-    const std::array<clSurfHF, 3> clDy = { Dy[0], Dy[1], Dy[2] };
-    const std::array<clSurfHF, 4> clDxy = { Dxy[0], Dxy[1], Dxy[2], Dxy[3] };
-
-    if (ctx->DxBuffer.get() == 0) {
-        ctx->DxBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDx);
-        ctx->DyBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDy);
-        ctx->DxyBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof clDxy);
-    }
-    cl::enqueueWriteBuffer(ctx->DxBuffer, false, 0, sizeof(clDx), &clDx);
-    cl::enqueueWriteBuffer(ctx->DyBuffer, false, 0, sizeof(clDy), &clDy);
-    cl::enqueueWriteBuffer(ctx->DxyBuffer, false, 0, sizeof(clDxy), &clDxy);
-
-    // Schedule the kernel on the GPU
-    kernel(
-#if __APPLE__
-           gls::OpenCLContext::buildEnqueueArgs(margin_crop.width, margin_crop.height),
-#else
-           cl::EnqueueArgs(cl::NDRange(margin_crop.width, margin_crop.height), cl::NDRange(32, 32)),
-#endif
-           sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
-           { margin_crop.x, margin_crop.y }, sampleStep, ctx->DxBuffer, ctx->DyBuffer, ctx->DxyBuffer);
-}
-
-#else
-
 struct clSurfHF {
     cl_int8 p_dx[3];
-    cl_int8 p_dy[3];
-    cl_int8 p_dxy[4];
-
     cl_float4 w_dx;
+
+    cl_int8 p_dy[3];
     cl_float4 w_dy;
+
+    cl_int8 p_dxy[4];
     cl_float4 w_dxy;
 
     clSurfHF(const std::array<SurfHF, 3>& Dx, const std::array<SurfHF, 3>& Dy, const std::array<SurfHF, 4>& Dxy) {
@@ -197,9 +116,9 @@ struct clSurfHF {
         w_dy = { Dy[0].w, Dy[1].w, Dy[2].w, 0 };
 
         for (int i = 0; i < 4; i++) {
-            p_dy[i] = { Dxy[i].p0.x, Dxy[i].p0.y, Dxy[i].p1.x, Dxy[i].p1.y, Dxy[i].p2.x, Dxy[i].p2.y, Dxy[i].p3.x, Dxy[i].p3.y };
+            p_dxy[i] = { Dxy[i].p0.x, Dxy[i].p0.y, Dxy[i].p1.x, Dxy[i].p1.y, Dxy[i].p2.x, Dxy[i].p2.y, Dxy[i].p3.x, Dxy[i].p3.y };
         }
-        w_dy = { Dxy[0].w, Dxy[1].w, Dxy[2].w, Dxy[3].w };
+        w_dxy = { Dxy[0].w, Dxy[1].w, Dxy[2].w, Dxy[3].w };
     }
 };
 
@@ -260,8 +179,6 @@ void clCalcDetAndTrace(SurfClContext *ctx,
            sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
            { margin_crop.x, margin_crop.y }, sampleStep, ctx->surfHFDataBuffer);
 }
-
-#endif
 
 void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img,
 #if INTEGRAL_USE_BUFFERS
