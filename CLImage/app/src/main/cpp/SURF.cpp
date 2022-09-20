@@ -180,13 +180,7 @@ void clCalcDetAndTrace(SurfClContext *ctx,
            { margin_crop.x, margin_crop.y }, sampleStep, ctx->surfHFDataBuffer);
 }
 
-void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img,
-#if INTEGRAL_USE_BUFFERS
-                       const gls::cl_image_buffer_2d<float>* sum
-#else
-                       const gls::cl_image_2d<float>* sum
-#endif
-                ) {
+void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img, const gls::cl_image_buffer_2d<float>* sum) {
     static const int tileSize = 16;
 
     gls::size bufsize(((img.height + tileSize - 1) / tileSize) * tileSize, ((img.width + tileSize - 1) / tileSize) * tileSize);
