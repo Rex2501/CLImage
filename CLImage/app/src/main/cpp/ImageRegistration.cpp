@@ -26,6 +26,7 @@
 #include "gls_linalg.hpp"
 
 #include "SURF.hpp"
+#include "RANSAC.hpp"
 
 #if __APPLE__
 #define PATH "/Users/fabio/work/ImageRegistration/"

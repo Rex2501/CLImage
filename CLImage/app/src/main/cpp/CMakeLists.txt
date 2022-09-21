@@ -171,6 +171,7 @@ add_executable(
         climage/gls_color_science.cpp
         ThreadPool.cpp
         SURF.cpp
+        RANSAC.cpp
         IntegralImage.cpp
         ImageRegistration.cpp
         filesystem/operations.cpp

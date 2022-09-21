@@ -333,7 +333,6 @@ kernel void registerAndFuse(read_only image2d_t inputImage0,
                             sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
-    // const float2 input_pos = (convert_float2(imageCoordinates) + 0.5) * input_norm;
 
     float x = imageCoordinates.x;
     float y = imageCoordinates.y;

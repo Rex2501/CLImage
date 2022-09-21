@@ -26,8 +26,6 @@ typedef gls::basic_point<float> Point2f;
 bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num);
 
-std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
-
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,
                        const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,
                        const gls::cl_image_2d<gls::rgba_pixel>& inputImage1,
