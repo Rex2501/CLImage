@@ -27,19 +27,17 @@
 
 #include "SURF.hpp"
 
+#if __APPLE__
+#define PATH "/Users/fabio/work/ImageRegistration/"
+#else
+#define PATH "/data/local/tmp/"
+#endif
+
 void testSURF() {
     auto glsContext = new gls::OpenCLContext("");
 
-//    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/3untagged.png");
-//    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_png_file("/Users/fabio/work/Image-Registration_SURF/4untagged.png");
-
-#if __APPLE__
-    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8601.jpg");
-    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/Users/fabio/work/ImageRegistration/DSCF8603.jpg");
-#else
-    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/data/local/tmp/DSCF8601.jpg");
-    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file("/data/local/tmp/DSCF8603.jpg");
-#endif
+    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8601.jpg");
+    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8603.jpg");
 
     const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
     const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
@@ -59,17 +57,17 @@ void testSURF() {
         *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
     });
 
-    std::vector<surf::Point2f> matchpoints1;
-    std::vector<surf::Point2f> matchpoints2;
+    std::vector<gls::Point2f> matchpoints1;
+    std::vector<gls::Point2f> matchpoints2;
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
     int matches_num = 150;
-    bool isFeatureDection = surf::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
+    bool isFeatureDection = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
     printf("isFeatureDection: %d\n", isFeatureDection);
 
     std::vector<float> transParameter;
-    transParameter = surf::getRANSAC2(matchpoints1, matchpoints2, 9, 2 * 150);
+    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, 2 * 150);
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
@@ -112,10 +110,10 @@ void testSURF() {
         { transParameter[6], transParameter[7], 1 }
     };
 
-    surf::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
+    gls::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
 
     auto outputImageCpu = outputImage.mapImage();
-    outputImageCpu.write_png_file("/Users/fabio/work/ImageRegistration/fused.png", /*skip_alpha=*/ true);
+    outputImageCpu.write_png_file(PATH "fused.png", /*skip_alpha=*/ true);
 }
 
 int main(int argc, const char * argv[]) {

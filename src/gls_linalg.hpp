@@ -541,21 +541,74 @@ inline Matrix<1, 1, baseT> adjoint(const Matrix<1, 1, baseT>& m) {
     return { 1 };
 }
 
-// Inverse Matrix: inverse(m) = adj(m)/det(m)
-// https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
-template <size_t N, typename baseT>
-inline Matrix<N, N, baseT> inverse(const Matrix<N, N, baseT>& m) {
-    baseT det = determinant(m);
-    if (det == 0) {
-        throw std::range_error("null determinant");
+//// Inverse Matrix: inverse(m) = adj(m)/det(m)
+//// https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
+//template <size_t N, typename baseT>
+//inline Matrix<N, N, baseT> inverse(const Matrix<N, N, baseT>& m) {
+//    baseT det = determinant(m);
+//    if (det == 0) {
+//        throw std::range_error("null determinant");
+//    }
+//
+//    Matrix<N, N, baseT> inverse;
+//    const auto adj = adjoint(m);
+//    for (int i = 0; i < N; i++)
+//        for (int j = 0; j < N; j++) inverse[i][j] = adj[i][j] / det;
+//
+//    return inverse;
+//}
+
+// --- Large Matrix Inversion ---
+
+template <size_t N, size_t M, typename baseT>
+void swap_rows(gls::Matrix<N, M, baseT>& m, size_t i, size_t j) {
+    for (size_t column = 0; column < M; column++)
+        std::swap(m[i][column], m[j][column]);
+}
+
+// Convert matrix to reduced row echelon form
+template <size_t N, size_t M, typename baseT>
+void rref(gls::Matrix<N, M, baseT>& m) {
+    for (size_t row = 0, lead = 0; row < N && lead < M; ++row, ++lead) {
+        size_t i = row;
+        while (m[i][lead] == 0) {
+            if (++i == N) {
+                i = row;
+                if (++lead == M)
+                    return;
+            }
+        }
+        swap_rows(m, i, row);
+        if (m[row][lead] != 0) {
+            baseT f = m[row][lead];
+            for (size_t column = 0; column < M; ++column)
+                m[row][column] /= f;
+        }
+        for (size_t j = 0; j < N; ++j) {
+            if (j == row)
+                continue;
+            baseT f = m[j][lead];
+            for (size_t column = 0; column < M; ++column)
+                m[j][column] -= f * m[row][column];
+        }
     }
+}
 
-    Matrix<N, N, baseT> inverse;
-    const auto adj = adjoint(m);
-    for (int i = 0; i < N; i++)
-        for (int j = 0; j < N; j++) inverse[i][j] = adj[i][j] / det;
-
-    return inverse;
+template <size_t N, typename baseT>
+gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
+    gls::Matrix<N, 2 * N, baseT> tmp;
+    for (size_t row = 0; row < N; ++row) {
+        for (size_t column = 0; column < N; ++column)
+            tmp[row][column] = m[row][column];
+        tmp[row][row + N] = 1;
+    }
+    rref(tmp);
+    gls::Matrix<N, N, baseT> inv;
+    for (size_t row = 0; row < N; ++row) {
+        for (size_t column = 0; column < N; ++column)
+            inv[row][column] = tmp[row][column + N];
+    }
+    return inv;
 }
 
 // From DCRaw (https://www.dechifro.org/dcraw/)

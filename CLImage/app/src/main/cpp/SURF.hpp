@@ -19,7 +19,7 @@
 #include "gls_cl_image.hpp"
 #include "gls_linalg.hpp"
 
-namespace surf {
+namespace gls {
 
 typedef gls::basic_point<float> Point2f;
 
@@ -27,9 +27,6 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num);
 
 std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
-
-template <size_t N, typename baseT>
-gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m);
 
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,
                        const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,

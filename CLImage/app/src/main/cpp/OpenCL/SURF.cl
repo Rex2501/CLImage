@@ -190,7 +190,7 @@ kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t
 #define LOCAL_SUM_STRIDE    (LOCAL_SUM_SIZE + 1)
 
 kernel void integral_sum_cols(global const float *src_ptr, int src_width, int src_height,
-                              global float *buf_ptr, int buf_width) {
+                              global float *buf_ptr, int buf_width, float bias) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int x = get_global_id(0);
@@ -203,7 +203,7 @@ kernel void integral_sum_cols(global const float *src_ptr, int src_width, int sr
 #pragma unroll
         for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++, src_index += src_width) {
             if ((x < src_width) && (y + yin < src_height)) {
-                accum += src_ptr[src_index] / SURF_INTEGRAL_BIAS;
+                accum += src_ptr[src_index] / bias;
             }
             lm_sum[yin][lid] = accum;
         }
@@ -218,7 +218,7 @@ kernel void integral_sum_cols(global const float *src_ptr, int src_width, int sr
     }
 }
 
-kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width) {
+kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width, float bias) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int x = get_global_id(0);
@@ -229,7 +229,7 @@ kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global floa
     for (int y = 0; y < get_image_height(sourceImage); y += LOCAL_SUM_SIZE) {
 #pragma unroll
         for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++) {
-            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x / SURF_INTEGRAL_BIAS;
+            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x / bias;
             lm_sum[yin][lid] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -322,10 +322,14 @@ kernel void integral_sum_rows_image(global const float* buf_ptr, int buf_width, 
     }
 }
 
+typedef struct transform {
+    float matrix[3][3];
+} transform;
+
 kernel void registerAndFuse(read_only image2d_t inputImage0,
                             read_only image2d_t inputImage1,
                             write_only image2d_t outputImage,
-                            constant float homography[3][3],
+                            transform homography,
                             sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
@@ -334,9 +338,9 @@ kernel void registerAndFuse(read_only image2d_t inputImage0,
     float x = imageCoordinates.x;
     float y = imageCoordinates.y;
 
-    float u = homography[0][0] * x + homography[0][1] * y + homography[0][2];
-    float v = homography[1][0] * x + homography[1][1] * y + homography[1][2];
-    float w = homography[2][0] * x + homography[2][1] * y + homography[2][2];
+    float u = homography.matrix[0][0] * x + homography.matrix[0][1] * y + homography.matrix[0][2];
+    float v = homography.matrix[1][0] * x + homography.matrix[1][1] * y + homography.matrix[1][2];
+    float w = homography.matrix[2][0] * x + homography.matrix[2][1] * y + homography.matrix[2][2];
     float xx = u / w;
     float yy = v / w;
 

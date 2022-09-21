@@ -32,6 +32,7 @@
 		E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
 		E5345EE428D4F8A100FC57FA /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE128D4F8A100FC57FA /* SURF.cpp */; };
 		E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */; };
+		E554E3E828DB8ABA0095F20D /* IntegralImage.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E554E3E728DB8ABA0095F20D /* IntegralImage.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -149,6 +150,8 @@
 		E5345EE228D4F8A100FC57FA /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = SURF.hpp; path = ../../CLImage/app/src/main/cpp/SURF.hpp; sourceTree = "<group>"; };
 		E5345EE328D4F8A100FC57FA /* feature2d.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = feature2d.hpp; path = ../../CLImage/app/src/main/cpp/feature2d.hpp; sourceTree = "<group>"; };
 		E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ImageRegistration.cpp; path = ../../CLImage/app/src/main/cpp/ImageRegistration.cpp; sourceTree = "<group>"; };
+		E554E3E628DB8ABA0095F20D /* IntegralImage.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = IntegralImage.hpp; path = ../../CLImage/app/src/main/cpp/IntegralImage.hpp; sourceTree = "<group>"; };
+		E554E3E728DB8ABA0095F20D /* IntegralImage.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IntegralImage.cpp; path = ../../CLImage/app/src/main/cpp/IntegralImage.cpp; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -260,6 +263,8 @@
 				E5345EE328D4F8A100FC57FA /* feature2d.hpp */,
 				E5345EE128D4F8A100FC57FA /* SURF.cpp */,
 				E5345EE228D4F8A100FC57FA /* SURF.hpp */,
+				E554E3E728DB8ABA0095F20D /* IntegralImage.cpp */,
+				E554E3E628DB8ABA0095F20D /* IntegralImage.hpp */,
 			);
 			name = App;
 			sourceTree = "<group>";
@@ -540,6 +545,7 @@
 				E5E9EA9928B8D9030079A5C0 /* gls_cl.hpp in Sources */,
 				E5E9EA9A28B8D9030079A5C0 /* gls_image.hpp in Sources */,
 				E5E9EA9B28B8D9030079A5C0 /* gls_image_jpeg.cpp in Sources */,
+				E554E3E828DB8ABA0095F20D /* IntegralImage.cpp in Sources */,
 				E5E9EA9C28B8D9030079A5C0 /* gls_image_jpeg.h in Sources */,
 				E5E9EA9D28B8D9030079A5C0 /* gls_image_png.cpp in Sources */,
 				E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */,
