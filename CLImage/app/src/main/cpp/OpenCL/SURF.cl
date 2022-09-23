@@ -29,6 +29,7 @@ typedef struct SurfHF {
 float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw, int N) {
     const float w[4] = { dw.x, dw.y, dw.z, dw.w };
     float d = 0;
+#pragma unroll
     for (int k = 0; k < N; k++) {
         int8 v = dp[k];
         d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
