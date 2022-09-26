@@ -234,7 +234,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float whiteness = clamp(min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave)), 0.0, 1.0);
 
         // Minimum gradient threshold wrt the noise model
-        float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(gradient));
+        float gradient_threshold = smoothstep(0.25 * rawStdDev, rawStdDev, length(gradient));
 
         // Edges that are in strong highlights tend to grossly overestimate the gradient
         float highlights_edge = 1 - smoothstep(0.25, 1.0, max(c_xy, max(max(c_left, c_right), max(c_up, c_down))));
@@ -242,11 +242,15 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
+        // Bias result towards vertical and horizontal lines
+        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * gradient_threshold, 0.45 * gradient_threshold, direction))
+                                    : mix(direction, 1, smoothstep((1 - 0.45) * gradient_threshold, (1 - 0.3) * gradient_threshold, direction));
+
         // If the gradient is below threshold just go flat
         direction = mix(0.5, direction, gradient_threshold);
 
         // Reduce hf_gain when direction is diagonal
-        float diagonality = 1 - 0.5 * sin(M_PI_F * direction);
+        float diagonality = 1; // - 0.5 * sin(M_PI_F * direction);
 
         // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
         float hf_gain = diagonality * highlights_edge * gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);

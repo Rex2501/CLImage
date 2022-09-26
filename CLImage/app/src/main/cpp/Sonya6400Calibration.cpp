@@ -206,14 +206,14 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = 2 * chromaBoost,
             .gradientBoost = 8,
-            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
+            .sharpening = 2.0 // std::lerp(1.5f, 0.8f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
             .gradientBoost = 1,
-            .sharpening = 1.1
+            .sharpening = 1.2
         },
         {
             .luma = lmult[2] * lerp,
@@ -355,7 +355,7 @@ void calibrateSonya6400(RawConverter* rawConverter, const std::filesystem::path&
 gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     DemosaicParameters demosaicParameters = {
         .rgbConversionParameters = {
-            .contrast = 1.05,
+            .contrast = 1.025,
             .saturation = 1.0,
             .toneCurveSlope = 3.5,
             .localToneMapping = false
