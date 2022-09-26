@@ -1099,7 +1099,7 @@ void SURF::detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>*
     // since it computes orientation of each feature.
     printf("mapping intregral images...\n");
 
-    const auto integralSumCpu = sum.mapImage();
+    const auto integralSumCpu = sum.mapImage(CL_MAP_READ);
 
     descriptor(img, integralSumCpu, keypoints, _descriptors->get());
 
@@ -1262,8 +1262,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     gls::image<float> descriptor1(64, (int)keypoints1.size());
     gls::image<float> descriptor2(64, (int)keypoints2.size());
 
-    const auto integralSum1Cpu = integralSum1.mapImage();
-    const auto integralSum2Cpu = integralSum2.mapImage();
+    const auto integralSum1Cpu = integralSum1.mapImage(CL_MAP_READ);
+    const auto integralSum2Cpu = integralSum2.mapImage(CL_MAP_READ);
 
     auto t_mapped = std::chrono::high_resolution_clock::now();
     printf("--> Integral Image Mapping Time: %.2fms\n", timeDiff(t_erase, t_mapped));
