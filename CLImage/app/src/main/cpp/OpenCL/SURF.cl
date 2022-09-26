@@ -57,6 +57,40 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
     write_imagef(traceImage, imageCoordinates + margin, dx + dy);
 }
 
+float2 detAndTrace(read_only image2d_t sumImage, const int2 p, constant SurfHF *surfHFData) {
+    const float dx = calcHaarPattern(sumImage, p, surfHFData[0].p_dx, surfHFData[0].w_dx, 3);
+    const float dy = calcHaarPattern(sumImage, p, surfHFData[0].p_dy, surfHFData[0].w_dy, 3);
+    const float dxy = calcHaarPattern(sumImage, p, surfHFData[0].p_dxy, surfHFData[0].w_dxy, 4);
+    return (float2) (dx * dy - 0.81f * dxy * dxy, dx + dy);
+}
+
+kernel void calcDetAndTrace4(read_only image2d_t sumImage,
+                             write_only image2d_t detImage0, write_only image2d_t detImage1, write_only image2d_t detImage2, write_only image2d_t detImage3,
+                             write_only image2d_t traceImage0, write_only image2d_t traceImage1, write_only image2d_t traceImage2, write_only image2d_t traceImage3,
+                             int4 margin,
+                             int sampleStep,
+                             constant SurfHF surfHFData[4]) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const int2 p = imageCoordinates * sampleStep;
+
+    float2 detAndTrace0 = detAndTrace(sumImage, p, &surfHFData[0]);
+    float2 detAndTrace1 = detAndTrace(sumImage, p, &surfHFData[1]);
+    float2 detAndTrace2 = detAndTrace(sumImage, p, &surfHFData[2]);
+    float2 detAndTrace3 = detAndTrace(sumImage, p, &surfHFData[3]);
+
+    write_imagef(detImage0, imageCoordinates + margin.x, (float4)(detAndTrace0.x, 0, 0, 0));
+    write_imagef(traceImage0, imageCoordinates + margin.x, (float4)(detAndTrace0.y, 0, 0, 0));
+
+    write_imagef(detImage1, imageCoordinates + margin.y, (float4)(detAndTrace1.x, 0, 0, 0));
+    write_imagef(traceImage1, imageCoordinates + margin.y, (float4)(detAndTrace1.y, 0, 0, 0));
+
+    write_imagef(detImage2, imageCoordinates + margin.z, (float4)(detAndTrace2.x, 0, 0, 0));
+    write_imagef(traceImage2, imageCoordinates + margin.z, (float4)(detAndTrace2.y, 0, 0, 0));
+
+    write_imagef(detImage3, imageCoordinates + margin.w, (float4)(detAndTrace3.x, 0, 0, 0));
+    write_imagef(traceImage3, imageCoordinates + margin.w, (float4)(detAndTrace3.y, 0, 0, 0));
+}
+
 typedef struct KeyPoint {
     struct {
         float x, y;

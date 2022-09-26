@@ -140,6 +140,47 @@ struct clSurfHF {
     }
 };
 
+struct DetAndTraceHaarPattern {
+    static const int NX = 3, NY = 3, NXY = 4;
+
+    std::array<SurfHF, NX> Dx;
+    std::array<SurfHF, NY> Dy;
+    std::array<SurfHF, NXY> Dxy;
+
+    const int height, width;
+    const gls::rectangle margin_crop;
+
+    DetAndTraceHaarPattern(int sum_width, int sum_height, int size, int sampleStep) :
+        height(1 + (sum_height - 1 - size) / sampleStep),   // The integral image 'sum' is one pixel bigger than the source image
+        width(1 + (sum_width - 1 - size) / sampleStep),
+        margin_crop((size / 2) / sampleStep,                // Ignore pixels where some of the kernel is outside the image
+                    (size / 2) / sampleStep,
+                    width, height) {
+        const int dx_s[NX][5] = {
+            {0, 2, 3, 7, 1},
+            {3, 2, 6, 7, -2},
+            {6, 2, 9, 7, 1}
+        };
+        const int dy_s[NY][5] = {
+            {2, 0, 7, 3, 1},
+            {2, 3, 7, 6, -2},
+            {2, 6, 7, 9, 1}
+        };
+        const int dxy_s[NXY][5] = {
+            {1, 1, 4, 4, 1},
+            {5, 1, 8, 4, -1},
+            {1, 5, 4, 8, -1},
+            {5, 5, 8, 8, 1}
+        };
+
+        if (size > (sum_height - 1) || size > (sum_width - 1))
+            return;
+
+        resizeHaarPattern(dx_s, &Dx, 9, size);
+        resizeHaarPattern(dy_s, &Dy, 9, size);
+        resizeHaarPattern(dxy_s, &Dxy, 9, size);
+    }
+};
 
 class SURF {
 private:
@@ -176,11 +217,14 @@ private:
     void clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                            gls::cl_image_2d<float>* detImage,
                            gls::cl_image_2d<float>* traceImage,
-                           const gls::rectangle& margin_crop,
                            const int sampleStep,
-                           const std::array<SurfHF, 3>& Dx,
-                           const std::array<SurfHF, 3>& Dy,
-                           const std::array<SurfHF, 4>& Dxy);
+                           const DetAndTraceHaarPattern& haarPattern);
+
+    void clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
+                           const std::array<gls::cl_image_2d<float>*, 4>& detImage,
+                           const std::array<gls::cl_image_2d<float>*, 4>& traceImage,
+                           const int sampleStep,
+                           const std::array<DetAndTraceHaarPattern, 4>& haarPattern);
 
     void clFindMaximaInLayer(const gls::cl_image_2d<float>& sumImage,
                              const std::array<const gls::cl_image_2d<float>*, 3>& dets,
@@ -245,13 +289,8 @@ public:
 void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                              gls::cl_image_2d<float>* detImage,
                              gls::cl_image_2d<float>* traceImage,
-                             const gls::rectangle& margin_crop,
                              const int sampleStep,
-                             const std::array<SurfHF, 3>& Dx,
-                             const std::array<SurfHF, 3>& Dy,
-                             const std::array<SurfHF, 4>& Dxy) {
-    // std::cout << "clCalcDetAndTrace - margin_crop: { " << margin_crop.x << ", " << margin_crop.y << ", " << margin_crop.width << ", " << margin_crop.height << " }, sampleStep: " << sampleStep << std::endl;
-
+                             const DetAndTraceHaarPattern& haarPattern) {
     // Load the shader source
     const auto program = _glsContext->loadProgram("SURF");
 
@@ -264,12 +303,14 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                                     cl::Buffer    // surfHFData
                                     >(program, "calcDetAndTrace");
 
-    const clSurfHF surfHFData(Dx, Dy, Dxy);
+    const clSurfHF surfHFData(haarPattern.Dx, haarPattern.Dy, haarPattern.Dxy);
 
     if (_surfHFDataBuffer.get() == 0) {
         _surfHFDataBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof(clSurfHF));
     }
     cl::enqueueWriteBuffer(_surfHFDataBuffer, false, 0, sizeof(clSurfHF), &surfHFData);
+
+    const auto& margin_crop = haarPattern.margin_crop;
 
     // Schedule the kernel on the GPU
     kernel(
@@ -282,53 +323,46 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
            { margin_crop.x, margin_crop.y }, sampleStep, _surfHFDataBuffer);
 }
 
-struct DetAndTraceHaarPattern {
-    static const int NX = 3, NY = 3, NXY = 4;
+void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
+                             const std::array<gls::cl_image_2d<float>*, 4>& detImage,
+                             const std::array<gls::cl_image_2d<float>*, 4>& traceImage,
+                             const int sampleStep,
+                             const std::array<DetAndTraceHaarPattern, 4>& haarPattern) {
+    // Load the shader source
+    const auto program = _glsContext->loadProgram("SURF");
 
-    std::array<SurfHF, NX> Dx;
-    std::array<SurfHF, NY> Dy;
-    std::array<SurfHF, NXY> Dxy;
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
+                                    cl::Image2D, cl::Image2D, cl::Image2D, cl::Image2D,  // detImage
+                                    cl::Image2D, cl::Image2D, cl::Image2D, cl::Image2D,  // traceImage
+                                    cl_int4,      // margin
+                                    cl_int,      // sampleStep
+                                    cl::Buffer    // surfHFData
+                                    >(program, "calcDetAndTrace4");
 
-    const int height, width;
-    const gls::rectangle margin_crop;
+    const std::array<clSurfHF, 4> surfHFData = {
+        clSurfHF(haarPattern[0].Dx, haarPattern[0].Dy, haarPattern[0].Dxy),
+        clSurfHF(haarPattern[1].Dx, haarPattern[1].Dy, haarPattern[1].Dxy),
+        clSurfHF(haarPattern[2].Dx, haarPattern[2].Dy, haarPattern[2].Dxy),
+        clSurfHF(haarPattern[3].Dx, haarPattern[3].Dy, haarPattern[3].Dxy)
+    };
 
-    DetAndTraceHaarPattern(int sum_width, int sum_height, int size, int sampleStep) :
-        height(1 + (sum_height - 1 - size) / sampleStep),   // The integral image 'sum' is one pixel bigger than the source image
-        width(1 + (sum_width - 1 - size) / sampleStep),
-        margin_crop((size / 2) / sampleStep,                // Ignore pixels where some of the kernel is outside the image
-                    (size / 2) / sampleStep,
-                    width, height) {
-        const int dx_s[NX][5] = {
-            {0, 2, 3, 7, 1},
-            {3, 2, 6, 7, -2},
-            {6, 2, 9, 7, 1}
-        };
-        const int dy_s[NY][5] = {
-            {2, 0, 7, 3, 1},
-            {2, 3, 7, 6, -2},
-            {2, 6, 7, 9, 1}
-        };
-        const int dxy_s[NXY][5] = {
-            {1, 1, 4, 4, 1},
-            {5, 1, 8, 4, -1},
-            {1, 5, 4, 8, -1},
-            {5, 5, 8, 8, 1}
-        };
-
-        if (size > (sum_height - 1) || size > (sum_width - 1))
-            return;
-
-        resizeHaarPattern(dx_s, &Dx, 9, size);
-        resizeHaarPattern(dy_s, &Dy, 9, size);
-        resizeHaarPattern(dxy_s, &Dxy, 9, size);
+    if (_surfHFDataBuffer.get() == 0) {
+        _surfHFDataBuffer = cl::Buffer(CL_MEM_READ_ONLY, sizeof(surfHFData));
     }
-};
+    cl::enqueueWriteBuffer(_surfHFDataBuffer, false, 0, sizeof(surfHFData), &surfHFData);
 
-void SURF::clCalcLayerDetAndTrace(const gls::cl_image_2d<float>& sum, int size, int sampleStep,
-                                gls::cl_image_2d<float>* det, gls::cl_image_2d<float>* trace) {
-    DetAndTraceHaarPattern haarPattern(sum.width, sum.height, size, sampleStep);
-
-    clCalcDetAndTrace(sum, det, trace, haarPattern.margin_crop, sampleStep, haarPattern.Dx, haarPattern.Dy, haarPattern.Dxy);
+    kernel(
+#if __APPLE__
+           gls::OpenCLContext::buildEnqueueArgs(haarPattern[0].margin_crop.width, haarPattern[0].margin_crop.height),
+#else
+           cl::EnqueueArgs(cl::NDRange(haarPattern[0].margin_crop.width, haarPattern[0].margin_crop.height), cl::NDRange(32, 32)),
+#endif
+           sumImage.getImage2D(),
+           detImage[0]->getImage2D(), detImage[1]->getImage2D(), detImage[2]->getImage2D(), detImage[3]->getImage2D(),
+           traceImage[0]->getImage2D(), traceImage[1]->getImage2D(), traceImage[2]->getImage2D(), traceImage[3]->getImage2D(),
+           { haarPattern[0].margin_crop.x, haarPattern[1].margin_crop.x, haarPattern[2].margin_crop.x, haarPattern[3].margin_crop.x },
+           sampleStep, _surfHFDataBuffer);
 }
 
 void SURF::calcLayerDetAndTrace(const gls::cl_image_2d<float>& sum, int size, int sampleStep,
@@ -439,14 +473,38 @@ void SURF::Build(const gls::cl_image_2d<float>& sum,
 
     ThreadPool threadPool(8);
 
-    for (int i = 0; i < N; i++) {
-        // std::cout << "calcLayerDetAndTrace " << i << " of " << N << " @ " << dets[i]->width << ", " << dets[i]->width << std::endl;
-#if USE_OPENCL
-        clCalcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i].get(), traces[i].get());
+    const int layers = _nOctaveLayers + 2;
+
+    assert(_nOctaves * layers == N);
+
+    for (int octave = 0; octave < _nOctaves; octave++) {
+        const int i = octave * layers;
+
+        std::cout << "calcLayerDetAndTrace " << i << " of " << N << " @ " << dets[i]->width << ", " << dets[i]->width << std::endl;
+
+#if __ANDROID__
+        std::array<DetAndTraceHaarPattern, 4> haarPatterns = {
+            DetAndTraceHaarPattern(sum.width, sum.height, sizes[i], sampleSteps[i]),
+            DetAndTraceHaarPattern(sum.width, sum.height, sizes[i+1], sampleSteps[i+1]),
+            DetAndTraceHaarPattern(sum.width, sum.height, sizes[i+2], sampleSteps[i+2]),
+            DetAndTraceHaarPattern(sum.width, sum.height, sizes[i+3], sampleSteps[i+3])
+        };
+
+        clCalcDetAndTrace(sum, { dets[i].get(), dets[i + 1].get(), dets[i + 2].get(), dets[i + 3].get() },
+                          { traces[i].get(), traces[i + 1].get(), traces[i + 2].get(), traces[i + 3].get() },
+                          sampleSteps[i], haarPatterns);
 #else
-        threadPool.enqueue([&sum, &dets, &traces, &sizes, &sampleSteps, i, this](){
-            calcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i].get(), traces[i].get());
-        });
+        for (int layer = 0; layer < layers; layer++) {
+            const int i = octave * layers + layer;
+#if USE_OPENCL
+            DetAndTraceHaarPattern haarPattern(sum.width, sum.height, sizes[i], sampleSteps[i]);
+            clCalcDetAndTrace(sum, dets[i].get(), traces[i].get(), sampleSteps[i], haarPattern);
+#else
+            threadPool.enqueue([&sum, &dets, &traces, &sizes, &sampleSteps, i, this](){
+                calcLayerDetAndTrace(sum, sizes[i], sampleSteps[i], dets[i].get(), traces[i].get());
+            });
+#endif
+        }
 #endif
     }
 }

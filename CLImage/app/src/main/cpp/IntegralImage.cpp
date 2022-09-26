@@ -42,11 +42,11 @@ void clIntegral(gls::OpenCLContext* glsContext, const gls::image<float>& img, co
                       bias);
 
     auto integral_sum_rows = cl::KernelFunctor<cl::Buffer,  // buf_ptr
-    int,         // buf_width
-    cl::Buffer,  // dst_ptr
-    int,         // dst_width
-    int          // dst_height
-    >(program, "integral_sum_rows");
+                                               int,         // buf_width
+                                               cl::Buffer,  // dst_ptr
+                                               int,         // dst_width
+                                               int          // dst_height
+                                               >(program, "integral_sum_rows");
 
     // Schedule the kernel on the GPU
     integral_sum_rows(cl::EnqueueArgs(cl::NDRange(img.height), cl::NDRange(tileSize)),
