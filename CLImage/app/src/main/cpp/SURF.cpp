@@ -63,8 +63,6 @@
 
 #include "ThreadPool.hpp"
 
-#include "IntegralImage.hpp"
-
 #define USE_OPENCL true
 #define USE_OPENCL_INTEGRAL true
 #define USE_INTEGRAL_PYRAMID true
