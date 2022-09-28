@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "gls_geometry.hpp"
 #include "gls_image_jpeg.h"
 #include "gls_image_png.h"
 #include "gls_image_tiff.h"
@@ -32,66 +33,6 @@
 #define USE_FP16_FLOATS true
 
 namespace gls {
-
-template <typename T>
-struct basic_point {
-    T x;
-    T y;
-
-    basic_point(T _x, T _y) : x(_x), y(_y) {}
-    basic_point() { }
-
-    bool operator == (const basic_point& other) const {
-        return x == other.x && y == other.y;
-    }
-};
-
-template <typename T>
-bool operator == (const basic_point<T>& a, const basic_point<T>& b) {
-    return a.x == b.x && a.y == b.y;
-}
-
-template <typename T>
-struct basic_size {
-    T width;
-    T height;
-
-    basic_size(T _width, T _height) : width(_width), height(_height) {}
-    basic_size() { }
-
-    bool operator == (const basic_size& other) const {
-        return width == other.width && height == other.height;
-    }
-};
-
-template <typename T>
-bool operator == (const basic_size<T>& a, const basic_size<T>& b) {
-    return a.width == b.width && a.height == b.height;
-}
-
-template <typename T>
-struct basic_rectangle : public basic_point<T>, basic_size<T> {
-    basic_rectangle(basic_point<T> _origin, basic_size<T> _dimensions) : basic_point<T>(_origin), basic_size<T>(_dimensions) {}
-    basic_rectangle(T _x, T _y, T _width, T _height) : basic_point<T>(_x, _y), basic_size<T>(_width, _height) {}
-    basic_rectangle() { }
-
-    bool contains(const gls::basic_point<T> p) const {
-        return p.x >= basic_point<T>::x && p.y >= basic_point<T>::y && p.x < basic_point<T>::x + basic_size<T>::width && p.y < basic_point<T>::y + basic_size<T>::height;
-    }
-
-    bool operator == (const basic_rectangle& other) const {
-        return this->x == other.x && this->y == other.y && this->width == other.width && this->height == other.height;
-    }
-};
-
-template <typename T>
-bool operator == (const basic_rectangle<T>& a, const basic_rectangle<T>& b) {
-    return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
-}
-
-typedef basic_point<int> point;
-typedef basic_size<int> size;
-typedef basic_rectangle<int> rectangle;
 
 template <typename T>
 struct basic_luma_pixel {
@@ -512,6 +453,19 @@ class image : public basic_image<T> {
                             compression, dng_metadata, exif_metadata, row_pointer);
     }
 };
+
+template <typename T>
+static inline void copyPixels(gls::image<T>* to, const gls::image<T>& from) {
+    assert(to->width == from.width && to->height == from.height);
+
+    if (to->stride == from.stride) {
+        memcpy((void*) (*to)[0], (void*) from[0], to->stride * to->height * sizeof(T));
+    } else {
+        for (int j = 0; j < to->height; j++) {
+            memcpy((void*) (*to)[j], (void*) from[j], to->width * sizeof(T));
+        }
+    }
+}
 
 }  // namespace gls
 

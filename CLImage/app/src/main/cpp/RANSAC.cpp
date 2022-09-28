@@ -11,6 +11,12 @@
 
 #include "gls_linalg.hpp"
 
+#define PSEUDO_RANDOM_TEST_SEQUENCE true
+
+#if PSEUDO_RANDOM_TEST_SEQUENCE
+#include "PRNG.h"
+#endif
+
 namespace gls {
 
 bool MatrixMultiplyV(const std::vector<std::vector<float>>& X1, const std::vector<std::vector<float>>& X2,
@@ -124,7 +130,13 @@ std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<
     std::vector<Point2f> selectP1, selectP2;
     // generate random table
     int selectIndex[2000][4];
-    srand(0 /*(unsigned) time(NULL)*/);  // Use time as seed, each time the random number is different
+
+#if PSEUDO_RANDOM_TEST_SEQUENCE
+    const std::array<uint64_t, 16> prng_seed = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    PRNG prng(prng_seed);
+#else
+    srand((unsigned) time(NULL));  // Use time as seed, each time the random number is different
+#endif
     int pCount = (int)p1.size();
 
     for (int i = 0; i < 2000; i++) {
@@ -134,7 +146,11 @@ std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<
             selectIndex[i][0] = selectIndex[i][1] = selectIndex[i][2] = selectIndex[i][3] =
             pCount + 1;
             while (ii < 4) {
+#if PSEUDO_RANDOM_TEST_SEQUENCE
+                temp = prng.getRandomInt(0, RAND_MAX) % pCount;
+#else
                 temp = rand() % pCount;
+#endif
                 if (temp != selectIndex[i][0] && temp != selectIndex[i][1] &&
                     temp != selectIndex[i][2] && temp != selectIndex[i][3]) {
                     selectIndex[i][ii] = temp;

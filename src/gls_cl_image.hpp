@@ -78,26 +78,14 @@ class cl_image_2d : public cl_image<T> {
     void copyPixelsFrom(const image<T>& other) const {
         assert(other.width == image<T>::width && other.height == image<T>::height);
         auto cpuImage = mapImage();
-        if (cpuImage.stride == other.stride) {
-            memcpy((void*) cpuImage[0], (void*) other[0], cpuImage.stride * gls::image<T>::height * sizeof(T));
-        } else {
-            for (int j = 0; j < gls::image<T>::height; j++) {
-                memcpy((void*) cpuImage[j], (void*) other[j], gls::image<T>::width * sizeof(T));
-            }
-        }
+        copyPixels(&cpuImage, other);
         unmapImage(cpuImage);
     }
 
     void copyPixelsTo(image<T>* other) const {
         assert(other->width == image<T>::width && other->height == image<T>::height);
         auto cpuImage = mapImage();
-        if (cpuImage.stride == other->stride) {
-            memcpy((void*) (*other)[0], (void*) cpuImage[0], cpuImage.stride * gls::image<T>::height * sizeof(T));
-        } else {
-            for (int j = 0; j < gls::image<T>::height; j++) {
-                memcpy((void*) (*other)[j], (void*) cpuImage[j], gls::image<T>::width * sizeof(T));
-            }
-        }
+        copyPixels(other, cpuImage);
         unmapImage(cpuImage);
     }
 
@@ -132,6 +120,8 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
         : cl_image_2d<T>(context, _width, _height, buildPayload(context, _width, _height, _stride)), stride(_stride) {}
 
    public:
+    // typedef std::unique_ptr<cl_image_buffer_2d<T>> unique_ptr;
+
     const int stride;
 
     cl_image_buffer_2d(cl::Context context, int _width, int _height)

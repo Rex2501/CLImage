@@ -172,7 +172,6 @@ add_executable(
         ThreadPool.cpp
         SURF.cpp
         RANSAC.cpp
-        IntegralImage.cpp
         ImageRegistration.cpp
         filesystem/operations.cpp
         filesystem/directory_iterator.cpp

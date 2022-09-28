@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #include <map>
+#include <cmath>
 
 #ifndef GLS_CL_HPP
 #define GLS_CL_HPP
@@ -53,7 +54,7 @@ class OpenCLContext {
     std::map<std::string, std::vector<unsigned char>> cl_bytecode;
 #endif
 
-   public:
+public:
     OpenCLContext(const std::string& shadersRootPath = "", bool quiet = false);
 
     cl::Context clContext() { return _clContext; }
@@ -80,6 +81,20 @@ class OpenCLContext {
     inline static cl::EnqueueArgs buildEnqueueArgs(size_t width, size_t height) {
         cl::NDRange global_workgroup_size = cl::NDRange(width, height);
         cl::NDRange local_workgroup_size = computeWorkGroupSizes(width, height);
+        return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
+    }
+
+    inline static size_t roundTo(size_t value, int step) {
+        return step * ((value + step - 1) / step);
+    }
+
+    inline static cl::EnqueueArgs buildMaxEnqueueArgs(size_t width, size_t height) {
+        cl::Device d = cl::Device::getDefault();
+        const size_t max_workgroup_size = d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>();
+        const int max_dimension = sqrtf(max_workgroup_size);
+
+        cl::NDRange global_workgroup_size = cl::NDRange(roundTo(width, max_dimension), roundTo(height, max_dimension));
+        cl::NDRange local_workgroup_size = computeWorkGroupSizes(max_dimension, max_dimension);
         return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
     }
 };
