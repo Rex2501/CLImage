@@ -55,10 +55,10 @@ struct basic_luma_pixel {
     basic_luma_pixel(T _v[channels]) : v(_v) {}
     basic_luma_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
 
-    operator T() const { return luma; }
+    constexpr operator T() const { return luma; }
 
-    T& operator[](int c) { return v[c]; }
-    const T& operator[](int c) const { return v[c]; }
+    constexpr T& operator[](int c) { return v[c]; }
+    constexpr const T& operator[](int c) const { return v[c]; }
 };
 
 template <typename T>
@@ -84,8 +84,8 @@ struct basic_luma_alpha_pixel {
     basic_luma_alpha_pixel(T _v[channels]) : v(_v) {}
     basic_luma_alpha_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
 
-    T& operator[](int c) { return v[c]; }
-    const T& operator[](int c) const { return v[c]; }
+    constexpr T& operator[](int c) { return v[c]; }
+    constexpr const T& operator[](int c) const { return v[c]; }
 };
 
 template <typename T>
@@ -113,8 +113,8 @@ struct basic_rgb_pixel {
     basic_rgb_pixel(const T _v[channels]) : v(_v) {}
     basic_rgb_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
 
-    T& operator[](int c) { return v[c]; }
-    const T& operator[](int c) const { return v[c]; }
+    constexpr T& operator[](int c) { return v[c]; }
+    constexpr const T& operator[](int c) const { return v[c]; }
 };
 
 template <typename T>
@@ -144,8 +144,15 @@ struct basic_rgba_pixel {
     basic_rgba_pixel(T _v[channels]) : v(_v) {}
     basic_rgba_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
 
-    T& operator[](int c) { return v[c]; }
-    const T& operator[](int c) const { return v[c]; }
+    constexpr T& operator[](int c) { return v[c]; }
+    constexpr const T& operator[](int c) const { return v[c]; }
+};
+
+template <typename T, int N>
+struct pixel : public std::array<T, N> {
+    constexpr static size_t channels = N;
+    constexpr static int bit_depth = 8 * sizeof(T);
+    typedef T dataType;
 };
 
 typedef basic_luma_pixel<uint8_t> luma_pixel;
@@ -272,11 +279,11 @@ class image : public basic_image<T> {
     image(const image& _base, const rectangle& _crop) : image(_base, _crop.x, _crop.y, _crop.width, _crop.height) {}
 
     // row access
-    T* operator[](int row) { return &_data[stride * row]; }
+    constexpr T* operator[](int row) { return &_data[stride * row]; }
 
-    const T* operator[](int row) const { return &_data[stride * row]; }
+    const constexpr T* operator[](int row) const { return &_data[stride * row]; }
 
-    const std::span<T> pixels() const { return _data; }
+    const constexpr std::span<T> pixels() const { return _data; }
 
     void apply(std::function<void(const T& pixel)> process) const {
         for (int y = 0; y < basic_image<T>::height; y++) {
@@ -302,7 +309,7 @@ class image : public basic_image<T> {
         }
     }
 
-    const size_t size_in_bytes() { return _data.size() * basic_image<T>::pixel_size; }
+    const constexpr size_t size_in_bytes() { return _data.size() * basic_image<T>::pixel_size; }
 
     // image factory from PNG file
     static unique_ptr read_png_file(const std::string& filename) {

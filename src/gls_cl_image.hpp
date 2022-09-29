@@ -30,8 +30,64 @@ class cl_image : public basic_image<T> {
 
     cl_image(int _width, int _height) : basic_image<T>(_width, _height) {}
 
-    static inline cl::ImageFormat ImageFormat();
+    static inline cl::ImageFormat ImageFormat() {
+        static_assert(T::channels == 1 || T::channels == 2 || T::channels == 4);
+        static_assert(std::is_same<typename T::dataType, float>::value ||
+#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+                      std::is_same<typename T::dataType, gls::float16_t>::value ||
+#endif
+                      std::is_same<typename T::dataType, uint8_t>::value ||
+                      std::is_same<typename T::dataType, uint16_t>::value ||
+                      std::is_same<typename T::dataType, uint32_t>::value ||
+                      std::is_same<typename T::dataType, int32_t>::value);
+
+        cl_channel_order order = T::channels == 1 ? CL_R : T::channels == 2 ? CL_RG : CL_RGBA;
+        cl_channel_type type = std::is_same<typename T::dataType, float>::value ? CL_FLOAT :
+#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+                               std::is_same<typename T::dataType, gls::float16_t>::value ? CL_HALF_FLOAT :
+#endif
+                               std::is_same<typename T::dataType, uint8_t>::value ? CL_UNORM_INT8 :
+                               std::is_same<typename T::dataType, uint16_t>::value ? CL_UNORM_INT16 :
+                               std::is_same<typename T::dataType, uint32_t>::value ? CL_UNSIGNED_INT32 :
+                               /* std::is_same<typename T::dataType, int32_t>::value ? */ CL_SIGNED_INT32;
+
+        return cl::ImageFormat(order, type);
+    }
 };
+
+// Other Supported OpenCL mappings
+
+template <>
+inline cl::ImageFormat cl_image<float>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_FLOAT);
+}
+
+#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+template <>
+inline cl::ImageFormat cl_image<gls::float16_t>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_HALF_FLOAT);
+}
+#endif
+
+template <>
+inline cl::ImageFormat cl_image<uint8_t>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_UNORM_INT8);
+}
+
+template <>
+inline cl::ImageFormat cl_image<uint16_t>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_UNORM_INT16);
+}
+
+template <>
+inline cl::ImageFormat cl_image<uint32_t>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_UNSIGNED_INT32);
+}
+
+template <>
+inline cl::ImageFormat cl_image<int32_t>::ImageFormat() {
+    return cl::ImageFormat(CL_R, CL_SIGNED_INT32);
+}
 
 template <typename T>
 class cl_image_2d : public cl_image<T> {
@@ -243,129 +299,6 @@ class cl_image_3d : public cl_image<T> {
     cl::Image3D getImage3D() const { return _image; }
 };
 
-// Supported OpenCL mappings
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_pixel>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<uint8_t>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_alpha_pixel>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<uint8_t, 2>>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::rgba_pixel>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<uint8_t, 4>>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_UNORM_INT8);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_pixel_16>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<uint16_t>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_alpha_pixel_16>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<uint16_t, 2>>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::rgba_pixel_16>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<uint16_t, 4>>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_UNORM_INT16);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_pixel_fp32>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<float>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_alpha_pixel_fp32>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<float, 2>>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::rgba_pixel_fp32>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<float, 4>>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_FLOAT);
-}
-
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
-template <>
-inline cl::ImageFormat cl_image<gls::luma_pixel_fp16>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_HALF_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::float16_t>::ImageFormat() {
-    return cl::ImageFormat(CL_R, CL_HALF_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::luma_alpha_pixel_fp16>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_HALF_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<gls::float16_t, 2>>::ImageFormat() {
-    return cl::ImageFormat(CL_RG, CL_HALF_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<gls::rgba_pixel_fp16>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_HALF_FLOAT);
-}
-
-template <>
-inline cl::ImageFormat cl_image<std::array<gls::float16_t, 4>>::ImageFormat() {
-    return cl::ImageFormat(CL_RGBA, CL_HALF_FLOAT);
-}
-#endif
 }  // namespace gls
 
 #endif /* CL_IMAGE_H */
