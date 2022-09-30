@@ -34,153 +34,117 @@
 
 namespace gls {
 
-template <typename T>
-struct basic_luma_pixel {
-    constexpr static int channels = 1;
-    constexpr static int bit_depth = 8 * sizeof(T);
-    typedef T dataType;
-
-    union {
-        struct {
-            T luma;
-        };
-        struct {
-            T x;
-        };
-        std::array<T, channels> v;
-    };
-
-    basic_luma_pixel() {}
-    basic_luma_pixel(T _luma) : luma(_luma) {}
-    basic_luma_pixel(T _v[channels]) : v(_v) {}
-    basic_luma_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
-
-    constexpr operator T() const { return luma; }
-
-    constexpr T& operator[](int c) { return v[c]; }
-    constexpr const T& operator[](int c) const { return v[c]; }
-};
-
-template <typename T>
-struct basic_luma_alpha_pixel {
-    constexpr static int channels = 2;
-    constexpr static int bit_depth = 8 * sizeof(T);
-    typedef T dataType;
-
-    union {
-        struct {
-            T luma;
-            T alpha;
-        };
-        struct {
-            T x;
-            T y;
-        };
-        std::array<T, channels> v;
-    };
-
-    basic_luma_alpha_pixel() {}
-    basic_luma_alpha_pixel(T _luma, T _alpha) : luma(_luma), alpha(_alpha) {}
-    basic_luma_alpha_pixel(T _v[channels]) : v(_v) {}
-    basic_luma_alpha_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
-
-    constexpr T& operator[](int c) { return v[c]; }
-    constexpr const T& operator[](int c) const { return v[c]; }
-};
-
-template <typename T>
-struct basic_rgb_pixel {
-    constexpr static size_t channels = 3;
-    constexpr static int bit_depth = 8 * sizeof(T);
-    typedef T dataType;
-
-    union {
-        struct {
-            T red;
-            T green;
-            T blue;
-        };
-        struct {
-            T x;
-            T y;
-            T z;
-        };
-        std::array<T, channels> v;
-    };
-
-    basic_rgb_pixel() {}
-    basic_rgb_pixel(T _red, T _green, T _blue) : red(_red), green(_green), blue(_blue) {}
-    basic_rgb_pixel(const T _v[channels]) : v(_v) {}
-    basic_rgb_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
-
-    constexpr T& operator[](int c) { return v[c]; }
-    constexpr const T& operator[](int c) const { return v[c]; }
-};
-
-template <typename T>
-struct basic_rgba_pixel {
-    constexpr static int channels = 4;
-    constexpr static int bit_depth = 8 * sizeof(T);
-    typedef T dataType;
-
-    union {
-        struct {
-            T red;
-            T green;
-            T blue;
-            T alpha;
-        };
-        struct {
-            T x;
-            T y;
-            T z;
-            T w;
-        };
-        std::array<T, channels> v;
-    };
-
-    basic_rgba_pixel() {}
-    basic_rgba_pixel(T _red, T _green, T _blue, T _alpha) : red(_red), green(_green), blue(_blue), alpha(_alpha) {}
-    basic_rgba_pixel(T _v[channels]) : v(_v) {}
-    basic_rgba_pixel(const std::array<T, channels>& _v) { std::copy(_v.begin(), _v.end(), v.begin()); }
-
-    constexpr T& operator[](int c) { return v[c]; }
-    constexpr const T& operator[](int c) const { return v[c]; }
-};
-
 template <typename T, int N>
 struct pixel : public std::array<T, N> {
     constexpr static size_t channels = N;
     constexpr static int bit_depth = 8 * sizeof(T);
-    typedef T dataType;
+    typedef T value_type;
 };
 
-typedef basic_luma_pixel<uint8_t> luma_pixel;
-typedef basic_luma_alpha_pixel<uint8_t> luma_alpha_pixel;
-typedef basic_rgb_pixel<uint8_t> rgb_pixel;
-typedef basic_rgba_pixel<uint8_t> rgba_pixel;
+template <typename T>
+struct luma_type {
+    typedef pixel<T, 1> pixel_type;
+    union {
+        pixel_type v;
+        struct {
+            T luma;
+        };
+        struct {
+            T x;
+        };
+    };
 
-typedef basic_luma_pixel<uint16_t> luma_pixel_16;
-typedef basic_luma_alpha_pixel<uint16_t> luma_alpha_pixel_16;
-typedef basic_rgb_pixel<uint16_t> rgb_pixel_16;
-typedef basic_rgba_pixel<uint16_t> rgba_pixel_16;
+    constexpr operator T() const { return v[0]; }
+};
 
-typedef basic_luma_pixel<float> luma_pixel_fp32;
-typedef basic_luma_alpha_pixel<float> luma_alpha_pixel_fp32;
-typedef basic_rgb_pixel<float> rgb_pixel_fp32;
-typedef basic_rgba_pixel<float> rgba_pixel_fp32;
+template <typename T>
+struct luma_alpha_type {
+    typedef pixel<T, 2> pixel_type;
+    union {
+        pixel_type v;
+        struct {
+            T luma, alpha;
+        };
+        struct {
+            T x, y;
+        };
+    };
+};
 
-typedef basic_luma_pixel<float> pixel_fp32;
-typedef basic_luma_alpha_pixel<float> pixel_fp32_2;
-typedef basic_rgb_pixel<float> pixel_fp32_3;
-typedef basic_rgba_pixel<float> pixel_fp32_4;
+template <typename T>
+struct rgb_type {
+    typedef pixel<T, 3> pixel_type;
+    union {
+        pixel_type v;
+        struct {
+            T red, green, blue;
+        };
+        struct {
+            T x, y, z;
+        };
+    };
+};
+
+template <typename T>
+struct rgba_type {
+    typedef pixel<T, 4> pixel_type;
+    union {
+        pixel_type v;
+        struct {
+            T red, green, blue, alpha;
+        };
+        struct {
+            T x, y, z, w;
+        };
+    };
+};
+
+template <typename T>
+struct basic_pixel : public T {
+    constexpr static size_t channels = T::pixel_type::channels;
+    constexpr static int bit_depth = T::pixel_type::bit_depth;
+    typedef typename T::pixel_type::value_type value_type;
+
+    basic_pixel() {}
+    basic_pixel(value_type value) { static_assert(channels == 1); this->v[0] = value; }
+    basic_pixel(value_type _v[channels]) { std::copy(&_v[0], &_v[channels], this->v.begin()); }
+    basic_pixel(const std::array<value_type, channels>& _v) { std::copy(_v.begin(), _v.end(), this->v.begin()); }
+
+    basic_pixel(std::initializer_list<value_type> list) {
+        assert(list.size() == channels);
+        std::copy(list.begin(), list.end(), this->v.begin());
+    }
+
+    constexpr value_type& operator[](int c) { return this->v[c]; }
+    constexpr const value_type& operator[](int c) const { return this->v[c]; }
+};
+
+typedef basic_pixel<luma_type<uint8_t>> luma_pixel;
+typedef basic_pixel<luma_alpha_type<uint8_t>> luma_alpha_pixel;
+typedef basic_pixel<rgb_type<uint8_t>> rgb_pixel;
+typedef basic_pixel<rgba_type<uint8_t>> rgba_pixel;
+
+typedef basic_pixel<luma_type<uint16_t>> luma_pixel_16;
+typedef basic_pixel<luma_alpha_type<uint16_t>> luma_alpha_pixel_16;
+typedef basic_pixel<rgb_type<uint16_t>> rgb_pixel_16;
+typedef basic_pixel<rgba_type<uint16_t>> rgba_pixel_16;
+
+typedef basic_pixel<luma_type<float>> luma_pixel_fp32;
+typedef basic_pixel<luma_alpha_type<float>> luma_alpha_pixel_fp32;
+typedef basic_pixel<rgb_type<float>> rgb_pixel_fp32;
+typedef basic_pixel<rgba_type<float>> rgba_pixel_fp32;
+
+typedef basic_pixel<luma_type<float>> pixel_fp32;
+typedef basic_pixel<luma_alpha_type<float>> pixel_fp32_2;
+typedef basic_pixel<rgb_type<float>> pixel_fp32_3;
+typedef basic_pixel<rgba_type<float>> pixel_fp32_4;
 
 #if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
 typedef __fp16 float16_t;
-typedef basic_luma_pixel<float16_t> luma_pixel_fp16;
-typedef basic_luma_alpha_pixel<float16_t> luma_alpha_pixel_fp16;
-typedef basic_rgb_pixel<float16_t> rgb_pixel_fp16;
-typedef basic_rgba_pixel<float16_t> rgba_pixel_fp16;
+typedef basic_pixel<luma_type<float16_t>> luma_pixel_fp16;
+typedef basic_pixel<luma_alpha_type<float16_t>> luma_alpha_pixel_fp16;
+typedef basic_pixel<rgb_type<float16_t>> rgb_pixel_fp16;
+typedef basic_pixel<rgba_type<float16_t>> rgba_pixel_fp16;
 #endif
 
 #if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
@@ -188,15 +152,15 @@ typedef float16_t float_type;
 #else
 typedef float float_type;
 #endif
-typedef basic_luma_pixel<float_type> luma_pixel_float;
-typedef basic_luma_alpha_pixel<float_type> luma_alpha_pixel_float;
-typedef basic_rgb_pixel<float_type> rgb_pixel_float;
-typedef basic_rgba_pixel<float_type> rgba_pixel_float;
+typedef basic_pixel<luma_type<float_type>> luma_pixel_float;
+typedef basic_pixel<luma_alpha_type<float_type>> luma_alpha_pixel_float;
+typedef basic_pixel<rgb_type<float_type>> rgb_pixel_float;
+typedef basic_pixel<rgba_type<float_type>> rgba_pixel_float;
 
-typedef basic_luma_pixel<float_type> pixel_float;
-typedef basic_luma_alpha_pixel<float_type> pixel_float2;
-typedef basic_rgb_pixel<float_type> pixel_float3;
-typedef basic_rgba_pixel<float_type> pixel_float4;
+typedef basic_pixel<luma_type<float_type>> pixel_float;
+typedef basic_pixel<luma_alpha_type<float_type>> pixel_float2;
+typedef basic_pixel<rgb_type<float_type>> pixel_float3;
+typedef basic_pixel<rgba_type<float_type>> pixel_float4;
 
 class tiff_metadata;
 
@@ -373,18 +337,18 @@ class image : public basic_image<T> {
     static bool process_tiff_strip(image* destination, int tiff_bitspersample, int tiff_samplesperpixel,
                                    int destination_row, int strip_width, int strip_height,
                                    int crop_x, int crop_y, uint8_t *tiff_buffer) {
-        typedef typename T::dataType dataType;
+        typedef typename T::value_type value_type;
 
-        std::function<dataType()> nextTiffPixelSame = [&tiff_buffer]() -> dataType {
-            dataType pixelValue = *((dataType *) tiff_buffer);
-            tiff_buffer += sizeof(dataType);
+        std::function<value_type()> nextTiffPixelSame = [&tiff_buffer]() -> value_type {
+            value_type pixelValue = *((value_type *) tiff_buffer);
+            tiff_buffer += sizeof(value_type);
             return pixelValue;
         };
-        std::function<dataType()> nextTiffPixel8to16 = [&tiff_buffer]() -> dataType {
-            return (dataType) *(tiff_buffer++) << 8;;
+        std::function<value_type()> nextTiffPixel8to16 = [&tiff_buffer]() -> value_type {
+            return (value_type) *(tiff_buffer++) << 8;;
         };
-        std::function<dataType()> nextTiffPixel16to8 = [&tiff_buffer]() -> dataType {
-            dataType pixelValue = (dataType) (*((uint16_t *) tiff_buffer) >> 8);
+        std::function<value_type()> nextTiffPixel16to8 = [&tiff_buffer]() -> value_type {
+            value_type pixelValue = (value_type) (*((uint16_t *) tiff_buffer) >> 8);
             tiff_buffer += sizeof(uint16_t);
             return pixelValue;
         };
@@ -428,9 +392,9 @@ class image : public basic_image<T> {
 
     // Write image to TIFF file
     void write_tiff_file(const std::string& filename, tiff_compression compression = tiff_compression::NONE, tiff_metadata* metadata = nullptr) const {
-        typedef typename T::dataType dataType;
-        auto row_pointer = [this](int row) -> dataType* { return (dataType*)(*this)[row]; };
-        gls::write_tiff_file<dataType>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
+        typedef typename T::value_type value_type;
+        auto row_pointer = [this](int row) -> value_type* { return (value_type*)(*this)[row]; };
+        gls::write_tiff_file<value_type>(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
                                        compression, metadata, row_pointer);
     }
 
@@ -454,8 +418,8 @@ class image : public basic_image<T> {
     // Write image to DNG file
     void write_dng_file(const std::string& filename, tiff_compression compression = tiff_compression::NONE,
                         const tiff_metadata* dng_metadata = nullptr, const tiff_metadata* exif_metadata = nullptr) const {
-        typedef typename T::dataType dataType;
-        auto row_pointer = [this](int row) -> dataType* { return (dataType*)(*this)[row]; };
+        typedef typename T::value_type value_type;
+        auto row_pointer = [this](int row) -> value_type* { return (value_type*)(*this)[row]; };
         gls::write_dng_file(filename, basic_image<T>::width, basic_image<T>::height, T::channels, T::bit_depth,
                             compression, dng_metadata, exif_metadata, row_pointer);
     }

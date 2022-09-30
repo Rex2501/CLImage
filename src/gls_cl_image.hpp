@@ -32,24 +32,24 @@ class cl_image : public basic_image<T> {
 
     static inline cl::ImageFormat ImageFormat() {
         static_assert(T::channels == 1 || T::channels == 2 || T::channels == 4);
-        static_assert(std::is_same<typename T::dataType, float>::value ||
+        static_assert(std::is_same<typename T::value_type, float>::value ||
 #if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
-                      std::is_same<typename T::dataType, gls::float16_t>::value ||
+                      std::is_same<typename T::value_type, gls::float16_t>::value ||
 #endif
-                      std::is_same<typename T::dataType, uint8_t>::value ||
-                      std::is_same<typename T::dataType, uint16_t>::value ||
-                      std::is_same<typename T::dataType, uint32_t>::value ||
-                      std::is_same<typename T::dataType, int32_t>::value);
+                      std::is_same<typename T::value_type, uint8_t>::value ||
+                      std::is_same<typename T::value_type, uint16_t>::value ||
+                      std::is_same<typename T::value_type, uint32_t>::value ||
+                      std::is_same<typename T::value_type, int32_t>::value);
 
         cl_channel_order order = T::channels == 1 ? CL_R : T::channels == 2 ? CL_RG : CL_RGBA;
-        cl_channel_type type = std::is_same<typename T::dataType, float>::value ? CL_FLOAT :
+        cl_channel_type type = std::is_same<typename T::value_type, float>::value ? CL_FLOAT :
 #if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
-                               std::is_same<typename T::dataType, gls::float16_t>::value ? CL_HALF_FLOAT :
+                               std::is_same<typename T::value_type, gls::float16_t>::value ? CL_HALF_FLOAT :
 #endif
-                               std::is_same<typename T::dataType, uint8_t>::value ? CL_UNORM_INT8 :
-                               std::is_same<typename T::dataType, uint16_t>::value ? CL_UNORM_INT16 :
-                               std::is_same<typename T::dataType, uint32_t>::value ? CL_UNSIGNED_INT32 :
-                               /* std::is_same<typename T::dataType, int32_t>::value ? */ CL_SIGNED_INT32;
+                               std::is_same<typename T::value_type, uint8_t>::value ? CL_UNORM_INT8 :
+                               std::is_same<typename T::value_type, uint16_t>::value ? CL_UNORM_INT16 :
+                               std::is_same<typename T::value_type, uint32_t>::value ? CL_UNSIGNED_INT32 :
+                               /* std::is_same<typename T::value_type, int32_t>::value ? */ CL_SIGNED_INT32;
 
         return cl::ImageFormat(order, type);
     }
