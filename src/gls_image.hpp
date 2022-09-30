@@ -174,11 +174,12 @@ class basic_image {
         return { width, height };
     }
 
-    static const constexpr int pixel_bit_depth = T::bit_depth;
-    static const constexpr int pixel_channels = T::channels;
-    static const constexpr int pixel_size = sizeof(T);
-
+    typedef T pixel_type;
     typedef std::unique_ptr<basic_image<T>> unique_ptr;
+
+    static const constexpr int bit_depth = pixel_type::bit_depth;
+    static const constexpr int channels = pixel_type::channels;
+    static const constexpr int pixel_size = sizeof(pixel_type);
 
     basic_image(int _width, int _height) : width(_width), height(_height) {}
     basic_image(gls::size _dimensions) : width(_dimensions.width), height(_dimensions.height) {}
@@ -310,6 +311,9 @@ class image : public basic_image<T> {
 
     // Image factory from JPEG file
     static unique_ptr read_jpeg_file(const std::string& filename) {
+        static_assert(basic_image<T>::channels == 1 || basic_image<T>::channels == 3,
+                      "The JPEG codec only supports 1-channel or 3-channel images.");
+
         unique_ptr image = nullptr;
 
         auto image_allocator = [&image](int width, int height) -> std::span<uint8_t> {
@@ -326,6 +330,9 @@ class image : public basic_image<T> {
 
     // Write image to JPEG file
     void write_jpeg_file(const std::string& filename, int quality) const {
+        static_assert(basic_image<T>::channels == 1 || basic_image<T>::channels == 3,
+                      "The JPEG codec only supports 1-channel or 3-channel images.");
+
         auto image_data = [this]() -> std::span<uint8_t> {
             return std::span<uint8_t>((uint8_t*)this->_data.data(), sizeof(T) * this->_data.size());
         };

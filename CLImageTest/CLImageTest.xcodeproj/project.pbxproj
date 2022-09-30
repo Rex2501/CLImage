@@ -150,8 +150,6 @@
 		E5345EE228D4F8A100FC57FA /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = SURF.hpp; path = ../../CLImage/app/src/main/cpp/SURF.hpp; sourceTree = "<group>"; };
 		E5345EE328D4F8A100FC57FA /* feature2d.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = feature2d.hpp; path = ../../CLImage/app/src/main/cpp/feature2d.hpp; sourceTree = "<group>"; };
 		E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ImageRegistration.cpp; path = ../../CLImage/app/src/main/cpp/ImageRegistration.cpp; sourceTree = "<group>"; };
-		E554E3E628DB8ABA0095F20D /* IntegralImage.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = IntegralImage.hpp; path = ../../CLImage/app/src/main/cpp/IntegralImage.hpp; sourceTree = "<group>"; };
-		E554E3E728DB8ABA0095F20D /* IntegralImage.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IntegralImage.cpp; path = ../../CLImage/app/src/main/cpp/IntegralImage.cpp; sourceTree = "<group>"; };
 		E554E3E928DB90DD0095F20D /* RANSAC.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = RANSAC.cpp; path = ../../CLImage/app/src/main/cpp/RANSAC.cpp; sourceTree = "<group>"; };
 		E554E3EA28DB90DD0095F20D /* RANSAC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = RANSAC.hpp; path = ../../CLImage/app/src/main/cpp/RANSAC.hpp; sourceTree = "<group>"; };
 		E554E3EC28E4B1E60095F20D /* gls_geometry.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_geometry.hpp; path = ../../src/gls_geometry.hpp; sourceTree = "<group>"; };
@@ -269,8 +267,6 @@
 				E5345EE228D4F8A100FC57FA /* SURF.hpp */,
 				E554E3E928DB90DD0095F20D /* RANSAC.cpp */,
 				E554E3EA28DB90DD0095F20D /* RANSAC.hpp */,
-				E554E3E728DB8ABA0095F20D /* IntegralImage.cpp */,
-				E554E3E628DB8ABA0095F20D /* IntegralImage.hpp */,
 				E554E3ED28E4B5D00095F20D /* PRNG.h */,
 			);
 			name = App;

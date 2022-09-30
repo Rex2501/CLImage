@@ -88,7 +88,7 @@ void testSURF() {
     printf("Elapsed Time: %f\n", elapsed_time_ms);
 
     auto inputImage1 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
-    auto inputImage1Cpu = inputImage1.mapImage();
+    auto inputImage1Cpu = inputImage1.mapImage(CL_MAP_WRITE);
     inputImage1Cpu.apply([&srcImg1_](gls::rgba_pixel* p, int x, int y) {
         const auto& pIn = (*srcImg1_)[y][x];
         *p = { pIn.red, pIn.green, pIn.blue, 255 };
@@ -96,7 +96,7 @@ void testSURF() {
     inputImage1.unmapImage(inputImage1Cpu);
 
     auto inputImage2 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg2_->width, srcImg2_->height);
-    auto inputImage2Cpu = inputImage2.mapImage();
+    auto inputImage2Cpu = inputImage2.mapImage(CL_MAP_WRITE);
     inputImage2Cpu.apply([&srcImg2_](gls::rgba_pixel* p, int x, int y) {
         const auto& pIn = (*srcImg2_)[y][x];
         *p = { pIn.red, pIn.green, pIn.blue, 255 };
@@ -113,8 +113,9 @@ void testSURF() {
 
     gls::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
 
-    auto outputImageCpu = outputImage.mapImage();
+    auto outputImageCpu = outputImage.mapImage(CL_MAP_READ);
     outputImageCpu.write_png_file(PATH "fused.png", /*skip_alpha=*/ true);
+    outputImage.unmapImage(outputImageCpu);
 }
 
 int main(int argc, const char * argv[]) {

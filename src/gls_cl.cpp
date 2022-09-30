@@ -67,7 +67,8 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _
     cl::Platform platform;
     for (auto &p : platforms) {
         std::string version = p.getInfo<CL_PLATFORM_VERSION>();
-        if (version.find("OpenCL 2.") != std::string::npos) {
+        if (version.find("OpenCL 2.") != std::string::npos ||
+            version.find("OpenCL 3.") != std::string::npos) {
             platform = p;
         }
     }
