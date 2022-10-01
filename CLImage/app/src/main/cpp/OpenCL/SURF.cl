@@ -222,14 +222,13 @@ kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t
 // Integral Image
 
 #define LOCAL_SUM_SIZE      16
-#define LOCAL_SUM_STRIDE    (LOCAL_SUM_SIZE + 1)
 
 kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width, float bias) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int x = get_global_id(0);
 
-    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
+    local float lm_sum[LOCAL_SUM_SIZE][LOCAL_SUM_SIZE];
 
     float accum = 0;
     for (int y = 0; y < get_image_height(sourceImage); y += LOCAL_SUM_SIZE) {
@@ -260,7 +259,7 @@ kernel void integral_sum_rows_image(global const float* buf_ptr, int buf_width,
     int dst_width = get_image_width(sumImage0);
     int dst_height = get_image_height(sumImage0);
 
-    local float lm_sum[LOCAL_SUM_STRIDE][LOCAL_SUM_SIZE];
+    local float lm_sum[LOCAL_SUM_SIZE][LOCAL_SUM_SIZE];
 
     for (int xin = x; xin < dst_width; xin += gs) {
         write_imagef(sumImage0, (int2)(xin, 0), 0);
@@ -319,6 +318,85 @@ kernel void integral_sum_rows_image(global const float* buf_ptr, int buf_width,
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
+float L1Norm(global const float4* p1, global const float4* p2, int n) {
+    float4 sum = 0;
+    for (int i = 0; i < n; i++) {
+        sum += fabs(p1[i] - p2[i]);
+    }
+    return dot(sum, 1);
+}
+
+float L2Norm(global const float4* p1, global const float4* p2, int n) {
+    float4 sum = 0;
+    for (int i = 0; i < n; i++) {
+        float4 diff = p1[i] - p2[i];
+        sum += diff * diff;
+    }
+    return sqrt(dot(sum, 1));
+}
+
+typedef struct DMatch {
+    // ushort2 idx;    // query + train descriptor indices
+    int queryIdx;  // query descriptor index
+    int trainIdx;  // train descriptor index
+    float distance;
+} DMatch;
+
+#define MATCH_BLOCK_SIZE 32
+
+kernel void matchKeyPoints(global const float4 descriptor1[],
+                           int descriptor1_stride,
+                           int descriptor1_height,
+                           global const float4 descriptor2[],
+                           int descriptor2_stride,
+                           int descriptor2_height,
+                           global DMatch* matchedPoints) {
+    local int trainIdx[MATCH_BLOCK_SIZE];
+    local float distance[MATCH_BLOCK_SIZE];
+
+    const int lid = get_local_id(1);
+    const int i = get_global_id(0);
+
+    trainIdx[lid] = -1;
+    distance[lid] = -1;
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    global const float4* p1 = &descriptor1[descriptor1_stride/4 * i];
+    float distance_min = 100;
+    int j_min = 0;
+
+    for (int j = 0; j < descriptor2_height; j += MATCH_BLOCK_SIZE) {
+        if (j + lid >= descriptor2_height) {
+            break;
+        }
+        global const float4* p2 = &descriptor2[descriptor2_stride/4 * (j + lid)];
+        float distance_t = L2Norm(p1, p2, 64/4);
+        if (distance_t < distance_min) {
+            distance_min = distance_t;
+            j_min = j + lid;
+        }
+    }
+
+    trainIdx[lid] = j_min;
+    distance[lid] = distance_min;
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    if (lid == 0) {
+        int j_min = 0;
+        float distance_min = 1000;
+        for (int k = 0; k < MATCH_BLOCK_SIZE; k++) {
+            if (distance[k] < distance_min) {
+                distance_min = distance[k];
+                j_min = trainIdx[k];
+            }
+        }
+        DMatch match = { i, j_min, distance_min };
+        matchedPoints[i] = match;
     }
 }
 

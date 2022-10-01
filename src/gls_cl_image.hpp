@@ -185,10 +185,11 @@ class cl_image_buffer_2d : public cl_image_2d<T> {
 
     cl_image_buffer_2d(cl::Context context, const gls::image<T>& other)
         : cl_image_buffer_2d(context, other.width, other.height) {
-
+        this->copyPixelsFrom(other);
     }
 
     static int compute_stride(int width) {
+        // pitch_alignment in *pixels*
         const int pitch_alignment = cl::Device::getDefault().getInfo<CL_DEVICE_IMAGE_PITCH_ALIGNMENT>();
         return pitch_alignment * ((width + pitch_alignment - 1) / pitch_alignment);
     }
