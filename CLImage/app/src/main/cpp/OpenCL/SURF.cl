@@ -326,7 +326,7 @@ float L1Norm(global const float4* p1, global const float4* p2, int n) {
     for (int i = 0; i < n; i++) {
         sum += fabs(p1[i] - p2[i]);
     }
-    return dot(sum, 1);
+    return sum.x + sum.y + sum.z + sum.w;
 }
 
 float L2Norm(global const float4* p1, global const float4* p2, int n) {
@@ -335,21 +335,19 @@ float L2Norm(global const float4* p1, global const float4* p2, int n) {
         float4 diff = p1[i] - p2[i];
         sum += diff * diff;
     }
-    return sqrt(dot(sum, 1));
+    return native_sqrt(sum.x + sum.y + sum.z + sum.w);
 }
 
 typedef struct DMatch {
-    // ushort2 idx;    // query + train descriptor indices
     int queryIdx;  // query descriptor index
     int trainIdx;  // train descriptor index
     float distance;
 } DMatch;
 
-#define MATCH_BLOCK_SIZE 32
+#define MATCH_BLOCK_SIZE 24
 
 kernel void matchKeyPoints(global const float4 descriptor1[],
                            int descriptor1_stride,
-                           int descriptor1_height,
                            global const float4 descriptor2[],
                            int descriptor2_stride,
                            int descriptor2_height,
@@ -388,7 +386,7 @@ kernel void matchKeyPoints(global const float4 descriptor1[],
 
     if (lid == 0) {
         int j_min = 0;
-        float distance_min = 1000;
+        float distance_min = 100;
         for (int k = 0; k < MATCH_BLOCK_SIZE; k++) {
             if (distance[k] < distance_min) {
                 distance_min = distance[k];

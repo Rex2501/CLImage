@@ -827,6 +827,21 @@ void SURFFind(const gls::image<float>& sum,
     }
 }
 
+class DMatch {
+   public:
+    DMatch() : queryIdx(-1), trainIdx(-1), distance(FLT_MAX) {}
+    DMatch(int _queryIdx, int _trainIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), distance(_distance) {}
+
+    int queryIdx;  // query descriptor index
+    int trainIdx;  // train descriptor index
+
+    float distance;
+
+    // less is better
+    bool operator < (const DMatch& m) const { return distance < m.distance; }
+};
+
 class SURF {
 private:
     gls::OpenCLContext* _glsContext;
@@ -932,6 +947,10 @@ public:
     void detectAndCompute(const gls::image<float>& img,
                           std::vector<KeyPoint>* keypoints,
                           gls::image<float>::unique_ptr* _descriptors);
+
+    void clMatchKeyPoints(const gls::image<float>& descriptor1,
+                          const gls::image<float>& descriptor2,
+                          std::vector<DMatch>* matchedPoints);
 };
 
 void SURF::clIntegral(const gls::image<float>& img,
@@ -1322,6 +1341,11 @@ float L2Norm(const float* p1, const float* p2, int n) {
     return sqrtf(sum);
 }
 
+double timeDiff(std::chrono::steady_clock::time_point t_start,
+                std::chrono::steady_clock::time_point t_end) {
+    return std::chrono::duration<double, std::milli>(t_end-t_start).count();
+}
+
 void SURF::detectAndCompute(const gls::image<float>& img,
                             std::vector<KeyPoint>* keypoints,
                             gls::image<float>::unique_ptr* _descriptors) {
@@ -1338,6 +1362,8 @@ void SURF::detectAndCompute(const gls::image<float>& img,
 
     std::cout << "doDescriptors: " << std::endl;
 
+    auto t_start_descriptor = std::chrono::high_resolution_clock::now();
+
     // we call SURFInvoker in any case, even if we do not need descriptors,
     // since it computes orientation of each feature.
     printf("mapping intregral images...\n");
@@ -1349,6 +1375,9 @@ void SURF::detectAndCompute(const gls::image<float>& img,
     sum[0]->unmapImage(integralSumCpu);
 
     printf("unmapping intregral images...\n");
+
+    auto t_end_descriptor = std::chrono::high_resolution_clock::now();
+    printf("--> descriptor Time: %.2fms\n", timeDiff(t_start_descriptor, t_end_descriptor));
 
     // remove keypoints that were marked for deletion
     int j = 0;
@@ -1376,21 +1405,6 @@ void SURF::detectAndCompute(const gls::image<float>& img,
         memcpy((**_descriptors)[0], (*descriptors)[0], N * 64 * sizeof(float));
     }
 }
-
-class DMatch {
-   public:
-    DMatch() : queryIdx(-1), trainIdx(-1), distance(FLT_MAX) {}
-    DMatch(int _queryIdx, int _trainIdx, float _distance)
-        : queryIdx(_queryIdx), trainIdx(_trainIdx), distance(_distance) {}
-
-    int queryIdx;  // query descriptor index
-    int trainIdx;  // train descriptor index
-
-    float distance;
-
-    // less is better
-    bool operator < (const DMatch& m) const { return distance < m.distance; }
-};
 
 void matchKeyPoints(const gls::image<float>& descriptor1,
                     const gls::image<float>& descriptor2,
@@ -1431,33 +1445,30 @@ cl::Buffer bufferFromImage(const gls::image<T>& source) {
     return buffer;
 }
 
-void clMatchKeyPoints(gls::OpenCLContext* cLContext,
-                      const gls::image<float>& descriptor1,
-                      const gls::image<float>& descriptor2,
-                      std::vector<DMatch>* matchedPoints) {
+void SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
+                            const gls::image<float>& descriptor2,
+                            std::vector<DMatch>* matchedPoints) {
     auto descriptor1Buffer = bufferFromImage(descriptor1);
     auto descriptor2Buffer = bufferFromImage(descriptor2);
 
     auto matchesBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(DMatch) * descriptor1.height);
 
     // Load the shader source
-    const auto program = cLContext->loadProgram("SURF");
+    const auto program = _glsContext->loadProgram("SURF");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Buffer,     // descriptor1
                                     int,            // descriptor1_stride
-                                    int,            // descriptor1_height
                                     cl::Buffer,     // descriptor2
                                     int,            // descriptor2_stride
                                     int,            // descriptor2_height
                                     cl::Buffer      // matchedPoints
                                     >(program, "matchKeyPoints");
 
-    int groups = 32;
+    int groups = 24;
     kernel(cl::EnqueueArgs(cl::NDRange(descriptor1.height, groups), cl::NDRange(1, groups)),
            descriptor1Buffer,
            descriptor1.stride,
-           descriptor1.height,
            descriptor2Buffer,
            descriptor2.stride,
            descriptor2.height,
@@ -1484,16 +1495,11 @@ struct refineMatch {
     }
 };
 
-double timeDiff(std::chrono::steady_clock::time_point t_start,
-                std::chrono::steady_clock::time_point t_end) {
-    return std::chrono::duration<double, std::milli>(t_end-t_start).count();
-}
-
 bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 4 * 800);
+    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 8 * 800);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
     printf("--> SURF Creation Time: %.2fms\n", timeDiff(t_start, t_surf));
@@ -1507,15 +1513,13 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
 
-    printf(" ---------- \n Detected feature points: %ld, %ld, %d x %d, %d x %d\n",
-           keypoints1.size(), keypoints2.size(),
-           descriptor1->width, descriptor1->height,
-           descriptor2->width, descriptor2->height);
+    printf(" ---------- \n Detected feature points: %ld, %ld\n",
+           keypoints1.size(), keypoints2.size());
 
     // (4) Match feature points
     std::vector<DMatch> matchedPoints;
     // matchKeyPoints(*descriptor1, *descriptor2, &matchedPoints);
-    clMatchKeyPoints(cLContext, *descriptor1, *descriptor2, &matchedPoints);
+    surf.clMatchKeyPoints(*descriptor1, *descriptor2, &matchedPoints);
 
     auto t_match = std::chrono::high_resolution_clock::now();
     printf("--> Keypoint Matching: %.2fms\n", timeDiff(t_detect, t_match));
@@ -1526,12 +1530,10 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     printf("--> Keypoint Sorting: %.2fms\n", timeDiff(t_match, t_sort));
 
     // Convert to Point2D format
-    int goodPoints = matches_num < (int)matchedPoints.size() ? matches_num : (int)matchedPoints.size();
+    int goodPoints = std::min(matches_num, (int) matchedPoints.size());
     for (int i = 0; i < goodPoints; i++) {
-        matchpoints1->push_back(Point2f(keypoints1[matchedPoints[i].queryIdx].pt.x,
-                                        keypoints1[matchedPoints[i].queryIdx].pt.y));
-        matchpoints2->push_back(Point2f(keypoints2[matchedPoints[i].trainIdx].pt.x,
-                                        keypoints2[matchedPoints[i].trainIdx].pt.y));
+        matchpoints1->push_back(keypoints1[matchedPoints[i].queryIdx].pt);
+        matchpoints2->push_back(keypoints2[matchedPoints[i].trainIdx].pt);
     }
 
     auto t_end = std::chrono::high_resolution_clock::now();
