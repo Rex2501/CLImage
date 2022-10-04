@@ -55,7 +55,6 @@
 #include <cmath>
 #include <iostream>
 #include <mutex>
-#include <unordered_map>
 
 #include "gls_cl_image.hpp"
 
@@ -66,13 +65,6 @@
 #define USE_OPENCL true
 #define USE_OPENCL_INTEGRAL true
 #define USE_INTEGRAL_PYRAMID true
-
-template<>
-struct std::hash<gls::size> {
-    std::size_t operator()(gls::size const& r) const noexcept {
-        return r.width ^ r.height;
-    }
-};
 
 namespace gls {
 
@@ -243,24 +235,26 @@ static bool interpolateKeypoint(const std::array<gls::image<float>, 3>& N9, int 
 }
 
 struct clSurfHF {
-    cl_int8 p_dx[3];
+    cl_int8 p_dx[2];
     cl_float4 w_dx;
 
-    cl_int8 p_dy[3];
+    cl_int8 p_dy[2];
     cl_float4 w_dy;
 
     cl_int8 p_dxy[4];
     cl_float4 w_dxy;
 
     clSurfHF(const std::array<SurfHF, 3>& Dx, const std::array<SurfHF, 3>& Dy, const std::array<SurfHF, 4>& Dxy) {
-        for (int i = 0; i < 3; i++) {
-            p_dx[i] = { Dx[i].p[0].x, Dx[i].p[0].y, Dx[i].p[1].x, Dx[i].p[1].y, Dx[i].p[2].x, Dx[i].p[2].y, Dx[i].p[3].x, Dx[i].p[3].y };
-        }
+        /*
+         NOTE: Removed repeating offsets from Dx and Dy, see note in SURF.cl
+         */
+
+        p_dx[0] = { Dx[0].p[0].x, Dx[0].p[0].y, Dx[0].p[1].x, Dx[0].p[1].y, Dx[0].p[2].x, Dx[0].p[2].y, Dx[0].p[3].x, Dx[0].p[3].y };
+        p_dx[1] = { Dx[1].p[2].x, Dx[1].p[2].y, Dx[1].p[3].x, Dx[1].p[3].y, Dx[2].p[2].x, Dx[2].p[2].y, Dx[2].p[3].x, Dx[2].p[3].y };
         w_dx = { Dx[0].w, Dx[1].w, Dx[2].w, 0 };
 
-        for (int i = 0; i < 3; i++) {
-            p_dy[i] = { Dy[i].p[0].x, Dy[i].p[0].y, Dy[i].p[1].x, Dy[i].p[1].y, Dy[i].p[2].x, Dy[i].p[2].y, Dy[i].p[3].x, Dy[i].p[3].y };
-        }
+        p_dy[0] = { Dy[0].p[0].x, Dy[0].p[0].y, Dy[0].p[1].x, Dy[0].p[1].y, Dy[0].p[2].x, Dy[0].p[2].y, Dy[0].p[3].x, Dy[0].p[3].y };
+        p_dy[1] = { Dy[1].p[1].x, Dy[1].p[1].y, Dy[1].p[3].x, Dy[1].p[3].y, Dy[2].p[1].x, Dy[2].p[1].y, Dy[2].p[3].x, Dy[2].p[3].y };
         w_dy = { Dy[0].w, Dy[1].w, Dy[2].w, 0 };
 
         for (int i = 0; i < 4; i++) {
@@ -867,9 +861,6 @@ private:
        for each additional octave. WARNING: Increasing this improves speed,
        however keypoint extraction becomes unreliable. */
     static const int SAMPLE_STEP0 = 1;
-
-    void clCalcLayerDetAndTrace(const gls::cl_image_2d<float>& sum, int size, int sampleStep,
-                                gls::cl_image_2d<float>* det, gls::cl_image_2d<float>* trace);
 
     void clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                            gls::cl_image_2d<float>* detImage,

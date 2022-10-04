@@ -191,4 +191,21 @@ typedef basic_rectangle<int> rectangle;
 
 }  // namespace gls
 
+// For maps and sets
+
+template<>
+struct std::hash<gls::size> {
+    std::size_t operator()(gls::size const& r) const noexcept {
+        return r.width ^ r.height;
+    }
+};
+
+
+template<>
+struct std::hash<gls::point> {
+    std::size_t operator()(gls::point const& p) const noexcept {
+        return p.x + p.y;
+    }
+};
+
 #endif /* gls_geometry_h */

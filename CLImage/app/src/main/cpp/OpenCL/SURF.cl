@@ -16,21 +16,84 @@
 #define SURF_INTEGRAL_BIAS 255.0f
 
 typedef struct SurfHF {
-    int8 p_dx[3];
+    int8 p_dx[2];
     float4 w_dx;
 
-    int8 p_dy[3];
+    int8 p_dy[2];
     float4 w_dy;
 
     int8 p_dxy[4];
     float4 w_dxy;
 } SurfHF;
 
-float calcHaarPattern(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw, int N) {
+/*
+ NOTE: calcHaarPatternDx and calcHaarPatternDy have been hand optimized to avoid loading data from repeated offsets,
+       and the redundant offsets themselves have been removed from the SurfHF struct.
+ */
+
+float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
+    float r02 = read_imagef(inputImage, p + dp[0].lo.lo /* p0 */).x;
+    float r07 = read_imagef(inputImage, p + dp[0].lo.hi /* p1 */).x;
+    float r32 = read_imagef(inputImage, p + dp[0].hi.lo /* p2 */).x;
+    float r37 = read_imagef(inputImage, p + dp[0].hi.hi /* p3 */).x;
+
+    float r62 = read_imagef(inputImage, p + dp[1].lo.lo /* p2 */).x;
+    float r67 = read_imagef(inputImage, p + dp[1].lo.hi /* p3 */).x;
+
+    float r92 = read_imagef(inputImage, p + dp[1].hi.lo /* p2 */).x;
+    float r97 = read_imagef(inputImage, p + dp[1].hi.hi /* p3 */).x;
+
+    float d = SURF_INTEGRAL_BIAS * (r02 /* p0 */ +
+                                    r37 /* p3 */ -
+                                    r07 /* p1 */ -
+                                    r32 /* p2 */) * dw.x;
+
+    d += SURF_INTEGRAL_BIAS * (r32 /* p0 */ +
+                               r67 /* p3 */ -
+                               r37 /* p1 */ -
+                               r62 /* p2 */) * dw.y;
+
+    d += SURF_INTEGRAL_BIAS * (r62 /* p0 */ +
+                               r97 /* p3 */ -
+                               r67 /* p1 */ -
+                               r92 /* p2 */) * dw.z;
+    return d;
+}
+
+float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
+    float r20 = read_imagef(inputImage, p + dp[0].lo.lo /* p0 */).x;
+    float r23 = read_imagef(inputImage, p + dp[0].lo.hi /* p1 */).x;
+    float r70 = read_imagef(inputImage, p + dp[0].hi.lo /* p2 */).x;
+    float r73 = read_imagef(inputImage, p + dp[0].hi.hi /* p3 */).x;
+
+    float r26 = read_imagef(inputImage, p + dp[1].lo.lo /* p1 */).x;
+    float r76 = read_imagef(inputImage, p + dp[1].lo.hi /* p3 */).x;
+
+    float r29 = read_imagef(inputImage, p + dp[1].hi.lo /* p1 */).x;
+    float r79 = read_imagef(inputImage, p + dp[1].hi.hi /* p3 */).x;
+
+    float d = SURF_INTEGRAL_BIAS * (r20 /* p0 */ +
+                                    r73 /* p3 */ -
+                                    r23 /* p1 */ -
+                                    r70 /* p2 */) * dw.x;
+
+    d += SURF_INTEGRAL_BIAS * (r23 /* p0 */ +
+                               r76 /* p3 */ -
+                               r26 /* p1 */ -
+                               r73 /* p2 */) * dw.y;
+
+    d += SURF_INTEGRAL_BIAS * (r26 /* p0 */ +
+                               r79 /* p3 */ -
+                               r29 /* p1 */ -
+                               r76 /* p2 */) * dw.z;
+    return d;
+}
+
+float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], const float4 dw) {
     const float w[4] = { dw.x, dw.y, dw.z, dw.w };
     float d = 0;
 #pragma unroll
-    for (int k = 0; k < N; k++) {
+    for (int k = 0; k < 4; k++) {
         int8 v = dp[k];
         d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
                                    read_imagef(inputImage, p + v.hi.hi /* p3 */).x -
@@ -49,18 +112,18 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
-    const float dx = calcHaarPattern(sumImage, p, surfHFData->p_dx, surfHFData->w_dx, 3);
-    const float dy = calcHaarPattern(sumImage, p, surfHFData->p_dy, surfHFData->w_dy, 3);
-    const float dxy = calcHaarPattern(sumImage, p, surfHFData->p_dxy, surfHFData->w_dxy, 4);
+    const float dx = calcHaarPatternDx(sumImage, p, surfHFData->p_dx, surfHFData->w_dx);
+    const float dy = calcHaarPatternDy(sumImage, p, surfHFData->p_dy, surfHFData->w_dy);
+    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData->p_dxy, surfHFData->w_dxy);
 
     write_imagef(detImage, imageCoordinates + margin, dx * dy - 0.81f * dxy * dxy);
     write_imagef(traceImage, imageCoordinates + margin, dx + dy);
 }
 
 float2 detAndTrace(read_only image2d_t sumImage, const int2 p, constant SurfHF *surfHFData) {
-    const float dx = calcHaarPattern(sumImage, p, surfHFData[0].p_dx, surfHFData[0].w_dx, 3);
-    const float dy = calcHaarPattern(sumImage, p, surfHFData[0].p_dy, surfHFData[0].w_dy, 3);
-    const float dxy = calcHaarPattern(sumImage, p, surfHFData[0].p_dxy, surfHFData[0].w_dxy, 4);
+    const float dx = calcHaarPatternDx(sumImage, p, surfHFData[0].p_dx, surfHFData[0].w_dx);
+    const float dy = calcHaarPatternDy(sumImage, p, surfHFData[0].p_dy, surfHFData[0].w_dy);
+    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData[0].p_dxy, surfHFData[0].w_dxy);
     return (float2) (dx * dy - 0.81f * dxy * dxy, dx + dy);
 }
 

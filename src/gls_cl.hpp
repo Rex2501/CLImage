@@ -45,6 +45,10 @@
 
 namespace gls {
 
+inline static size_t roundTo(size_t value, int step) {
+    return step * ((value + step - 1) / step);
+}
+
 class OpenCLContext {
     cl::Context _clContext;
     const std::string _shadersRootPath;
@@ -82,10 +86,6 @@ public:
         cl::NDRange global_workgroup_size = cl::NDRange(width, height);
         cl::NDRange local_workgroup_size = computeWorkGroupSizes(width, height);
         return cl::EnqueueArgs(global_workgroup_size, local_workgroup_size);
-    }
-
-    inline static size_t roundTo(size_t value, int step) {
-        return step * ((value + step - 1) / step);
     }
 
     inline static cl::EnqueueArgs buildMaxEnqueueArgs(size_t width, size_t height) {
