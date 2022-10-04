@@ -148,45 +148,29 @@ typedef struct KeyPoint {
     int class_id;
 } KeyPoint;
 
-#define KeyPointMaxima_MaxCount 64000
+inline float determinant(const float3 A0, const float3 A1, const float3 A2) {
+    float3 D = A0 * (A1.yxx * A2.zzy - A1.zzy * A2.yxx);
+    return D.x - D.y + D.z;
+}
 
-typedef struct KeyPointMaxima {
-    int count;
-    KeyPoint keyPoints[KeyPointMaxima_MaxCount];
-} KeyPointMaxima;
-
-inline bool solve3x3(const float3 A[3], const float b[3], float x[3]) {
-    float det = A[0].x * (A[1].y * A[2].z - A[1].z * A[2].y) -
-                A[0].y * (A[1].x * A[2].z - A[1].z * A[2].x) +
-                A[0].z * (A[1].x * A[2].y - A[1].y * A[2].x);
-
-    if (det != 0) {
-        float invdet = 1.0f / det;
-        x[0] = invdet *
-               (b[0]   * (A[1].y * A[2].z - A[1].z * A[2].y) -
-                A[0].y * (b[1]   * A[2].z - A[1].z * b[2]  ) +
-                A[0].z * (b[1]   * A[2].y - A[1].y * b[2]  ));
-
-        x[1] = invdet *
-               (A[0].x * (b[1]   * A[2].z - A[1].z * b[2]  ) -
-                b[0]   * (A[1].x * A[2].z - A[1].z * A[2].x) +
-                A[0].z * (A[1].x * b[2]   - b[1]   * A[2].x));
-
-        x[2] = invdet *
-               (A[0].x * (A[1].y * b[2]   - b[1]   * A[2].y) -
-                A[0].y * (A[1].x * b[2]   - b[1]   * A[2].x) +
-                b[0]   * (A[1].x * A[2].y - A[1].y * A[2].x));
-
-        return true;
+// Simple Cramer's rule solver
+inline float3 solve3x3(const float3 A[3], const float3 B) {
+    float det = determinant(A[0], A[1], A[2]);
+    if (det == 0) {
+        return 0;
     }
-    return false;
+    return (float3) (
+        determinant(B,    A[1], A[2]),
+        determinant(A[0], B,    A[2]),
+        determinant(A[0], A[1], B)
+    ) / det;
 }
 
 #define N9(_idx, _off_y, _off_x) read_imagef(detImage ## _idx, p + (int2) (_off_x, _off_y)).x
 
 bool interpolateKeypoint(read_only image2d_t detImage0, read_only image2d_t detImage1, read_only image2d_t detImage2,
                          int2 p, int dx, int dy, int ds, KeyPoint* kpt) {
-    float B[3] = {
+    float3 B = {
         -(N9(1, 0, 1) - N9(1,  0, -1)) / 2, // Negative 1st deriv with respect to x
         -(N9(1, 1, 0) - N9(1, -1,  0)) / 2, // Negative 1st deriv with respect to y
         -(N9(2, 0, 0) - N9(0,  0,  0)) / 2  // Negative 1st deriv with respect to s
@@ -202,18 +186,22 @@ bool interpolateKeypoint(read_only image2d_t detImage0, read_only image2d_t detI
           (N9(2,  1,  0) -     N9(2, -1,  0) - N9(0,  1, 0) + N9(0, -1,  0)) / 4,      // 2nd deriv y, s
            N9(0,  0,  0) - 2 * N9(1,  0,  0) + N9(2,  0, 0) }                          // 2nd deriv s, s
     };
-    float x[3];
-    bool ok = solve3x3(A, B, x);
-    ok = ok && (x[0] != 0 || x[1] != 0 || x[2] != 0) &&
-         fabs(x[0]) <= 1 && fabs(x[1]) <= 1 && fabs(x[2]) <= 1;
+    float3 x = solve3x3(A, B);
 
-    if (ok) {
-        kpt->pt.x += x[0] * dx;
-        kpt->pt.y += x[1] * dy;
-        kpt->size = (float) rint(kpt->size + x[2] * ds);
+    if (!all(x == 0) && all(fabs(x) <= 1)) {
+        kpt->pt.x += x.x * dx;
+        kpt->pt.y += x.y * dy;
+        kpt->size = (float) rint(kpt->size + x.z * ds);
+        return true;
     }
-    return ok;
+    return false;
 }
+
+#define KeyPointMaxima_MaxCount 64000
+typedef struct KeyPointMaxima {
+    int count;
+    KeyPoint keyPoints[KeyPointMaxima_MaxCount];
+} KeyPointMaxima;
 
 kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t detImage1, read_only image2d_t detImage2,
                               read_only image2d_t traceImage, int3 sizes, global KeyPointMaxima* keypoints,
