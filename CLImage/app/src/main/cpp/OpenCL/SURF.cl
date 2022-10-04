@@ -15,6 +15,7 @@
 
 #define SURF_INTEGRAL_BIAS 255.0f
 
+// TODO: generate the wavelet parameters dynamically in the shader
 typedef struct SurfHF {
     int8 p_dx[2];
     float4 w_dx;
@@ -31,62 +32,44 @@ typedef struct SurfHF {
        and the redundant offsets themselves have been removed from the SurfHF struct.
  */
 
+/*
+ RANSAC interior point ratio - number of loops: 115 150 12
+  Transformation matrix parameter:
+ 0.992493 0.029114 80.062500
+-0.029900 0.996582 116.250000
+-0.000002 -0.000001 1
+ */
 float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
-    float r02 = read_imagef(inputImage, p + dp[0].lo.lo /* p0 */).x;
-    float r07 = read_imagef(inputImage, p + dp[0].lo.hi /* p1 */).x;
-    float r32 = read_imagef(inputImage, p + dp[0].hi.lo /* p2 */).x;
-    float r37 = read_imagef(inputImage, p + dp[0].hi.hi /* p3 */).x;
+    float r02 = read_imagef(inputImage, p + dp[0].lo.lo).x;
+    float r07 = read_imagef(inputImage, p + dp[0].lo.hi).x;
+    float r32 = read_imagef(inputImage, p + dp[0].hi.lo).x;
+    float r37 = read_imagef(inputImage, p + dp[0].hi.hi).x;
 
-    float r62 = read_imagef(inputImage, p + dp[1].lo.lo /* p2 */).x;
-    float r67 = read_imagef(inputImage, p + dp[1].lo.hi /* p3 */).x;
+    float r62 = read_imagef(inputImage, p + dp[1].lo.lo).x;
+    float r67 = read_imagef(inputImage, p + dp[1].lo.hi).x;
 
-    float r92 = read_imagef(inputImage, p + dp[1].hi.lo /* p2 */).x;
-    float r97 = read_imagef(inputImage, p + dp[1].hi.hi /* p3 */).x;
+    float r92 = read_imagef(inputImage, p + dp[1].hi.lo).x;
+    float r97 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    float d = SURF_INTEGRAL_BIAS * (r02 /* p0 */ +
-                                    r37 /* p3 */ -
-                                    r07 /* p1 */ -
-                                    r32 /* p2 */) * dw.x;
+    return SURF_INTEGRAL_BIAS * dw.x * ((r02 + r37 - r07 - r32) - 2 * (r32 + r67 - r37 - r62) + (r62 + r97 - r67 - r92));
 
-    d += SURF_INTEGRAL_BIAS * (r32 /* p0 */ +
-                               r67 /* p3 */ -
-                               r37 /* p1 */ -
-                               r62 /* p2 */) * dw.y;
-
-    d += SURF_INTEGRAL_BIAS * (r62 /* p0 */ +
-                               r97 /* p3 */ -
-                               r67 /* p1 */ -
-                               r92 /* p2 */) * dw.z;
-    return d;
+    // return SURF_INTEGRAL_BIAS * dw.x * (((r97 - r92) - (r07 - r02)) - 3 * ((r67 - r62) - (r37 - r32)));
 }
 
 float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
-    float r20 = read_imagef(inputImage, p + dp[0].lo.lo /* p0 */).x;
-    float r23 = read_imagef(inputImage, p + dp[0].lo.hi /* p1 */).x;
-    float r70 = read_imagef(inputImage, p + dp[0].hi.lo /* p2 */).x;
-    float r73 = read_imagef(inputImage, p + dp[0].hi.hi /* p3 */).x;
+    float r20 = read_imagef(inputImage, p + dp[0].lo.lo).x;
+    float r23 = read_imagef(inputImage, p + dp[0].lo.hi).x;
+    float r26 = read_imagef(inputImage, p + dp[1].lo.lo).x;
+    float r29 = read_imagef(inputImage, p + dp[1].hi.lo).x;
 
-    float r26 = read_imagef(inputImage, p + dp[1].lo.lo /* p1 */).x;
-    float r76 = read_imagef(inputImage, p + dp[1].lo.hi /* p3 */).x;
+    float r70 = read_imagef(inputImage, p + dp[0].hi.lo).x;
+    float r73 = read_imagef(inputImage, p + dp[0].hi.hi).x;
+    float r76 = read_imagef(inputImage, p + dp[1].lo.hi).x;
+    float r79 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    float r29 = read_imagef(inputImage, p + dp[1].hi.lo /* p1 */).x;
-    float r79 = read_imagef(inputImage, p + dp[1].hi.hi /* p3 */).x;
+    return SURF_INTEGRAL_BIAS * dw.x * ((r20 + r73 - r23 - r70) - 2 * (r23 + r76 - r26 - r73) + (r26 + r79 - r29 - r76));
 
-    float d = SURF_INTEGRAL_BIAS * (r20 /* p0 */ +
-                                    r73 /* p3 */ -
-                                    r23 /* p1 */ -
-                                    r70 /* p2 */) * dw.x;
-
-    d += SURF_INTEGRAL_BIAS * (r23 /* p0 */ +
-                               r76 /* p3 */ -
-                               r26 /* p1 */ -
-                               r73 /* p2 */) * dw.y;
-
-    d += SURF_INTEGRAL_BIAS * (r26 /* p0 */ +
-                               r79 /* p3 */ -
-                               r29 /* p1 */ -
-                               r76 /* p2 */) * dw.z;
-    return d;
+    // return SURF_INTEGRAL_BIAS * dw.x * (((r79 - r70) - (r29 - r20)) - 3 * ((r76 - r73) - (r26 - r23)));
 }
 
 float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], const float4 dw) {
