@@ -18,13 +18,8 @@
 // TODO: generate the wavelet parameters dynamically in the shader
 typedef struct SurfHF {
     int8 p_dx[2];
-    float4 w_dx;
-
     int8 p_dy[2];
-    float4 w_dy;
-
     int8 p_dxy[4];
-    float4 w_dxy;
 } SurfHF;
 
 /*
@@ -39,7 +34,7 @@ typedef struct SurfHF {
 -0.029900 0.996582 116.250000
 -0.000002 -0.000001 1
  */
-float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
+float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
     float r02 = read_imagef(inputImage, p + dp[0].lo.lo).x;
     float r07 = read_imagef(inputImage, p + dp[0].lo.hi).x;
     float r32 = read_imagef(inputImage, p + dp[0].hi.lo).x;
@@ -51,12 +46,12 @@ float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant i
     float r92 = read_imagef(inputImage, p + dp[1].hi.lo).x;
     float r97 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    return SURF_INTEGRAL_BIAS * dw.x * ((r02 + r37 - r07 - r32) - 2 * (r32 + r67 - r37 - r62) + (r62 + r97 - r67 - r92));
+    return SURF_INTEGRAL_BIAS * w * ((r02 + r37 - r07 - r32) - 2 * (r32 + r67 - r37 - r62) + (r62 + r97 - r67 - r92));
 
     // return SURF_INTEGRAL_BIAS * dw.x * (((r97 - r92) - (r07 - r02)) - 3 * ((r67 - r62) - (r37 - r32)));
 }
 
-float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], const float4 dw) {
+float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
     float r20 = read_imagef(inputImage, p + dp[0].lo.lo).x;
     float r23 = read_imagef(inputImage, p + dp[0].lo.hi).x;
     float r26 = read_imagef(inputImage, p + dp[1].lo.lo).x;
@@ -67,62 +62,64 @@ float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant i
     float r76 = read_imagef(inputImage, p + dp[1].lo.hi).x;
     float r79 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    return SURF_INTEGRAL_BIAS * dw.x * ((r20 + r73 - r23 - r70) - 2 * (r23 + r76 - r26 - r73) + (r26 + r79 - r29 - r76));
+    return SURF_INTEGRAL_BIAS * w * ((r20 + r73 - r23 - r70) - 2 * (r23 + r76 - r26 - r73) + (r26 + r79 - r29 - r76));
 
     // return SURF_INTEGRAL_BIAS * dw.x * (((r79 - r70) - (r29 - r20)) - 3 * ((r76 - r73) - (r26 - r23)));
 }
 
-float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], const float4 dw) {
-    const float w[4] = { dw.x, dw.y, dw.z, dw.w };
+float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], float w) {
+    const float w4[4] = { w, -w, -w, w };
     float d = 0;
 #pragma unroll
     for (int k = 0; k < 4; k++) {
         int8 v = dp[k];
-        d += SURF_INTEGRAL_BIAS * (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
-                                   read_imagef(inputImage, p + v.hi.hi /* p3 */).x -
-                                   read_imagef(inputImage, p + v.lo.hi /* p1 */).x -
-                                   read_imagef(inputImage, p + v.hi.lo /* p2 */).x) * w[k];
+        d += (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
+              read_imagef(inputImage, p + v.hi.hi /* p3 */).x -
+              read_imagef(inputImage, p + v.lo.hi /* p1 */).x -
+              read_imagef(inputImage, p + v.hi.lo /* p2 */).x) * w4[k];
     }
-    return d;
+    return SURF_INTEGRAL_BIAS * d;
 }
 
 kernel void calcDetAndTrace(read_only image2d_t sumImage,
                             write_only image2d_t detImage,
                             write_only image2d_t traceImage,
-                            int2 margin,
                             int sampleStep,
+                            float2 w,
+                            int2 margin,
                             constant SurfHF surfHFData[1]) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
-    const float dx = calcHaarPatternDx(sumImage, p, surfHFData->p_dx, surfHFData->w_dx);
-    const float dy = calcHaarPatternDy(sumImage, p, surfHFData->p_dy, surfHFData->w_dy);
-    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData->p_dxy, surfHFData->w_dxy);
+    const float dx = calcHaarPatternDx(sumImage, p, surfHFData->p_dx, w.x);
+    const float dy = calcHaarPatternDy(sumImage, p, surfHFData->p_dy, w.x);
+    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData->p_dxy, w.y);
 
     write_imagef(detImage, imageCoordinates + margin, dx * dy - 0.81f * dxy * dxy);
     write_imagef(traceImage, imageCoordinates + margin, dx + dy);
 }
 
-float2 detAndTrace(read_only image2d_t sumImage, const int2 p, constant SurfHF *surfHFData) {
-    const float dx = calcHaarPatternDx(sumImage, p, surfHFData[0].p_dx, surfHFData[0].w_dx);
-    const float dy = calcHaarPatternDy(sumImage, p, surfHFData[0].p_dy, surfHFData[0].w_dy);
-    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData[0].p_dxy, surfHFData[0].w_dxy);
+float2 detAndTrace(read_only image2d_t sumImage, const int2 p, constant SurfHF *surfHFData, const float2 w) {
+    const float dx = calcHaarPatternDx(sumImage, p, surfHFData[0].p_dx, w.x);
+    const float dy = calcHaarPatternDy(sumImage, p, surfHFData[0].p_dy, w.x);
+    const float dxy = calcHaarPatternDxy(sumImage, p, surfHFData[0].p_dxy, w.y);
     return (float2) (dx * dy - 0.81f * dxy * dxy, dx + dy);
 }
 
 kernel void calcDetAndTrace4(read_only image2d_t sumImage,
                              write_only image2d_t detImage0, write_only image2d_t detImage1, write_only image2d_t detImage2, write_only image2d_t detImage3,
                              write_only image2d_t traceImage0, write_only image2d_t traceImage1, write_only image2d_t traceImage2, write_only image2d_t traceImage3,
-                             int4 margin,
                              int sampleStep,
+                             float8 w,
+                             int4 margin,
                              constant SurfHF surfHFData[4]) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
-    float2 detAndTrace0 = detAndTrace(sumImage, p, &surfHFData[0]);
-    float2 detAndTrace1 = detAndTrace(sumImage, p, &surfHFData[1]);
-    float2 detAndTrace2 = detAndTrace(sumImage, p, &surfHFData[2]);
-    float2 detAndTrace3 = detAndTrace(sumImage, p, &surfHFData[3]);
+    float2 detAndTrace0 = detAndTrace(sumImage, p, &surfHFData[0], w.lo.lo);
+    float2 detAndTrace1 = detAndTrace(sumImage, p, &surfHFData[1], w.lo.hi);
+    float2 detAndTrace2 = detAndTrace(sumImage, p, &surfHFData[2], w.hi.lo);
+    float2 detAndTrace3 = detAndTrace(sumImage, p, &surfHFData[3], w.hi.hi);
 
     write_imagef(detImage0, imageCoordinates + margin.x, (float4)(detAndTrace0.x, 0, 0, 0));
     write_imagef(traceImage0, imageCoordinates + margin.x, (float4)(detAndTrace0.y, 0, 0, 0));
@@ -136,17 +133,6 @@ kernel void calcDetAndTrace4(read_only image2d_t sumImage,
     write_imagef(detImage3, imageCoordinates + margin.w, (float4)(detAndTrace3.x, 0, 0, 0));
     write_imagef(traceImage3, imageCoordinates + margin.w, (float4)(detAndTrace3.y, 0, 0, 0));
 }
-
-typedef struct KeyPoint {
-    struct {
-        float x, y;
-    } pt;
-    float size;
-    float angle;
-    float response;
-    int octave;
-    int class_id;
-} KeyPoint;
 
 inline float determinant(const float3 A0, const float3 A1, const float3 A2) {
     float3 D = A0 * (A1.yxx * A2.zzy - A1.zzy * A2.yxx);
@@ -165,6 +151,17 @@ inline float3 solve3x3(const float3 A[3], const float3 B) {
         determinant(A[0], A[1], B)
     ) / det;
 }
+
+typedef struct KeyPoint {
+    struct {
+        float x, y;
+    } pt;
+    float size;
+    float angle;
+    float response;
+    int octave;
+    int class_id;
+} KeyPoint;
 
 #define N9(_idx, _off_y, _off_x) read_imagef(detImage ## _idx, p + (int2) (_off_x, _off_y)).x
 

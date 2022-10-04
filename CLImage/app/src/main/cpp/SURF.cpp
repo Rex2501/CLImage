@@ -114,12 +114,12 @@ static inline float calcHaarPattern(const gls::image<float>& sum, const gls::poi
     for (int k = 0; k < N; k++) {
         const auto& fk = f[k];
 
-        d += SURF_INTEGRAL_BIAS * (sum[p.y + fk.p[0].y][p.x + fk.p[0].x] +
-                                   sum[p.y + fk.p[3].y][p.x + fk.p[3].x] -
-                                   sum[p.y + fk.p[1].y][p.x + fk.p[1].x] -
-                                   sum[p.y + fk.p[2].y][p.x + fk.p[2].x]) * fk.w;
+        d += (sum[p.y + fk.p[0].y][p.x + fk.p[0].x] +
+              sum[p.y + fk.p[3].y][p.x + fk.p[3].x] -
+              sum[p.y + fk.p[1].y][p.x + fk.p[1].x] -
+              sum[p.y + fk.p[2].y][p.x + fk.p[2].x]) * fk.w;
     }
-    return d;
+    return SURF_INTEGRAL_BIAS * d;
 }
 
 template <size_t N>
@@ -141,12 +141,12 @@ static void resizeHaarPattern(const int src[N][5], std::array<SurfHF, N>* dst, i
 }
 
 static void calcDetAndTrace(const gls::image<float>& sum,
-                     gls::image<float>* det,
-                     gls::image<float>* trace,
-                     int x, int y, int sampleStep,
-                     const std::array<SurfHF, 3>& Dx,
-                     const std::array<SurfHF, 3>& Dy,
-                     const std::array<SurfHF, 4>& Dxy) {
+                            gls::image<float>* det,
+                            gls::image<float>* trace,
+                            int x, int y, int sampleStep,
+                            const std::array<SurfHF, 3>& Dx,
+                            const std::array<SurfHF, 3>& Dy,
+                            const std::array<SurfHF, 4>& Dxy) {
     const gls::point p = { x * sampleStep, y * sampleStep };
 
     float dx = calcHaarPattern(sum, p, Dx);
@@ -177,28 +177,21 @@ static void calcDetAndTrace(const gls::image<float>& sum,
  * Return value is 1 if interpolation was successful, 0 on failure.
  */
 
+inline float determinant(const gls::Matrix<3, 3>& A) {
+    return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
+           A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+           A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+}
+
 inline bool solve3x3(const gls::Matrix<3, 3>& A, const gls::Vector<3>& b, gls::Vector<3>* x) {
-    float det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
-                A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
-                A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+    float det = determinant(A);
 
     if (det != 0) {
-        float invdet = 1.0f / det;
-        (*x)[0] = invdet *
-               (b[0]    * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
-                A[0][1] * (b[1]    * A[2][2] - A[1][2] * b[2]   ) +
-                A[0][2] * (b[1]    * A[2][1] - A[1][1] * b[2]   ));
-
-        (*x)[1] = invdet *
-               (A[0][0] * (b[1]    * A[2][2] - A[1][2] * b[2]   ) -
-                b[0]    * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
-                A[0][2] * (A[1][0] * b[2]    - b[1]    * A[2][0]));
-
-        (*x)[2] = invdet *
-               (A[0][0] * (A[1][1] * b[2]    - b[1]    * A[2][1]) -
-                A[0][1] * (A[1][0] * b[2]    - b[1]    * A[2][0]) +
-                b[0]    * (A[1][0] * A[2][1] - A[1][1] * A[2][0]));
-
+        return gls::Vector<3> {
+            determinant({b,    A[1], A[2]}),
+            determinant({A[0], b,    A[2]}),
+            determinant({A[0], A[1], b})
+        } / det;
         return true;
     }
     return false;
@@ -236,13 +229,8 @@ static bool interpolateKeypoint(const std::array<gls::image<float>, 3>& N9, int 
 
 struct clSurfHF {
     cl_int8 p_dx[2];
-    cl_float4 w_dx;
-
     cl_int8 p_dy[2];
-    cl_float4 w_dy;
-
     cl_int8 p_dxy[4];
-    cl_float4 w_dxy;
 
     clSurfHF(const std::array<SurfHF, 3>& Dx, const std::array<SurfHF, 3>& Dy, const std::array<SurfHF, 4>& Dxy) {
         /*
@@ -251,16 +239,13 @@ struct clSurfHF {
 
         p_dx[0] = { Dx[0].p[0].x, Dx[0].p[0].y, Dx[0].p[1].x, Dx[0].p[1].y, Dx[0].p[2].x, Dx[0].p[2].y, Dx[0].p[3].x, Dx[0].p[3].y };
         p_dx[1] = { Dx[1].p[2].x, Dx[1].p[2].y, Dx[1].p[3].x, Dx[1].p[3].y, Dx[2].p[2].x, Dx[2].p[2].y, Dx[2].p[3].x, Dx[2].p[3].y };
-        w_dx = { Dx[0].w, Dx[1].w, Dx[2].w, 0 };
 
         p_dy[0] = { Dy[0].p[0].x, Dy[0].p[0].y, Dy[0].p[1].x, Dy[0].p[1].y, Dy[0].p[2].x, Dy[0].p[2].y, Dy[0].p[3].x, Dy[0].p[3].y };
         p_dy[1] = { Dy[1].p[1].x, Dy[1].p[1].y, Dy[1].p[3].x, Dy[1].p[3].y, Dy[2].p[1].x, Dy[2].p[1].y, Dy[2].p[3].x, Dy[2].p[3].y };
-        w_dy = { Dy[0].w, Dy[1].w, Dy[2].w, 0 };
 
         for (int i = 0; i < 4; i++) {
             p_dxy[i] = { Dxy[i].p[0].x, Dxy[i].p[0].y, Dxy[i].p[1].x, Dxy[i].p[1].y, Dxy[i].p[2].x, Dxy[i].p[2].y, Dxy[i].p[3].x, Dxy[i].p[3].y };
         }
-        w_dxy = { Dxy[0].w, Dxy[1].w, Dxy[2].w, Dxy[3].w };
     }
 };
 
@@ -355,15 +340,14 @@ void calcLayerDetAndTrace(const gls::image<float>& sum, int size, int sampleStep
     }
 }
 
-void findMaximaInLayer(const gls::image<float>& sum,
-                             const std::array<gls::image<float>*, 3>& dets, const gls::image<float>& trace,
-                             const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
-                             float hessianThreshold, int sampleStep, std::mutex& keypointsMutex) {
+void findMaximaInLayer(int width, int height,
+                       const std::array<gls::image<float>*, 3>& dets, const gls::image<float>& trace,
+                       const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
+                       float hessianThreshold, int sampleStep, std::mutex& keypointsMutex) {
     const int size = sizes[1];
 
-    // The integral image 'sum' is one pixel bigger than the source image
-    const int layer_height = (sum.height - 1) / sampleStep;
-    const int layer_width = (sum.width - 1) / sampleStep;
+    const int layer_height = width / sampleStep;
+    const int layer_width = height / sampleStep;
 
     // Ignore pixels without a 3x3x3 neighbourhood in the layer above
     const int margin = (sizes[2] / 2) / sampleStep + 1;
@@ -814,7 +798,7 @@ void SURFFind(const gls::image<float>& sum,
 
             auto traceImage = traces[layer].get();
 
-            findMaximaInLayer(sum, { dets0, dets1, dets2 },
+            findMaximaInLayer(sum.width - 1, sum.height - 1, { dets0, dets1, dets2 },
                               *traceImage, { sizes[layer-1], sizes[layer], sizes[layer+1] },
                               keypoints, octave, hessianThreshold, sampleSteps[layer], keypointsMutex);
         });
@@ -874,8 +858,7 @@ private:
                            const int sampleStep,
                            const std::array<DetAndTraceHaarPattern, 4>& haarPattern);
 
-    void clFindMaximaInLayer(const gls::cl_image_2d<float>& sumImage,
-                             const std::array<const gls::cl_image_2d<float>*, 3>& dets,
+    void clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
                              const gls::cl_image_2d<float>& traceImage,
                              const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
                              float hessianThreshold, int sampleStep);
@@ -885,8 +868,7 @@ private:
                const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
                const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces);
 
-    void Find(const gls::cl_image_2d<float>& sum,
-              const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
+    void Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
               const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces,
               const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
               const std::vector<int>& middleIndices, std::vector<KeyPoint>* keypoints,
@@ -1006,8 +988,9 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
                                     cl::Image2D,  // detImage
                                     cl::Image2D,  // traceImage
-                                    cl_int2,      // margin
                                     int,          // sampleStep
+                                    cl_float2,    // w
+                                    cl_int2,      // margin
                                     cl::Buffer    // surfHFData
                                     >(program, "calcDetAndTrace");
 
@@ -1028,7 +1011,7 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
            cl::EnqueueArgs(cl::NDRange(margin_crop.width, margin_crop.height), cl::NDRange(32, 32)),
 #endif
            sumImage.getImage2D(), detImage->getImage2D(), traceImage->getImage2D(),
-           { margin_crop.x, margin_crop.y }, sampleStep, _surfHFDataBuffer);
+           sampleStep, { haarPattern.Dx[0].w, haarPattern.Dxy[0].w }, { margin_crop.x, margin_crop.y }, _surfHFDataBuffer);
 }
 
 void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
@@ -1043,8 +1026,9 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // sumImage
                                     cl::Image2D, cl::Image2D, cl::Image2D, cl::Image2D,  // detImage
                                     cl::Image2D, cl::Image2D, cl::Image2D, cl::Image2D,  // traceImage
+                                    cl_int,       // sampleStep
+                                    cl_float8,    // w
                                     cl_int4,      // margin
-                                    cl_int,      // sampleStep
                                     cl::Buffer    // surfHFData
                                     >(program, "calcDetAndTrace4");
 
@@ -1069,8 +1053,15 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
            sumImage.getImage2D(),
            detImage[0]->getImage2D(), detImage[1]->getImage2D(), detImage[2]->getImage2D(), detImage[3]->getImage2D(),
            traceImage[0]->getImage2D(), traceImage[1]->getImage2D(), traceImage[2]->getImage2D(), traceImage[3]->getImage2D(),
+           sampleStep,
+           {
+               haarPattern[0].Dx[0].w, haarPattern[0].Dxy[0].w,
+               haarPattern[1].Dx[0].w, haarPattern[1].Dxy[0].w,
+               haarPattern[2].Dx[0].w, haarPattern[2].Dxy[0].w,
+               haarPattern[3].Dx[0].w, haarPattern[3].Dxy[0].w
+           },
            { haarPattern[0].margin_crop.x, haarPattern[1].margin_crop.x, haarPattern[2].margin_crop.x, haarPattern[3].margin_crop.x },
-           sampleStep, _surfHFDataBuffer);
+           _surfHFDataBuffer);
 }
 
 void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
@@ -1171,8 +1162,7 @@ typedef struct KeyPointMaxima {
     KeyPoint keyPoints[MaxCount];
 } KeyPointMaxima;
 
-void SURF::clFindMaximaInLayer(const gls::cl_image_2d<float>& sumImage,
-                               const std::array<const gls::cl_image_2d<float>*, 3>& dets,
+void SURF::clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
                                const gls::cl_image_2d<float>& traceImage,
                                const std::array<int, 3>& sizes,
                                std::vector<KeyPoint>* keypoints,
@@ -1197,9 +1187,8 @@ void SURF::clFindMaximaInLayer(const gls::cl_image_2d<float>& sumImage,
         _keyPointsBuffer = cl::Buffer(CL_MEM_READ_WRITE, sizeof(KeyPointMaxima));
     }
 
-    // The integral image 'sum' is one pixel bigger than the source image
-    const int layer_height = (sumImage.height - 1) / sampleStep;
-    const int layer_width = (sumImage.width - 1) / sampleStep;
+    const int layer_height = _height / sampleStep;
+    const int layer_width = _width / sampleStep;
 
     // Ignore pixels without a 3x3x3 neighbourhood in the layer above
     const int margin = (sizes[2] / 2) / sampleStep + 1;
@@ -1217,8 +1206,7 @@ void SURF::clFindMaximaInLayer(const gls::cl_image_2d<float>& sumImage,
            margin, octave, hessianThreshold, sampleStep);
 }
 
-void SURF::Find(const gls::cl_image_2d<float>& sum,
-                const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
+void SURF::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
                 const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces,
                 const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
                 const std::vector<int>& middleIndices, std::vector<KeyPoint>* keypoints,
@@ -1240,7 +1228,7 @@ void SURF::Find(const gls::cl_image_2d<float>& sum,
 
         const auto traceImage = traces[layer].get();
 
-        clFindMaximaInLayer(sum, detImages, *traceImage,
+        clFindMaximaInLayer(detImages, *traceImage,
                             { sizes[layer-1], sizes[layer], sizes[layer+1] },
                             keypoints, octave, hessianThreshold, sampleSteps[layer]);
     }
@@ -1306,7 +1294,7 @@ void SURF::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_
     Build(sum, sizes, sampleSteps, _dets, _traces);
 
     // Find maxima in the determinant of the hessian
-    Find(*sum[0], _dets, _traces, sizes, sampleSteps, middleIndices, keypoints, nOctaveLayers, hessianThreshold);
+    Find(_dets, _traces, sizes, sampleSteps, middleIndices, keypoints, nOctaveLayers, hessianThreshold);
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
