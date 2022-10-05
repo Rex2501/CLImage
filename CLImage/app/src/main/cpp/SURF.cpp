@@ -734,12 +734,12 @@ void descriptor(const gls::image<float>& srcImg,
     }
 }
 
-template <int N = 4>
-std::array<gls::cl_image_2d<float>::unique_ptr, N> sumImageStack(cl::Context context, int width, int height) {
-    std::array<gls::cl_image_2d<float>::unique_ptr, N> result;
+template <typename T, int N = 4>
+std::array<typename gls::cl_image_2d<T>::unique_ptr, N> sumImageStack(cl::Context context, int width, int height) {
+    std::array<typename gls::cl_image_2d<T>::unique_ptr, N> result;
     for (int i = 0; i < N; i++) {
         int step = 1 << i;
-        result[i] = std::make_unique<gls::cl_image_buffer_2d<float>>(context, 1 + (width - 1) / step, 1 + (height - 1) / step);
+        result[i] = std::make_unique<gls::cl_image_buffer_2d<T>>(context, 1 + (width - 1) / step, 1 + (height - 1) / step);
     }
     return result;
 }
@@ -860,7 +860,7 @@ private:
 
     void clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
                              const gls::cl_image_2d<float>& traceImage,
-                             const std::array<int, 3>& sizes, std::vector<KeyPoint>* keypoints, int octave,
+                             const std::array<int, 3>& sizes, int octave,
                              float hessianThreshold, int sampleStep);
 
     void Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
@@ -919,7 +919,8 @@ public:
 
     void detectAndCompute(const gls::image<float>& img,
                           std::vector<KeyPoint>* keypoints,
-                          gls::image<float>::unique_ptr* _descriptors);
+                          gls::image<float>::unique_ptr* _descriptors,
+                          gls::size sections = { 1, 1 });
 
     void clMatchKeyPoints(const gls::image<float>& descriptor1,
                           const gls::image<float>& descriptor2,
@@ -936,7 +937,7 @@ void SURF::clIntegral(const gls::image<float>& img,
         _integralTmpBuffer = cl::Buffer(CL_MEM_READ_WRITE, tmpSize.width * tmpSize.height * sizeof(float));
     }
     if (_integralInputImage == nullptr) {
-        _integralInputImage = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(), _width, _height);
+        _integralInputImage = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(), img.width, img.height);
     }
     _integralInputImage->copyPixelsFrom(img);
 
@@ -1076,7 +1077,7 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
     assert(_nOctaves * layers == N);
 
     for (int octave = 0; octave < _nOctaves; octave++) {
-#if __ANDROID__
+#if false // __ANDROID__
         const int i = octave * layers;
 
         std::array<DetAndTraceHaarPattern, 4> haarPatterns = {
@@ -1165,7 +1166,6 @@ typedef struct KeyPointMaxima {
 void SURF::clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
                                const gls::cl_image_2d<float>& traceImage,
                                const std::array<int, 3>& sizes,
-                               std::vector<KeyPoint>* keypoints,
                                int octave, float hessianThreshold, int sampleStep) {
     // Load the shader source
     const auto program = _glsContext->loadProgram("SURF");
@@ -1211,9 +1211,6 @@ void SURF::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
                 const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
                 const std::vector<int>& middleIndices, std::vector<KeyPoint>* keypoints,
                 int nOctaveLayers, float hessianThreshold) {
-    std::mutex keypointsMutex;
-    ThreadPool threadPool(8);
-
     int M = (int) middleIndices.size();
     std::cout << "enqueueing " << M << " findMaximaInLayer" << std::endl;
     for (int i = 0; i < M; i++) {
@@ -1230,7 +1227,7 @@ void SURF::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
 
         clFindMaximaInLayer(detImages, *traceImage,
                             { sizes[layer-1], sizes[layer], sizes[layer+1] },
-                            keypoints, octave, hessianThreshold, sampleSteps[layer]);
+                            octave, hessianThreshold, sampleSteps[layer]);
     }
 
     // Collect results
@@ -1269,8 +1266,6 @@ void SURF::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_
     std::vector<int> sizes(nTotalLayers);
     std::vector<int> sampleSteps(nTotalLayers);
     std::vector<int> middleIndices(nMiddleLayers);
-
-    keypoints->clear();
 
     // Calculate properties of each layer
     int index = 0, middleIndex = 0, step = SAMPLE_STEP0;
@@ -1327,62 +1322,87 @@ double timeDiff(std::chrono::steady_clock::time_point t_start,
 
 void SURF::detectAndCompute(const gls::image<float>& img,
                             std::vector<KeyPoint>* keypoints,
-                            gls::image<float>::unique_ptr* _descriptors) {
-    bool doDescriptors = _descriptors != nullptr;
+                            gls::image<float>::unique_ptr* descriptors,
+                            gls::size sections) {
+    std::vector<gls::rectangle> tiles(sections.width * sections.height);
 
-    auto sum = sumImageStack(_glsContext->clContext(), img.width + 1, img.height + 1);
-    clIntegral(img, sum, SURF_INTEGRAL_BIAS);
+    const int tile_width = img.width / sections.width;
+    const int tile_height = img.height / sections.height;
 
-    fastHessianDetector(sum, keypoints, _nOctaves, _nOctaveLayers, _hessianThreshold);
+    // TODO: Add a skirt overlap between tiles
+    int y_pos = 0;
+    for (int j = 0; j < sections.height; j++) {
+        int x_pos = 0;
+        for (int i = 0; i < sections.width; i++) {
+            tiles[j * sections.width + i] = gls::rectangle({x_pos, y_pos, tile_width, tile_height});
+            x_pos += tile_width;
+        }
+        y_pos += tile_height;
+    }
 
-    int N = (int)keypoints->size();
+    std::vector<gls::image<float>::unique_ptr> allDescriptors;
 
-    auto descriptors = doDescriptors ? std::make_unique<gls::image<float>>(64, N) : nullptr;
+    auto sum = sumImageStack<float>(_glsContext->clContext(), tile_width + 1, tile_height + 1);
 
-    std::cout << "doDescriptors: " << std::endl;
+    for (const auto& tile : tiles) {
+        const auto tileImage = gls::image<float>(img, tile);
 
-    auto t_start_descriptor = std::chrono::high_resolution_clock::now();
+        clIntegral(tileImage, sum, SURF_INTEGRAL_BIAS);
 
-    // we call SURFInvoker in any case, even if we do not need descriptors,
-    // since it computes orientation of each feature.
-    printf("mapping intregral images...\n");
+        std::vector<KeyPoint> tileKeypoints;
 
-    const auto integralSumCpu = sum[0]->mapImage(CL_MAP_READ);
+        fastHessianDetector(sum, &tileKeypoints, _nOctaves, _nOctaveLayers, _hessianThreshold);
 
-    descriptor(img, integralSumCpu, keypoints, doDescriptors ? descriptors.get() : nullptr);
+        int N = (int) tileKeypoints.size();
 
-    sum[0]->unmapImage(integralSumCpu);
+        std::cout << "tileKeypoints: " << N << std::endl;
 
-    printf("unmapping intregral images...\n");
+        auto tileDescriptors = descriptors != nullptr ? std::make_unique<gls::image<float>>(64, N) : nullptr;
 
-    auto t_end_descriptor = std::chrono::high_resolution_clock::now();
-    printf("--> descriptor Time: %.2fms\n", timeDiff(t_start_descriptor, t_end_descriptor));
+        auto t_start_descriptor = std::chrono::high_resolution_clock::now();
 
-    // remove keypoints that were marked for deletion
-    int j = 0;
-    for (int i = 0; i < N; i++) {
-        if ((*keypoints)[i].size > 0) {
-            if (i > j) {
-                (*keypoints)[j] = (*keypoints)[i];
-                if (doDescriptors) {
-                    memcpy((*descriptors)[j], (*descriptors)[i], 64 * sizeof(float));
-                }
+        const auto integralSumCpu = sum[0]->mapImage(CL_MAP_READ);
+
+        // we call SURFInvoker in any case, even if we do not need descriptors,
+        // since it computes orientation of each feature.
+        descriptor(tileImage, integralSumCpu, &tileKeypoints, descriptors != nullptr ? tileDescriptors.get() : nullptr);
+
+        sum[0]->unmapImage(integralSumCpu);
+
+        for (auto kp : tileKeypoints) {
+            // Translate keypoints to their full image locations
+            keypoints->push_back(KeyPoint(kp.pt + Point2f(tile.x, tile.y), kp.size, kp.angle, kp.response, kp.octave, kp.class_id));
+        }
+
+        if (descriptors != nullptr) {
+            allDescriptors.push_back(std::move(tileDescriptors));
+        }
+
+        auto t_end_descriptor = std::chrono::high_resolution_clock::now();
+        printf("--> descriptor Time: %.2fms\n", timeDiff(t_start_descriptor, t_end_descriptor));
+    }
+
+    if (descriptors != nullptr) {
+        if (allDescriptors.size() == 1) {
+            *descriptors = std::move(allDescriptors[0]);
+        } else {
+            int descriptorsCount = 0;
+            for (const auto& qd : allDescriptors) {
+                descriptorsCount += qd->height;
             }
-            j++;
+            *descriptors = std::make_unique<gls::image<float>>(64, descriptorsCount);
+
+            int idx = 0;
+            for (auto& qd : allDescriptors) {
+                memcpy((void *) (**descriptors)[idx],
+                       (void *) (qd)->pixels().data(),
+                       (qd)->pixels().size() * sizeof(float));
+                idx += qd->height;
+            }
         }
     }
 
-    if (N > j) {
-        std::cout << "resizing descriptors - N: " << N << ", j: " << j << std::endl;
-        N = j;
-        keypoints->resize(N);
-    }
-
-    if (doDescriptors) {
-        std::cout << "allocating _descriptors" << std::endl;
-        *_descriptors = std::make_unique<gls::image<float>>(64, N);
-        memcpy((**_descriptors)[0], (*descriptors)[0], N * 64 * sizeof(float));
-    }
+    std::cout << "Collected " << keypoints->size() << " keypoints and " << (**descriptors).height << " descriptors" << std::endl;
 }
 
 void matchKeyPoints(const gls::image<float>& descriptor1,
@@ -1486,8 +1506,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     std::vector<KeyPoint> keypoints1, keypoints2;
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, &keypoints1, &descriptor1);
-    surf.detectAndCompute(srcIMAGE2, &keypoints2, &descriptor2);
+    surf.detectAndCompute(srcIMAGE1, &keypoints1, &descriptor1 /*, {2, 2} */);
+    surf.detectAndCompute(srcIMAGE2, &keypoints2, &descriptor2 /*, {2, 2} */);
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));

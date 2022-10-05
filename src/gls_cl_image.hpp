@@ -62,6 +62,16 @@ inline cl::ImageFormat cl_image<float>::ImageFormat() {
     return cl::ImageFormat(CL_R, CL_FLOAT);
 }
 
+template <>
+inline cl::ImageFormat cl_image<std::array<float, 2>>::ImageFormat() {
+    return cl::ImageFormat(CL_RG, CL_FLOAT);
+}
+
+template <>
+inline cl::ImageFormat cl_image<std::array<float, 4>>::ImageFormat() {
+    return cl::ImageFormat(CL_RGBA, CL_FLOAT);
+}
+
 #if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
 template <>
 inline cl::ImageFormat cl_image<gls::float16_t>::ImageFormat() {

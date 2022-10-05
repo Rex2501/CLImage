@@ -135,8 +135,8 @@ kernel void calcDetAndTrace4(read_only image2d_t sumImage,
 }
 
 inline float determinant(const float3 A0, const float3 A1, const float3 A2) {
-    float3 D = A0 * (A1.yxx * A2.zzy - A1.zzy * A2.yxx);
-    return D.x - D.y + D.z;
+    // The cross product computes the 2x2 sub-determinants
+    return dot(A0, cross(A1, A2));
 }
 
 // Simple Cramer's rule solver

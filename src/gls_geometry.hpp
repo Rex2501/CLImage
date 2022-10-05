@@ -85,6 +85,34 @@ struct basic_point {
         y /= right;
         return *this;
     }
+
+    basic_point<T> operator + (const basic_point<T>& other) const {
+        basic_point<T> result = {
+            x + other.x,
+            y + other.y
+        };
+        return result;
+    }
+
+    basic_point<T>& operator += (const basic_point<T>& other) {
+        x += other.x;
+        y += other.y;
+        return *this;
+    }
+
+    basic_point<T> operator - (const basic_point<T>& other) const {
+        basic_point<T> result = {
+            x - other.x,
+            y - other.y
+        };
+        return result;
+    }
+
+    basic_point<T>& operator -= (const basic_point<T>& other) {
+        x -= other.x;
+        y -= other.y;
+        return *this;
+    }
 };
 
 template <typename T>

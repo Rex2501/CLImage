@@ -772,7 +772,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
-				LLVM_LTO = YES;
+				LLVM_LTO = NO;
 				MACOSX_DEPLOYMENT_TARGET = 12.3;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -790,7 +790,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/CLImageTest/libs",
 				);
-				LLVM_LTO = YES;
+				LLVM_LTO = NO;
 				MACOSX_DEPLOYMENT_TARGET = 12.3;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
