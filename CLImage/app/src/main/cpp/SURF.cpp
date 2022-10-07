@@ -706,20 +706,23 @@ struct SURFInvoker {
     }
 
     void run() {
-        const int threads = 8;
-        ThreadPool threadPool(threads);
-
         const int K = (int) keypoints->size();
-        const int ranges = (int) std::ceil((float) K / threads);
 
-        std::cout << "enqueueing " << threads << " computeRange" << std::endl;
-        for (int rr = 0; rr < ranges; rr++) {
-            int k1 = ranges * rr;
-            int k2 = std::min(ranges * (rr + 1), K);
+        if (K > 32) {
+            const int threads = 8;
+            ThreadPool threadPool(threads);
 
-            threadPool.enqueue([this, k1, k2](){
-                computeRange(k1, k2);
-            });
+            const int ranges = (int) std::ceil((float) K / threads);
+            for (int rr = 0; rr < ranges; rr++) {
+                int k1 = ranges * rr;
+                int k2 = std::min(ranges * (rr + 1), K);
+
+                threadPool.enqueue([this, k1, k2](){
+                    computeRange(k1, k2);
+                });
+            }
+        } else {
+            computeRange(0, K);
         }
     }
 };
@@ -1578,17 +1581,17 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     auto t_surf = std::chrono::high_resolution_clock::now();
     printf("--> SURF Creation Time: %.2fms\n", timeDiff(t_start, t_surf));
 
-    std::vector<KeyPoint> keypoints1, keypoints2;
+    auto keypoints1 = std::make_unique<std::vector<KeyPoint>>();
+    auto keypoints2 = std::make_unique<std::vector<KeyPoint>>();
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, &keypoints1, &descriptor1, {2, 4});
-    surf.detectAndCompute(srcIMAGE2, &keypoints2, &descriptor2, {2, 4});
+    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {2, 4});
+    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {2, 4});
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
 
-    printf(" ---------- \n Detected feature points: %ld, %ld\n",
-           keypoints1.size(), keypoints2.size());
+    printf(" ---------- \n Detected feature points: %ld, %ld\n", keypoints1->size(), keypoints2->size());
 
     // (4) Match feature points
     std::vector<DMatch> matchedPoints;
@@ -1607,8 +1610,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     matchpoints1->resize(matchedPoints.size());
     matchpoints2->resize(matchedPoints.size());
     for (int i = 0; i < matchedPoints.size(); i++) {
-        (*matchpoints1)[i] = keypoints1[matchedPoints[i].queryIdx].pt;
-        (*matchpoints2)[i] = keypoints2[matchedPoints[i].trainIdx].pt;
+        (*matchpoints1)[i] = (*keypoints1)[matchedPoints[i].queryIdx].pt;
+        (*matchpoints2)[i] = (*keypoints2)[matchedPoints[i].trainIdx].pt;
     }
 
     auto t_end = std::chrono::high_resolution_clock::now();

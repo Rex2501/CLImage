@@ -64,10 +64,14 @@ void testSURF() {
 
     bool success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
     assert(matchpoints1.size() == matchpoints2.size());
-    printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
+    printf("Feature Dection 1 successful: %d, matched %d features\n", success, (int) matchpoints1.size());
+
+    success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
+    assert(matchpoints1.size() == matchpoints2.size());
+    printf("Feature Dection 2 successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
     std::vector<float> transParameter;
-    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
+    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, std::min((int) matchpoints1.size(), 300));
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();

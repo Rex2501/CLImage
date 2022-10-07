@@ -22,8 +22,6 @@ struct KeyPoint {
     int octave;
     int class_id;
 
-    // ((float)j, (float)(i-1), 7.f, -1, (float)score)
-
     KeyPoint()
         : pt(0,0), size(0), angle(-1), response(0), octave(0), class_id(-1) {}
 
@@ -32,6 +30,12 @@ struct KeyPoint {
 
     KeyPoint(float x, float y, float _size, float _angle=-1, float _response=0, int _octave=0, int _class_id=-1)
         : pt(x, y), size(_size), angle(_angle), response(_response), octave(_octave), class_id(_class_id) {}
+
+    bool operator == (const KeyPoint& other) const {
+        return pt == other.pt && size == other.size &&
+               angle == other.angle && response == other.response &&
+               octave == other.octave && class_id == other.class_id;
+    }
 };
 
 inline int cvRound(float x) {
