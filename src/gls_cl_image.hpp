@@ -143,14 +143,14 @@ class cl_image_2d : public cl_image<T> {
 
     void copyPixelsFrom(const image<T>& other) const {
         assert(other.width == image<T>::width && other.height == image<T>::height);
-        auto cpuImage = mapImage(CL_MAP_READ);
+        auto cpuImage = mapImage(CL_MAP_WRITE);
         copyPixels(&cpuImage, other);
         unmapImage(cpuImage);
     }
 
     void copyPixelsTo(image<T>* other) const {
         assert(other->width == image<T>::width && other->height == image<T>::height);
-        auto cpuImage = mapImage(CL_MAP_WRITE);
+        auto cpuImage = mapImage(CL_MAP_READ);
         copyPixels(other, cpuImage);
         unmapImage(cpuImage);
     }
