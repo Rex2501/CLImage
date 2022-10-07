@@ -37,11 +37,11 @@
 void testSURF() {
     auto glsContext = new gls::OpenCLContext("");
 
-    const auto srcImg1_full = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8601.jpg");
-    const auto srcImg2_full = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8603.jpg");
+    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8601.jpg");
+    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8603.jpg");
 
-    const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
-    const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
+//    const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
+//    const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
 
     gls::image<float> srcImg1(srcImg1_->width, srcImg1_->height);
     gls::image<float> srcImg2(srcImg2_->width, srcImg2_->height);
@@ -58,17 +58,16 @@ void testSURF() {
         *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
     });
 
-    std::vector<gls::Point2f> matchpoints1;
-    std::vector<gls::Point2f> matchpoints2;
+    std::vector<gls::Point2f> matchpoints1, matchpoints2;
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    int matches_num = 150;
-    bool isFeatureDection = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2, matches_num);
-    printf("isFeatureDection: %d\n", isFeatureDection);
+    bool success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
+    assert(matchpoints1.size() == matchpoints2.size());
+    printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
     std::vector<float> transParameter;
-    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, 2 * 150);
+    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();

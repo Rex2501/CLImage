@@ -1298,7 +1298,7 @@ void SURF::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_
     sort(keypoints->begin(), keypoints->end(), KeypointGreater());
 }
 
-float L1Norm(float* p1, float* p2, int n) {
+static inline float L1Norm(float* p1, float* p2, int n) {
     float sum = 0;
     for (int i = 0; i < n; i++) {
         sum += fabs(p1[i] - p2[i]);
@@ -1306,7 +1306,7 @@ float L1Norm(float* p1, float* p2, int n) {
     return sum;
 }
 
-float L2Norm(const float* p1, const float* p2, int n) {
+static inline float L2Norm(const float* p1, const float* p2, int n) {
     float sum = 0;
     for (int i = 0; i < n; i++) {
         float diff = p1[i] - p2[i];
@@ -1320,6 +1320,95 @@ double timeDiff(std::chrono::steady_clock::time_point t_start,
     return std::chrono::duration<double, std::milli>(t_end-t_start).count();
 }
 
+static bool keypointsAvailable(const std::vector<size_t>& kptIndices,
+                               const std::vector<size_t>& kptSizes) {
+    for (int i = 0; i < kptIndices.size(); i++) {
+        if (kptIndices[i] < kptSizes[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int maxKeypointIndex(const std::vector<size_t>& kptIndices,
+                            const std::vector<std::unique_ptr<std::vector<KeyPoint>>>& allKeypoints) {
+    int maxIndex = -1;
+    for (int i = 0; i < kptIndices.size(); i++) {
+        if (kptIndices[i] < allKeypoints[i]->size()) {
+            maxIndex = i;
+        }
+    }
+    for (int i = maxIndex + 1; i < kptIndices.size(); i++) {
+        if (kptIndices[i] < allKeypoints[i]->size() &&
+            KeypointGreater()((*allKeypoints[i])[kptIndices[i]],
+                              (*allKeypoints[maxIndex])[kptIndices[maxIndex]])) {
+            maxIndex = i;
+        }
+    }
+    return maxIndex;
+}
+
+// Merge individually sorted keypoint vectors into a single keypoint vector
+static void mergeKeypoints(const std::vector<std::unique_ptr<std::vector<KeyPoint>>>& allKeypoints,
+                           std::vector<KeyPoint>* keypoints,
+                           const std::vector<gls::image<float>::unique_ptr>& allDescriptors,
+                           gls::image<float>::unique_ptr* descriptors) {
+    // Find out how many keypoints we have
+    int keypointsCount = 0;
+    for (const auto& kps : allKeypoints) {
+        keypointsCount += kps->size();
+    }
+
+    // Make sure we have corresponding descriptors for all keypoints
+    if (descriptors) {
+        assert(allKeypoints.size() == allDescriptors.size());
+
+        int descriptorsCount = 0;
+        for (const auto& d : allDescriptors) {
+            descriptorsCount += d->height;
+        }
+        assert(keypointsCount == descriptorsCount);
+    }
+
+    // Allocate space for the result
+    keypoints->clear();
+    keypoints->resize(keypointsCount);
+
+    if (descriptors != nullptr) {
+        *descriptors = std::make_unique<gls::image<float>>(64, keypointsCount);
+    }
+
+    std::vector<size_t> kptIndices(allKeypoints.size());
+    std::vector<size_t> kptSizes(allKeypoints.size());
+    for (int i = 0; i < allKeypoints.size(); i++) {
+        kptIndices[i] = 0;
+        kptSizes[i] = allKeypoints[i]->size();
+    }
+
+    int outIndex = 0;
+    while (keypointsAvailable(kptIndices, kptSizes)) {
+        assert(outIndex < keypointsCount);
+
+        // Find max keypoint index
+        int maxIndex = maxKeypointIndex(kptIndices, allKeypoints);
+
+        // Copy keypoint to output
+        (*keypoints)[outIndex] = (*allKeypoints[maxIndex])[kptIndices[maxIndex]];
+
+        // Copy descriptor to output
+        if (descriptors != nullptr) {
+            float *outPtr = (**descriptors)[outIndex];
+            float *descPtr = (*allDescriptors[maxIndex])[(int) kptIndices[maxIndex]];
+
+            memcpy(outPtr, descPtr, 64 * sizeof(float));
+        }
+        kptIndices[maxIndex]++;
+        outIndex++;
+    }
+
+    assert(outIndex == keypointsCount);
+}
+
 void SURF::detectAndCompute(const gls::image<float>& img,
                             std::vector<KeyPoint>* keypoints,
                             gls::image<float>::unique_ptr* descriptors,
@@ -1328,6 +1417,8 @@ void SURF::detectAndCompute(const gls::image<float>& img,
 
     const int tile_width = img.width / sections.width;
     const int tile_height = img.height / sections.height;
+
+    std::cout << "Tile size: " << tile_width << " x " << tile_height << std::endl;
 
     // TODO: Add a skirt overlap between tiles
     int y_pos = 0;
@@ -1341,6 +1432,7 @@ void SURF::detectAndCompute(const gls::image<float>& img,
     }
 
     std::vector<gls::image<float>::unique_ptr> allDescriptors;
+    std::vector<std::unique_ptr<std::vector<KeyPoint>>> allKeypoints;
 
     auto sum = sumImageStack<float>(_glsContext->clContext(), tile_width + 1, tile_height + 1);
 
@@ -1349,11 +1441,11 @@ void SURF::detectAndCompute(const gls::image<float>& img,
 
         clIntegral(tileImage, sum, SURF_INTEGRAL_BIAS);
 
-        std::vector<KeyPoint> tileKeypoints;
+        auto tileKeypoints = std::make_unique<std::vector<KeyPoint>>();
 
-        fastHessianDetector(sum, &tileKeypoints, _nOctaves, _nOctaveLayers, _hessianThreshold);
+        fastHessianDetector(sum, tileKeypoints.get(), _nOctaves, _nOctaveLayers, _hessianThreshold);
 
-        int N = (int) tileKeypoints.size();
+        int N = (int) tileKeypoints->size();
 
         std::cout << "tileKeypoints: " << N << std::endl;
 
@@ -1365,14 +1457,15 @@ void SURF::detectAndCompute(const gls::image<float>& img,
 
         // we call SURFInvoker in any case, even if we do not need descriptors,
         // since it computes orientation of each feature.
-        descriptor(tileImage, integralSumCpu, &tileKeypoints, descriptors != nullptr ? tileDescriptors.get() : nullptr);
+        descriptor(tileImage, integralSumCpu, tileKeypoints.get(), descriptors != nullptr ? tileDescriptors.get() : nullptr);
 
         sum[0]->unmapImage(integralSumCpu);
 
-        for (auto kp : tileKeypoints) {
-            // Translate keypoints to their full image locations
-            keypoints->push_back(KeyPoint(kp.pt + Point2f(tile.x, tile.y), kp.size, kp.angle, kp.response, kp.octave, kp.class_id));
+        // Translate tile keypoints to their full image locations
+        for (auto& kp : *tileKeypoints) {
+            kp.pt += Point2f(tile.x, tile.y);
         }
+        allKeypoints.push_back(std::move(tileKeypoints));
 
         if (descriptors != nullptr) {
             allDescriptors.push_back(std::move(tileDescriptors));
@@ -1382,25 +1475,7 @@ void SURF::detectAndCompute(const gls::image<float>& img,
         printf("--> descriptor Time: %.2fms\n", timeDiff(t_start_descriptor, t_end_descriptor));
     }
 
-    if (descriptors != nullptr) {
-        if (allDescriptors.size() == 1) {
-            *descriptors = std::move(allDescriptors[0]);
-        } else {
-            int descriptorsCount = 0;
-            for (const auto& qd : allDescriptors) {
-                descriptorsCount += qd->height;
-            }
-            *descriptors = std::make_unique<gls::image<float>>(64, descriptorsCount);
-
-            int idx = 0;
-            for (auto& qd : allDescriptors) {
-                memcpy((void *) (**descriptors)[idx],
-                       (void *) (qd)->pixels().data(),
-                       (qd)->pixels().size() * sizeof(float));
-                idx += qd->height;
-            }
-        }
-    }
+    mergeKeypoints(allKeypoints, keypoints, allDescriptors, descriptors);
 
     std::cout << "Collected " << keypoints->size() << " keypoints and " << (**descriptors).height << " descriptors" << std::endl;
 }
@@ -1495,7 +1570,7 @@ struct refineMatch {
 };
 
 bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
-                    std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2, int matches_num) {
+                    std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
     SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 8 * 800);
@@ -1506,8 +1581,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     std::vector<KeyPoint> keypoints1, keypoints2;
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, &keypoints1, &descriptor1 /*, {2, 2} */);
-    surf.detectAndCompute(srcIMAGE2, &keypoints2, &descriptor2 /*, {2, 2} */);
+    surf.detectAndCompute(srcIMAGE1, &keypoints1, &descriptor1, {2, 4});
+    surf.detectAndCompute(srcIMAGE2, &keypoints2, &descriptor2, {2, 4});
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
@@ -1529,10 +1604,11 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     printf("--> Keypoint Sorting: %.2fms\n", timeDiff(t_match, t_sort));
 
     // Convert to Point2D format
-    int goodPoints = std::min(matches_num, (int) matchedPoints.size());
-    for (int i = 0; i < goodPoints; i++) {
-        matchpoints1->push_back(keypoints1[matchedPoints[i].queryIdx].pt);
-        matchpoints2->push_back(keypoints2[matchedPoints[i].trainIdx].pt);
+    matchpoints1->resize(matchedPoints.size());
+    matchpoints2->resize(matchedPoints.size());
+    for (int i = 0; i < matchedPoints.size(); i++) {
+        (*matchpoints1)[i] = keypoints1[matchedPoints[i].queryIdx].pt;
+        (*matchpoints2)[i] = keypoints2[matchedPoints[i].trainIdx].pt;
     }
 
     auto t_end = std::chrono::high_resolution_clock::now();
