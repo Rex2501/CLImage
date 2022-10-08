@@ -63,7 +63,7 @@
 #include "ThreadPool.hpp"
 
 #define USE_OPENCL true
-#define USE_OPENCL_INTEGRAL true
+#define USE_OPENCL_INTEGRAL false
 #define USE_INTEGRAL_PYRAMID true
 
 namespace gls {
@@ -81,11 +81,8 @@ static const int SURF_HAAR_SIZE0 = 9;
 // above and below are aligned correctly.
 static const int SURF_HAAR_SIZE_INC = 6;
 
-// Bias value used to optimize the dynamic range of the integral image
-static const float SURF_INTEGRAL_BIAS  = 255;
-
 template <typename T>
-void integral(const gls::image<float>& img, gls::image<T>* sum, const float bias = 1) {
+void integral(const gls::image<float>& img, gls::image<T>* sum) {
     // Zero the first row and the first column of the sum
     for (int i = 0; i < sum->width; i++) {
         (*sum)[0][i] = 0;
@@ -96,7 +93,10 @@ void integral(const gls::image<float>& img, gls::image<T>* sum, const float bias
 
     for (int j = 1; j < sum->height; j++) {
         for (int i = 1; i < sum->width; i++) {
-            (*sum)[j][i] = img[j - 1][i - 1] / bias + (*sum)[j][i - 1] + (*sum)[j - 1][i] - (*sum)[j - 1][i - 1];
+            // Use Signed Offset Pixel Representation to improve Integral Image precision
+            // See: Hensley et al.: "Fast Summed-Area Table Generation and its Applications".
+            (*sum)[j][i] = (img[j - 1][i - 1] - 0.5) +
+                           (*sum)[j][i - 1] + (*sum)[j - 1][i] - (*sum)[j - 1][i - 1];
         }
     }
 }
@@ -114,12 +114,13 @@ static inline float calcHaarPattern(const gls::image<float>& sum, const gls::poi
     for (int k = 0; k < N; k++) {
         const auto& fk = f[k];
 
-        d += (sum[p.y + fk.p[0].y][p.x + fk.p[0].x] +
-              sum[p.y + fk.p[3].y][p.x + fk.p[3].x] -
-              sum[p.y + fk.p[1].y][p.x + fk.p[1].x] -
-              sum[p.y + fk.p[2].y][p.x + fk.p[2].x]) * fk.w;
+        // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code
+        d += (0.5 + ((sum[p.y + fk.p[0].y][p.x + fk.p[0].x] /* p0 */ -
+                      sum[p.y + fk.p[1].y][p.x + fk.p[1].x] /* p1 */) -
+                     (sum[p.y + fk.p[2].y][p.x + fk.p[2].x] /* p2 */ -
+                      sum[p.y + fk.p[3].y][p.x + fk.p[3].x] /* p3 */))) * fk.w;
     }
-    return SURF_INTEGRAL_BIAS * d;
+    return d;
 }
 
 template <size_t N>
@@ -881,7 +882,7 @@ private:
                              int nOctaveLayers, float hessianThreshold);
 
 public:
-    SURF(gls::OpenCLContext* glsContext, int width, int height, int nOctaves = 4, int nOctaveLayers = 2, float hessianThreshold = 800) :
+    SURF(gls::OpenCLContext* glsContext, int width, int height, int nOctaves = 4, int nOctaveLayers = 2, float hessianThreshold = 0.02) :
         _glsContext(glsContext),
         _width(width),
         _height(height),
@@ -913,8 +914,7 @@ public:
         }
 
     void clIntegral(const gls::image<float>& img,
-                    const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
-                    const float bias = 1);
+                    const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum);
 
     void detect(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& integralSum, std::vector<KeyPoint>* keypoints) {
         fastHessianDetector(integralSum, keypoints, _nOctaves, _nOctaveLayers, _hessianThreshold);
@@ -931,8 +931,7 @@ public:
 };
 
 void SURF::clIntegral(const gls::image<float>& img,
-                      const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
-                      const float bias) {
+                      const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) {
     static const int tileSize = 16;
 
     gls::size tmpSize(((_height + tileSize - 1) / tileSize) * tileSize, ((_width + tileSize - 1) / tileSize) * tileSize);
@@ -950,16 +949,14 @@ void SURF::clIntegral(const gls::image<float>& img,
     // Bind the kernel parameters
     auto integral_sum_cols = cl::KernelFunctor<cl::Image2D, // src_ptr
                                                cl::Buffer,  // buf_ptr
-                                               int,         // buf_width
-                                               float        // bias
+                                               int          // buf_width
                                                >(program, "integral_sum_cols_image");
 
     // Schedule the kernel on the GPU
     integral_sum_cols(cl::EnqueueArgs(cl::NDRange(_width), cl::NDRange(tileSize)),
                       _integralInputImage->getImage2D(),
                       _integralTmpBuffer,
-                      tmpSize.width,
-                      bias);
+                      tmpSize.width);
 
     // Bind the kernel parameters
     auto integral_sum_rows = cl::KernelFunctor<cl::Buffer,  // buf_ptr
@@ -1442,7 +1439,7 @@ void SURF::detectAndCompute(const gls::image<float>& img,
     for (const auto& tile : tiles) {
         const auto tileImage = gls::image<float>(img, tile);
 
-        clIntegral(tileImage, sum, SURF_INTEGRAL_BIAS);
+        clIntegral(tileImage, sum);
 
         auto tileKeypoints = std::make_unique<std::vector<KeyPoint>>();
 
@@ -1462,6 +1459,15 @@ void SURF::detectAndCompute(const gls::image<float>& img,
         // since it computes orientation of each feature.
         descriptor(tileImage, integralSumCpu, tileKeypoints.get(), descriptors != nullptr ? tileDescriptors.get() : nullptr);
 
+#if DEBUG_RECONSTRUCTED_IMAGE
+        static int count = 0;
+        gls::image<gls::luma_pixel> reconstructed(integralSumCpu.width-1, integralSumCpu.height-1);
+        reconstructed.apply([&integralSumCpu](gls::luma_pixel* p, int x, int y) {
+            float value = 0.5 + (integralSumCpu[y+1][x+1] - integralSumCpu[y+1][x]) - (integralSumCpu[y][x+1] - integralSumCpu[y][x]);
+            *p = std::clamp((int) (255 * value), 0, 255);
+        });
+        reconstructed.write_png_file("/Users/fabio/reconstructed" + std::to_string(count++) + ".png");
+#endif
         sum[0]->unmapImage(integralSumCpu);
 
         // Translate tile keypoints to their full image locations
@@ -1576,7 +1582,7 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
                     std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 8 * 800);
+    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.1);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
     printf("--> SURF Creation Time: %.2fms\n", timeDiff(t_start, t_surf));
@@ -1585,8 +1591,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     auto keypoints2 = std::make_unique<std::vector<KeyPoint>>();
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {2, 4});
-    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {2, 4});
+    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {1, 1});
+    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {1, 1});
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));

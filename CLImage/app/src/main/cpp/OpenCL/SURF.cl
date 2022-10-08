@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#define SURF_INTEGRAL_BIAS 255.0f
-
 // TODO: generate the wavelet parameters dynamically in the shader
 typedef struct SurfHF {
     int8 p_dx[2];
@@ -46,9 +44,8 @@ float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant i
     float r92 = read_imagef(inputImage, p + dp[1].hi.lo).x;
     float r97 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    return SURF_INTEGRAL_BIAS * w * ((r02 + r37 - r07 - r32) - 2 * (r32 + r67 - r37 - r62) + (r62 + r97 - r67 - r92));
-
-    // return SURF_INTEGRAL_BIAS * dw.x * (((r97 - r92) - (r07 - r02)) - 3 * ((r67 - r62) - (r37 - r32)));
+    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
+    return w * ((0.5 + (r97 - r92) - (r07 - r02)) - 3 * (0.5 + (r67 - r62) - (r37 - r32)));
 }
 
 float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
@@ -62,9 +59,8 @@ float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant i
     float r76 = read_imagef(inputImage, p + dp[1].lo.hi).x;
     float r79 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    return SURF_INTEGRAL_BIAS * w * ((r20 + r73 - r23 - r70) - 2 * (r23 + r76 - r26 - r73) + (r26 + r79 - r29 - r76));
-
-    // return SURF_INTEGRAL_BIAS * dw.x * (((r79 - r70) - (r29 - r20)) - 3 * ((r76 - r73) - (r26 - r23)));
+    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
+    return w * ((0.5 + (r79 - r70) - (r29 - r20)) - 3 * (0.5 + (r76 - r73) - (r26 - r23)));
 }
 
 float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], float w) {
@@ -73,12 +69,14 @@ float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant 
 #pragma unroll
     for (int k = 0; k < 4; k++) {
         int8 v = dp[k];
-        d += (read_imagef(inputImage, p + v.lo.lo /* p0 */).x +
-              read_imagef(inputImage, p + v.hi.hi /* p3 */).x -
-              read_imagef(inputImage, p + v.lo.hi /* p1 */).x -
-              read_imagef(inputImage, p + v.hi.lo /* p2 */).x) * w4[k];
+
+        // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
+        d += (0.5 + ((read_imagef(inputImage, p + v.lo.lo /* p0 */).x -
+                      read_imagef(inputImage, p + v.lo.hi /* p1 */).x) -
+                     (read_imagef(inputImage, p + v.hi.lo /* p2 */).x -
+                      read_imagef(inputImage, p + v.hi.hi /* p3 */).x))) * w4[k];
     }
-    return SURF_INTEGRAL_BIAS * d;
+    return d;
 }
 
 kernel void calcDetAndTrace(read_only image2d_t sumImage,
@@ -254,7 +252,7 @@ kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t
 
 #define LOCAL_SUM_SIZE      16
 
-kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width, float bias) {
+kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width) {
     const int lid = get_local_id(0);
     const int gid = get_group_id(0);
     const int x = get_global_id(0);
@@ -265,7 +263,9 @@ kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global floa
     for (int y = 0; y < get_image_height(sourceImage); y += LOCAL_SUM_SIZE) {
 #pragma unroll
         for (int yin = 0; yin < LOCAL_SUM_SIZE; yin++) {
-            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x / bias;
+            // Use Signed Offset Pixel Representation to improve Integral Image precision
+            // See: Hensley et al.: "Fast Summed-Area Table Generation and its Applications".
+            accum += read_imagef(sourceImage, (int2)(x, y + yin)).x - 0.5;
             lm_sum[yin][lid] = accum;
         }
         barrier(CLK_LOCAL_MEM_FENCE);

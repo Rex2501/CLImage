@@ -48,14 +48,15 @@ void testSURF() {
 
     std::cout << "image size: " << srcImg1_->width << "x" << srcImg1_->height << std::endl;
 
+    // Convert to grayscale and normalize values in [0..1]
     srcImg1.apply([&](float *p, int x, int y) {
         const gls::rgb_pixel& pIn = (*srcImg1_)[y][x];
-        *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
+        *p = std::clamp((pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114) / 255.0, 0.0, 1.0);
     });
 
     srcImg2.apply([&](float *p, int x, int y) {
         const gls::rgb_pixel& pIn = (*srcImg2_)[y][x];
-        *p = std::clamp(pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114, 0.0, 255.0);
+        *p = std::clamp((pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114) / 255.0, 0.0, 1.0);
     });
 
     std::vector<gls::Point2f> matchpoints1, matchpoints2;
@@ -64,14 +65,10 @@ void testSURF() {
 
     bool success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
     assert(matchpoints1.size() == matchpoints2.size());
-    printf("Feature Dection 1 successful: %d, matched %d features\n", success, (int) matchpoints1.size());
-
-    success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
-    assert(matchpoints1.size() == matchpoints2.size());
-    printf("Feature Dection 2 successful: %d, matched %d features\n", success, (int) matchpoints1.size());
+    printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
     std::vector<float> transParameter;
-    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, std::min((int) matchpoints1.size(), 300));
+    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
