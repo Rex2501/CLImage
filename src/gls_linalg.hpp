@@ -25,30 +25,30 @@
 
 namespace gls {
 
-template<size_t M, size_t N, typename baseT = float> struct Matrix;
+template<size_t M, size_t N, typename value_type = float> struct Matrix;
 
 // ---- Vector Type ----
-template <size_t N, typename baseT = float>
-struct Vector : public std::array<baseT, N> {
+template <size_t N, typename value_type = float>
+struct Vector : public std::array<value_type, N> {
     Vector() {
         this->fill(0);  // Zero the array content
     }
 
-    Vector(const baseT(&il)[N]) {
+    Vector(const value_type(&il)[N]) {
         std::copy(il, il + N, this->begin());
     }
 
-    Vector(const std::vector<baseT>& v) {
+    Vector(const std::vector<value_type>& v) {
         assert(v.size() == N);
         std::copy(v.begin(), v.end(), this->begin());
     }
 
-    Vector(const std::array<baseT, N>& v) {
+    Vector(const std::array<value_type, N>& v) {
         assert(v.size() == N);
         std::copy(v.begin(), v.end(), this->begin());
     }
 
-    Vector(std::initializer_list<baseT> list) {
+    Vector(std::initializer_list<value_type> list) {
         assert(list.size() == N);
         std::copy(list.begin(), list.end(), this->begin());
     }
@@ -84,8 +84,8 @@ struct Vector : public std::array<baseT, N> {
         return *this;
     }
 
-    // Cast to a const baseT*
-    operator const baseT*() const {
+    // Cast to a const value_type*
+    operator const value_type*() const {
         return this->data();
     }
 };
@@ -122,176 +122,176 @@ struct DVector : public Vector<N, double> {
 };
 
 // Vector - Vector Addition (component-wise)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator + (const Vector<N, baseT>& a, const Vector<N, baseT>& b) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator + (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
     auto ita = a.begin();
     auto itb = b.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&](baseT &r){ r = *ita++ + *itb++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&](value_type &r){ r = *ita++ + *itb++; });
     return result;
 }
 
 // Vector - Vector Subtraction (component-wise)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator - (const Vector<N, baseT>& a, const Vector<N, baseT>& b) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator - (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
     auto ita = a.begin();
     auto itb = b.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&](baseT &r){ r = *ita++ - *itb++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&](value_type &r){ r = *ita++ - *itb++; });
     return result;
 }
 
 // Vector - Vector Multiplication (component-wise)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator * (const Vector<N, baseT>& a, const Vector<N, baseT>& b) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator * (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
     auto ita = a.begin();
     auto itb = b.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&](baseT &r){ r = *ita++ * *itb++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&](value_type &r){ r = *ita++ * *itb++; });
     return result;
 }
 
 // Vector - Vector Division (component-wise)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator / (const Vector<N, baseT>& a, const Vector<N, baseT>& b) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator / (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
     auto ita = a.begin();
     auto itb = b.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&](baseT &r){ r = *ita++ / *itb++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&](value_type &r){ r = *ita++ / *itb++; });
     return result;
 }
 
 // Vector - Scalar Addition
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator + (const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator + (const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = *itv++ + a; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = *itv++ + a; });
     return result;
 }
 
 // Vector - Scalar Addition (commutative)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator + (baseT a, const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator + (value_type a, const Vector<N, value_type>& v) {
     return v + a;
 }
 
 // Vector - Scalar Subtraction
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator - (const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator - (const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = *itv++ - a; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = *itv++ - a; });
     return result;
 }
 
 // Scalar - Vector Subtraction
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator - (baseT a, const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator - (value_type a, const Vector<N, value_type>& v) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = a - *itv++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = a - *itv++; });
     return result;
 }
 
 // Vector - Scalar Multiplication
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator * (const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator * (const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = *itv++ * a; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = *itv++ * a; });
     return result;
 }
 
 // Scalar - Vector Multiplication (commutative)
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator * (baseT a, const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator * (value_type a, const Vector<N, value_type>& v) {
     return v * a;
 }
 
 // Vector - Scalar Division
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator / (const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator / (const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = *itv++ / a; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = *itv++ / a; });
     return result;
 }
 
 // Scalar - Vector Division
-template <size_t N, typename baseT>
-inline Vector<N, baseT> operator / (baseT a, const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> operator / (value_type a, const Vector<N, value_type>& v) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = a / *itv++; });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = a / *itv++; });
     return result;
 }
 
-template <size_t N, typename baseT>
-inline Vector<N, baseT> abs(const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> abs(const Vector<N, value_type>& v) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&itv](baseT &r){ r = std::abs(*itv++); });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&itv](value_type &r){ r = std::abs(*itv++); });
     return result;
 }
 
 // Vector - Scalar Max
-template <size_t N, typename baseT>
-inline Vector<N, baseT> max(const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> max(const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = std::max(*itv++, a); });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = std::max(*itv++, a); });
     return result;
 }
 
 // Vector - Scalar Min
-template <size_t N, typename baseT>
-inline Vector<N, baseT> min(const Vector<N, baseT>& v, baseT a) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> min(const Vector<N, value_type>& v, value_type a) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&a, &itv](baseT &r){ r = std::min(*itv++, a); });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&a, &itv](value_type &r){ r = std::min(*itv++, a); });
     return result;
 }
 
 // Vector - Square Root
-template <size_t N, typename baseT>
-inline Vector<N, baseT> sqrt(const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline Vector<N, value_type> sqrt(const Vector<N, value_type>& v) {
     auto itv = v.begin();
-    Vector<N, baseT> result;
-    std::for_each(result.begin(), result.end(), [&itv](baseT &r){ r = sqrtf(*itv++); });
+    Vector<N, value_type> result;
+    std::for_each(result.begin(), result.end(), [&itv](value_type &r){ r = sqrtf(*itv++); });
     return result;
 }
 
 // ---- Matrix Type ----
 
-template <size_t N, size_t M, typename baseT>
-struct Matrix : public std::array<Vector<M, baseT>, N> {
+template <size_t N, size_t M, typename value_type>
+struct Matrix : public std::array<Vector<M, value_type>, N> {
     Matrix() {}
 
-    Matrix(const Vector<N * M, baseT>& v) {
+    Matrix(const Vector<N * M, value_type>& v) {
         std::copy(v.begin(), v.end(), span().begin());
     }
 
-    Matrix(const baseT(&il)[N * M]) {
+    Matrix(const value_type(&il)[N * M]) {
         std::copy(il, il + (N * M), span().begin());
     }
 
-    Matrix(const std::array<baseT, M>(&il)[N]) {
+    Matrix(const std::array<value_type, M>(&il)[N]) {
         // This is safe, il is just an array of arrays
-        std::copy((baseT *) il, (baseT *) il + (N * M), span().begin());
+        std::copy((value_type *) il, (value_type *) il + (N * M), span().begin());
     }
 
-    Matrix(const std::vector<baseT>& v) {
+    Matrix(const std::vector<value_type>& v) {
         assert(v.size() == N * M);
         std::copy(v.begin(), v.end(), span().begin());
     }
 
-    Matrix(std::initializer_list<baseT> list) {
+    Matrix(std::initializer_list<value_type> list) {
         assert(list.size() == N * M);
         std::copy(list.begin(), list.end(), span().begin());
     }
 
-    Matrix(std::initializer_list<std::array<baseT, M>> list) {
+    Matrix(std::initializer_list<std::array<value_type, M>> list) {
         assert(list.size() == N);
         int row = 0;
         for (const auto& v : list) {
@@ -300,48 +300,48 @@ struct Matrix : public std::array<Vector<M, baseT>, N> {
     }
 
     // Matrix Raw Data
-    std::span<baseT> span() {
+    std::span<value_type> span() {
         return std::span(&(*this)[0][0], N * M);
     }
 
-    const std::span<const baseT> span() const {
+    const std::span<const value_type> span() const {
         return std::span(&(*this)[0][0], N * M);
     }
 
     // Matrix Row Raw Data
-    std::span<baseT> span(int row) {
+    std::span<value_type> span(int row) {
         return std::span(&(*this)[row][0], M);
     }
 
-    const std::span<const baseT> span(int row) const {
+    const std::span<const value_type> span(int row) const {
         return std::span(&(*this)[row][0], M);
     }
 
-    // Cast to a const baseT*
-    operator const baseT*() const {
+    // Cast to a const value_type*
+    operator const value_type*() const {
         return span().data();
     }
 
-    typedef baseT (*opPtr)(baseT a, baseT b);
+    typedef value_type (*opPtr)(value_type a, value_type b);
 };
 
 template <size_t N, size_t M>
 struct DMatrix : public Matrix<N, M, double> { };
 
-template <size_t N, size_t M, typename baseT>
-std::span<baseT> span(Matrix<N, M, baseT>& m) {
+template <size_t N, size_t M, typename value_type>
+std::span<value_type> span(Matrix<N, M, value_type>& m) {
     return std::span(&m[0][0], N * M);
 }
 
-template <size_t N, size_t M, typename baseT>
-const std::span<const baseT> span(const Matrix<N, M, baseT>& m) {
+template <size_t N, size_t M, typename value_type>
+const std::span<const value_type> span(const Matrix<N, M, value_type>& m) {
     return std::span(&m[0][0], N * M);
 }
 
 // Matrix Transpose
-template<size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> transpose(const Matrix<M, N, baseT>& m) {
-    Matrix<N, M, baseT> result;
+template<size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> transpose(const Matrix<M, N, value_type>& m) {
+    Matrix<N, M, value_type> result;
     for (int j = 0; j < M; j++) {
         for (int i = 0; i < N; i++) {
             result[i][j] = m[j][i];
@@ -351,9 +351,9 @@ inline Matrix<N, M, baseT> transpose(const Matrix<M, N, baseT>& m) {
 }
 
 // General Matrix Multiplication
-template <size_t N, size_t K, size_t M, typename baseT>
-inline Matrix<M, N, baseT> operator * (const Matrix<M, K, baseT>& a, const Matrix<K, N, baseT>& b) {
-    Matrix<M, N, baseT> result;
+template <size_t N, size_t K, size_t M, typename value_type>
+inline Matrix<M, N, value_type> operator * (const Matrix<M, K, value_type>& a, const Matrix<K, N, value_type>& b) {
+    Matrix<M, N, value_type> result;
     const auto bt = transpose(b);
     for (int j = 0; j < M; j++) {
         for (int i = 0; i < N; i++) {
@@ -367,29 +367,29 @@ inline Matrix<M, N, baseT> operator * (const Matrix<M, K, baseT>& a, const Matri
 }
 
 // Matrix - Vector Multiplication
-template <size_t M, size_t N, typename baseT>
-inline Vector<M, baseT> operator * (const Matrix<M, N, baseT>& a, const Vector<N, baseT>& b) {
-    const auto result = a * Matrix<N, 1, baseT> { b };
-    return Vector<M, baseT>(result);
+template <size_t M, size_t N, typename value_type>
+inline Vector<M, value_type> operator * (const Matrix<M, N, value_type>& a, const Vector<N, value_type>& b) {
+    const auto result = a * Matrix<N, 1, value_type> { b };
+    return Vector<M, value_type>(result);
 }
 
 // Vector - Matrix Multiplication
-template <size_t M, size_t N, typename baseT>
-inline Vector<N, baseT> operator * (const Vector<M, baseT>& a, const Matrix<M, N, baseT>& b) {
-    const auto result = Matrix<1, N, baseT> { a } * b;
-    return Vector<N, baseT>(result);
+template <size_t M, size_t N, typename value_type>
+inline Vector<N, value_type> operator * (const Vector<M, value_type>& a, const Matrix<M, N, value_type>& b) {
+    const auto result = Matrix<1, N, value_type> { a } * b;
+    return Vector<N, value_type>(result);
 }
 
 // (Square) Matrix Division (Multiplication with Inverse)
-template <size_t N, typename baseT>
-inline Matrix<N, N, baseT> operator / (const Matrix<N, N, baseT>& a, const Matrix<N, N, baseT>& b) {
+template <size_t N, typename value_type>
+inline Matrix<N, N, value_type> operator / (const Matrix<N, N, value_type>& a, const Matrix<N, N, value_type>& b) {
     return a * inverse(b);
 }
 
 // Iterate over the elements of the input and output matrices applying a Matrix-Matrix function
-template<size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> apply(const Matrix<M, N, baseT>& a, const Matrix<M, N, baseT>& b, typename Matrix<N, M, baseT>::opPtr f) {
-    Matrix<N, M, baseT> result;
+template<size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> apply(const Matrix<M, N, value_type>& a, const Matrix<M, N, value_type>& b, typename Matrix<N, M, value_type>::opPtr f) {
+    Matrix<N, M, value_type> result;
     auto ita = span(a).begin();
     auto itb = span(b).begin();
     for (auto& r : span(result)) {
@@ -399,9 +399,9 @@ inline Matrix<N, M, baseT> apply(const Matrix<M, N, baseT>& a, const Matrix<M, N
 }
 
 // Iterate over the elements of the input and output matrices applying a Matrix-Scalar function
-template<size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> apply(const Matrix<M, N, baseT>& a, baseT b, typename Matrix<N, M, baseT>::opPtr f) {
-    Matrix<N, M, baseT> result;
+template<size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> apply(const Matrix<M, N, value_type>& a, value_type b, typename Matrix<N, M, value_type>::opPtr f) {
+    Matrix<N, M, value_type> result;
     auto ita = span(a).begin();
     for (auto& r : span(result)) {
         r = f(*ita++, b);
@@ -410,49 +410,49 @@ inline Matrix<N, M, baseT> apply(const Matrix<M, N, baseT>& a, baseT b, typename
 }
 
 // Matrix-Scalar Multiplication
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator * (const Matrix<N, M, baseT>& a, baseT b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator * (const Matrix<N, M, value_type>& a, value_type b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a * b;
     });
 }
 
 // Matrix-Scalar Division
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator / (const Matrix<N, M, baseT>& a, baseT b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator / (const Matrix<N, M, value_type>& a, value_type b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a / b;
     });
 }
 
 // Matrix-Matrix Addition
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator + (const Matrix<N, M, baseT>& a, const Matrix<N, M, baseT>& b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator + (const Matrix<N, M, value_type>& a, const Matrix<N, M, value_type>& b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a + b;
     });
 }
 
 // Matrix-Scalar Addition
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator + (const Matrix<N, M, baseT>& a, baseT b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator + (const Matrix<N, M, value_type>& a, value_type b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a + b;
     });
 }
 
 // Matrix-Matrix Subtraction
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator - (const Matrix<N, M, baseT>& a, const Matrix<N, M, baseT>& b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator - (const Matrix<N, M, value_type>& a, const Matrix<N, M, value_type>& b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a - b;
     });
 }
 
 // Matrix-Scalar Subtraction
-template <size_t N, size_t M, typename baseT>
-inline Matrix<N, M, baseT> operator - (const Matrix<N, M, baseT>& a, baseT b) {
-    return apply(a, b, [](baseT a, baseT b) {
+template <size_t N, size_t M, typename value_type>
+inline Matrix<N, M, value_type> operator - (const Matrix<N, M, value_type>& a, value_type b) {
+    return apply(a, b, [](value_type a, value_type b) {
         return a - b;
     });
 }
@@ -461,8 +461,8 @@ inline Matrix<N, M, baseT> operator - (const Matrix<N, M, baseT>& a, baseT b) {
 
 // Cofactor Matrix
 // https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
-template <size_t N1, size_t N2 = N1 - 1, typename baseT>
-inline Matrix<N2, N2> cofactor(const Matrix<N1, N1, baseT>& m, int p, int q) {
+template <size_t N1, size_t N2 = N1 - 1, typename value_type>
+inline Matrix<N2, N2> cofactor(const Matrix<N1, N1, value_type>& m, int p, int q) {
     assert(p < N1 && q < N1);
 
     Matrix<N2, N2> result;
@@ -490,12 +490,12 @@ inline Matrix<N2, N2> cofactor(const Matrix<N1, N1, baseT>& m, int p, int q) {
 
 // Matrix Determinant using Laplace's Cofactor Expansion
 // https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Cofactor_expansion_of_the_determinant
-template <size_t N, typename baseT>
-inline baseT determinant(const Matrix<N, N, baseT>& m) {
+template <size_t N, typename value_type>
+inline value_type determinant(const Matrix<N, N, value_type>& m) {
     assert(N > 1);
 
-    baseT sign = 1;
-    baseT result = 0;
+    value_type sign = 1;
+    value_type result = 0;
     // Iterate for each element of first row
     for (int f = 0; f < N; f++) {
         result += sign * m[0][f] * determinant(cofactor(m, 0, f));
@@ -506,20 +506,20 @@ inline baseT determinant(const Matrix<N, N, baseT>& m) {
 }
 
 // Matrix Determinant, Special case for size 1x1
-template <typename baseT>
-inline baseT determinant(const Matrix<1, 1, baseT>& m) {
+template <typename value_type>
+inline value_type determinant(const Matrix<1, 1, value_type>& m) {
     return m[0][0];
 }
 
 // Matrix Adjoint (Tanspose of the Cofactor Matrix)
 // https://en.wikipedia.org/wiki/Adjugate_matrix
-template <size_t N, typename baseT>
-inline Matrix<N, N, baseT> adjoint(const Matrix<N, N, baseT>& m) {
+template <size_t N, typename value_type>
+inline Matrix<N, N, value_type> adjoint(const Matrix<N, N, value_type>& m) {
     assert(N > 1);
 
-    Matrix<N, N, baseT> adj;
+    Matrix<N, N, value_type> adj;
 
-    baseT sign = 1;
+    value_type sign = 1;
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             // sign of adj[j][i] positive if sum of row
@@ -528,7 +528,7 @@ inline Matrix<N, N, baseT> adjoint(const Matrix<N, N, baseT>& m) {
 
             // Interchanging rows and columns to get the
             // transpose of the cofactor matrix
-            baseT d = determinant(cofactor(m, i, j));
+            value_type d = determinant(cofactor(m, i, j));
             adj[j][i] = d != 0 ? sign * d : 0;
         }
     }
@@ -536,21 +536,21 @@ inline Matrix<N, N, baseT> adjoint(const Matrix<N, N, baseT>& m) {
 }
 
 // Matrix Adjoint - Special case for size 1x1
-template <typename baseT>
-inline Matrix<1, 1, baseT> adjoint(const Matrix<1, 1, baseT>& m) {
+template <typename value_type>
+inline Matrix<1, 1, value_type> adjoint(const Matrix<1, 1, value_type>& m) {
     return { 1 };
 }
 
 //// Inverse Matrix: inverse(m) = adj(m)/det(m)
 //// https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
-//template <size_t N, typename baseT>
-//inline Matrix<N, N, baseT> inverse(const Matrix<N, N, baseT>& m) {
-//    baseT det = determinant(m);
+//template <size_t N, typename value_type>
+//inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
+//    value_type det = determinant(m);
 //    if (det == 0) {
 //        throw std::range_error("null determinant");
 //    }
 //
-//    Matrix<N, N, baseT> inverse;
+//    Matrix<N, N, value_type> inverse;
 //    const auto adj = adjoint(m);
 //    for (int i = 0; i < N; i++)
 //        for (int j = 0; j < N; j++) inverse[i][j] = adj[i][j] / det;
@@ -560,15 +560,15 @@ inline Matrix<1, 1, baseT> adjoint(const Matrix<1, 1, baseT>& m) {
 
 // --- Large Matrix Inversion ---
 
-template <size_t N, size_t M, typename baseT>
-void swap_rows(gls::Matrix<N, M, baseT>& m, size_t i, size_t j) {
+template <size_t N, size_t M, typename value_type>
+void swap_rows(gls::Matrix<N, M, value_type>& m, size_t i, size_t j) {
     for (size_t column = 0; column < M; column++)
         std::swap(m[i][column], m[j][column]);
 }
 
 // Convert matrix to reduced row echelon form
-template <size_t N, size_t M, typename baseT>
-void rref(gls::Matrix<N, M, baseT>& m) {
+template <size_t N, size_t M, typename value_type>
+void rref(gls::Matrix<N, M, value_type>& m) {
     for (size_t row = 0, lead = 0; row < N && lead < M; ++row, ++lead) {
         size_t i = row;
         while (m[i][lead] == 0) {
@@ -580,30 +580,30 @@ void rref(gls::Matrix<N, M, baseT>& m) {
         }
         swap_rows(m, i, row);
         if (m[row][lead] != 0) {
-            baseT f = m[row][lead];
+            value_type f = m[row][lead];
             for (size_t column = 0; column < M; ++column)
                 m[row][column] /= f;
         }
         for (size_t j = 0; j < N; ++j) {
             if (j == row)
                 continue;
-            baseT f = m[j][lead];
+            value_type f = m[j][lead];
             for (size_t column = 0; column < M; ++column)
                 m[j][column] -= f * m[row][column];
         }
     }
 }
 
-template <size_t N, typename baseT>
-gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
-    gls::Matrix<N, 2 * N, baseT> tmp;
+template <size_t N, typename value_type>
+gls::Matrix<N, N, value_type> inverse(const gls::Matrix<N, N, value_type>& m) {
+    gls::Matrix<N, 2 * N, value_type> tmp;
     for (size_t row = 0; row < N; ++row) {
         for (size_t column = 0; column < N; ++column)
             tmp[row][column] = m[row][column];
         tmp[row][row + N] = 1;
     }
     rref(tmp);
-    gls::Matrix<N, N, baseT> inv;
+    gls::Matrix<N, N, value_type> inv;
     for (size_t row = 0; row < N; ++row) {
         for (size_t column = 0; column < N; ++column)
             inv[row][column] = tmp[row][column + N];
@@ -612,8 +612,8 @@ gls::Matrix<N, N, baseT> inverse(const gls::Matrix<N, N, baseT>& m) {
 }
 
 // From DCRaw (https://www.dechifro.org/dcraw/)
-template <size_t size, typename baseT>
-gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, baseT>& in) {
+template <size_t size, typename value_type>
+gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, value_type>& in) {
     gls::Matrix<3,6> work;
 
     for (int i = 0; i < 3; i++) {
@@ -625,7 +625,7 @@ gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, baseT>& in) {
         }
     }
     for (int i = 0; i < 3; i++) {
-        baseT num = work[i][i];
+        value_type num = work[i][i];
         for (int j = 0; j < 6; j++) work[i][j] /= num;
         for (int k = 0; k < 3; k++) {
             if (k == i) continue;
@@ -647,8 +647,8 @@ gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, baseT>& in) {
 
 // --- Utility Functions ---
 
-template <size_t N, typename baseT>
-inline std::ostream& operator<<(std::ostream& os, const Vector<N, baseT>& v) {
+template <size_t N, typename value_type>
+inline std::ostream& operator<<(std::ostream& os, const Vector<N, value_type>& v) {
     for (int i = 0; i < N; i++) {
         os << v[i];
         if (i < N - 1) {
@@ -658,8 +658,8 @@ inline std::ostream& operator<<(std::ostream& os, const Vector<N, baseT>& v) {
     return os;
 }
 
-template <size_t N, size_t M, typename baseT>
-inline std::ostream& operator<<(std::ostream& os, const Matrix<N, M, baseT>& m) {
+template <size_t N, size_t M, typename value_type>
+inline std::ostream& operator<<(std::ostream& os, const Matrix<N, M, value_type>& m) {
     for (int j = 0; j < N; j++) {
         os << m[j] << ",";
         if (j < N-1) {
@@ -675,8 +675,8 @@ namespace std {
 
 // Useful for printing a gls::Matrix on a single line
 
-template <typename baseT>
-inline std::ostream& operator<<(std::ostream& os, const std::span<baseT>& s) {
+template <typename value_type>
+inline std::ostream& operator<<(std::ostream& os, const std::span<value_type>& s) {
     for (int i = 0; i < s.size(); i++) {
         os << s[i];
         if (i < s.size() - 1) {
