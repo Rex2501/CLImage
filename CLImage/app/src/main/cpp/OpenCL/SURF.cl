@@ -20,17 +20,14 @@ typedef struct SurfHF {
     int8 p_dxy[4];
 } SurfHF;
 
+float integralRectangle(float topRight, float topLeft, float bottomRight, float bottomLeft) {
+    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
+    return 0.5 + (topRight - topLeft) - (bottomRight - bottomLeft);
+}
+
 /*
  NOTE: calcHaarPatternDx and calcHaarPatternDy have been hand optimized to avoid loading data from repeated offsets,
        and the redundant offsets themselves have been removed from the SurfHF struct.
- */
-
-/*
- RANSAC interior point ratio - number of loops: 115 150 12
-  Transformation matrix parameter:
- 0.992493 0.029114 80.062500
--0.029900 0.996582 116.250000
--0.000002 -0.000001 1
  */
 float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
     float r02 = read_imagef(inputImage, p + dp[0].lo.lo).x;
@@ -44,8 +41,7 @@ float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant i
     float r92 = read_imagef(inputImage, p + dp[1].hi.lo).x;
     float r97 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
-    return w * ((0.5 + (r97 - r92) - (r07 - r02)) - 3 * (0.5 + (r67 - r62) - (r37 - r32)));
+    return w * (integralRectangle(r97, r92, r07, r02) - 3 * integralRectangle(r67, r62, r37, r32));
 }
 
 float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
@@ -59,8 +55,7 @@ float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant i
     float r76 = read_imagef(inputImage, p + dp[1].lo.hi).x;
     float r79 = read_imagef(inputImage, p + dp[1].hi.hi).x;
 
-    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
-    return w * ((0.5 + (r79 - r70) - (r29 - r20)) - 3 * (0.5 + (r76 - r73) - (r26 - r23)));
+    return w * (integralRectangle(r79, r70, r29, r20) - 3 * integralRectangle(r76, r73, r26, r23));
 }
 
 float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], float w) {
@@ -70,11 +65,12 @@ float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant 
     for (int k = 0; k < 4; k++) {
         int8 v = dp[k];
 
-        // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
-        d += (0.5 + ((read_imagef(inputImage, p + v.lo.lo /* p0 */).x -
-                      read_imagef(inputImage, p + v.lo.hi /* p1 */).x) -
-                     (read_imagef(inputImage, p + v.hi.lo /* p2 */).x -
-                      read_imagef(inputImage, p + v.hi.hi /* p3 */).x))) * w4[k];
+        float p0 = read_imagef(inputImage, p + v.lo.lo /* p0 */).x;
+        float p1 = read_imagef(inputImage, p + v.lo.hi /* p1 */).x;
+        float p2 = read_imagef(inputImage, p + v.hi.lo /* p2 */).x;
+        float p3 = read_imagef(inputImage, p + v.hi.hi /* p3 */).x;
+
+        d += w4[k] * integralRectangle(p0, p1, p2, p3);
     }
     return d;
 }

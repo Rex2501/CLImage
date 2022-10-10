@@ -108,17 +108,23 @@ struct SurfHF {
     SurfHF() : p({gls::point{0, 0}, gls::point{0, 0}, gls::point{0, 0}, gls::point{0, 0}}), w(0) {}
 };
 
+float integralRectangle(float topRight, float topLeft, float bottomRight, float bottomLeft) {
+    // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
+    return 0.5 + (topRight - topLeft) - (bottomRight - bottomLeft);
+}
+
 template <size_t N>
 static inline float calcHaarPattern(const gls::image<float>& sum, const gls::point& p, const std::array<SurfHF, N>& f) {
     float d = 0;
     for (int k = 0; k < N; k++) {
         const auto& fk = f[k];
 
-        // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code
-        d += (0.5 + ((sum[p.y + fk.p[0].y][p.x + fk.p[0].x] /* p0 */ -
-                      sum[p.y + fk.p[1].y][p.x + fk.p[1].x] /* p1 */) -
-                     (sum[p.y + fk.p[2].y][p.x + fk.p[2].x] /* p2 */ -
-                      sum[p.y + fk.p[3].y][p.x + fk.p[3].x] /* p3 */))) * fk.w;
+        float p0 = sum[p.y + fk.p[0].y][p.x + fk.p[0].x];
+        float p1 = sum[p.y + fk.p[1].y][p.x + fk.p[1].x];
+        float p2 = sum[p.y + fk.p[2].y][p.x + fk.p[2].x];
+        float p3 = sum[p.y + fk.p[3].y][p.x + fk.p[3].x];
+
+        d += fk.w * integralRectangle(p0, p1, p2, p3);
     }
     return d;
 }
@@ -1463,7 +1469,7 @@ void SURF::detectAndCompute(const gls::image<float>& img,
         static int count = 0;
         gls::image<gls::luma_pixel> reconstructed(integralSumCpu.width-1, integralSumCpu.height-1);
         reconstructed.apply([&integralSumCpu](gls::luma_pixel* p, int x, int y) {
-            float value = 0.5 + (integralSumCpu[y+1][x+1] - integralSumCpu[y+1][x]) - (integralSumCpu[y][x+1] - integralSumCpu[y][x]);
+            float value = integralRectangle(integralSumCpu[y+1][x+1], integralSumCpu[y+1][x], integralSumCpu[y][x+1], integralSumCpu[y][x]);
             *p = std::clamp((int) (255 * value), 0, 255);
         });
         reconstructed.write_png_file("/Users/fabio/reconstructed" + std::to_string(count++) + ".png");
@@ -1591,8 +1597,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     auto keypoints2 = std::make_unique<std::vector<KeyPoint>>();
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {1, 1});
-    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {1, 1});
+    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {2, 2});
+    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {2, 2});
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
@@ -1626,12 +1632,7 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
     printf("--> Features Finding Time: %.2fms\n", elapsed_time_ms);
 
-    /* ******* Registration Performance Evaluation - Additional Contents ********* */
-
-    if (matchpoints1->size() && matchpoints2->size())
-        return true;
-    else
-        return false;
+    return !matchpoints1->empty() && !matchpoints2->empty();
 }
 
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,
