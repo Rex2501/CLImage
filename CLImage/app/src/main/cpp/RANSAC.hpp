@@ -11,10 +11,11 @@
 #include <vector>
 
 #include "feature2d.hpp"
+#include "gls_linalg.hpp"
 
 namespace gls {
 
-std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
+gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
 
 } // namespace gls
 

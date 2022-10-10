@@ -67,16 +67,11 @@ void testSURF() {
     assert(matchpoints1.size() == matchpoints2.size());
     printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
-    std::vector<float> transParameter;
-    transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
+    const auto transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
 
-    if (!transParameter.size()) {
-        printf(" Perspective transformation matrix solution error! ");
-        return;
-    }
     printf(" Transformation matrix parameter: \n ");
     for (int i = 0; i < transParameter.size(); i++) {
         printf("%lf ", transParameter[i]);

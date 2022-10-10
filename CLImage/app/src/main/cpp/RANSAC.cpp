@@ -19,30 +19,25 @@
 
 namespace gls {
 
-bool MatrixMultiplyV(const std::vector<std::vector<float>>& X1, const std::vector<std::vector<float>>& X2,
-                     std::vector<std::vector<float>>* Y) {
-    int row1 = (int) X1.size();
-    int col1 = (int) X1[0].size();
-    int row2 = (int) X2.size();
-    int col2 = (int) X2[0].size();
-    if (col1 != row2) return false;
-    Y->resize(row1);
-    for (int i = 0; i < row1; i++) (*Y)[i].resize(col2);
+gls::image<float> MatrixMultiply(const gls::image<float>& X1, const gls::image<float>& X2) {
+    assert(X1.width == X2.height);
 
-    for (int i = 0; i < Y->size(); i++) {
-        for (int j = 0; j < (*Y)[0].size(); j++) {
+    auto result = gls::image<float>(X2.width, X1.height);
+
+    for (int i = 0; i < result.height; i++) {
+        for (int j = 0; j < result.width; j++) {
             float sum = 0;
-            for (int ki = 0; ki < col1; ki++) {
+            for (int ki = 0; ki < X1.width; ki++) {
                 sum += X1[i][ki] * X2[ki][j];
             }
-            (*Y)[i][j] = sum;
+            result[i][j] = sum;
         }
     }
-    return true;
+    return result;
 }
 
-template <typename TIN, typename TA, typename TB>
-void getPerspectiveTransformAB(const TIN& src, const TIN& dst, TA& a, TB& b) {
+template <typename TA, typename TB>
+void getPerspectiveTransformAB(const std::vector<Point2f>& src, const std::vector<Point2f>& dst, TA& a, TB& b) {
     int count = (int) src.size();
 
     for (int i = 0; i < count; i++) {
@@ -74,53 +69,42 @@ gls::Vector<NN> getPerspectiveTransformIata(const std::vector<Point2f>& src, con
 }
 
 template <size_t NN=8>
-std::vector<float> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+gls::Vector<NN> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
     int count = (int) src.size();
 
-    std::vector<std::vector<float>> a;
-    std::vector<std::vector<float>> b;
-    a.resize(2 * count);
-    b.resize(2 * count);
-    for (int i = 0; i < 2 * count; i++) {
-        a[i].resize(NN, 0);
-        b[i].resize(1, 0);
-    }
+    auto a = gls::image<float>(NN, 2 * count);
+    auto b = gls::image<float>(1, 2 * count);
 
     getPerspectiveTransformAB(src, dst, a, b);
 
-    std::vector<std::vector<float>> at(NN, std::vector<float>(a.size()));
-    for (int i = 0; i < NN; i++) { // transpose of a
+    auto at = gls::image<float>(a.height, NN);
+    for (int i = 0; i < NN; i++) {
         for (int j = 0; j < 2 * count; j++) {
             at[i][j] = a[j][i];
         }
     }
 
+    const auto ata = MatrixMultiply(at, a);
+    const auto atb = MatrixMultiply(at, b);
+
     gls::Matrix<NN, NN> aa;
     gls::Vector<NN> bb;
-
-    std::vector<std::vector<float>> ata(NN, std::vector<float>(NN, 0));
-    std::vector<std::vector<float>> atb(NN, std::vector<float>(1, 0));
-
-    if (MatrixMultiplyV(at, a, &ata) && MatrixMultiplyV(at, b, &atb)) {
-        for (int i = 0; i < NN; i++) {
-            for (int j = 0; j < NN; j++) {
-                aa[i][j] = ata[i][j];
-            }
+    for (int i = 0; i < NN; i++) {
+        for (int j = 0; j < NN; j++) {
+            aa[i][j] = ata[i][j];
         }
-        for (int i = 0; i < NN; i++) {
-            bb[i] = atb[i][0];
-        }
+    }
+    for (int i = 0; i < NN; i++) {
+        bb[i] = atb[i][0];
     }
 
     // TODO: replace this with a proper solver
-    gls::Vector<NN> trans = inverse(aa) * bb;
-
-    return std::vector<float>(trans.begin(), trans.end());
+    return inverse(aa) * bb;
 }
 
-std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
-    std::vector<float> homoV;
-    if (p1.size() == 0) return homoV;
+gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
+    assert(p1.size() > 0 && p2.size() > 0);
+
     // Calculate the maximum set of interior points
     int max_iters = 2000;
     int iters = max_iters;
@@ -231,8 +215,7 @@ std::vector<float> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<
         _p2.push_back(Point2f(p2[innerPvInd_i[i]].x, p2[innerPvInd_i[i]].y));
     }
 
-    homoV = getPerspectiveTransformLSM2(_p1, _p2);
-    return homoV;
+    return getPerspectiveTransformLSM2(_p1, _p2);
 }
 
 } // namespace gls
