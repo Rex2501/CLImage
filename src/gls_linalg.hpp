@@ -151,6 +151,16 @@ inline Vector<N, value_type> operator * (const Vector<N, value_type>& a, const V
     return result;
 }
 
+// Vector Dot Product
+template <size_t N, typename value_type>
+inline value_type dot(const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    value_type result = 0;
+    for (size_t i = 0; i < N; i++) {
+        result += a[i] * b[i];
+    }
+    return result;
+}
+
 // Vector - Vector Division (component-wise)
 template <size_t N, typename value_type>
 inline Vector<N, value_type> operator / (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
@@ -293,7 +303,7 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
 
     Matrix(std::initializer_list<std::array<value_type, M>> list) {
         assert(list.size() == N);
-        int row = 0;
+        size_t row = 0;
         for (const auto& v : list) {
             std::copy(v.begin(), v.end(), span(row++).begin());
         }
@@ -309,11 +319,11 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
     }
 
     // Matrix Row Raw Data
-    std::span<value_type> span(int row) {
+    std::span<value_type> span(size_t row) {
         return std::span(&(*this)[row][0], M);
     }
 
-    const std::span<const value_type> span(int row) const {
+    const std::span<const value_type> span(size_t row) const {
         return std::span(&(*this)[row][0], M);
     }
 
@@ -342,8 +352,8 @@ const std::span<const value_type> span(const Matrix<N, M, value_type>& m) {
 template<size_t N, size_t M, typename value_type>
 inline Matrix<N, M, value_type> transpose(const Matrix<M, N, value_type>& m) {
     Matrix<N, M, value_type> result;
-    for (int j = 0; j < M; j++) {
-        for (int i = 0; i < N; i++) {
+    for (size_t j = 0; j < M; j++) {
+        for (size_t i = 0; i < N; i++) {
             result[i][j] = m[j][i];
         }
     }
@@ -355,10 +365,10 @@ template <size_t N, size_t K, size_t M, typename value_type>
 inline Matrix<M, N, value_type> operator * (const Matrix<M, K, value_type>& a, const Matrix<K, N, value_type>& b) {
     Matrix<M, N, value_type> result;
     const auto bt = transpose(b);
-    for (int j = 0; j < M; j++) {
-        for (int i = 0; i < N; i++) {
+    for (size_t j = 0; j < M; j++) {
+        for (size_t i = 0; i < N; i++) {
             result[j][i] = 0;
-            for (int k = 0; k < K; k++) {
+            for (size_t k = 0; k < K; k++) {
                 result[j][i] += a[j][k] * bt[i][k];
             }
         }
@@ -462,15 +472,15 @@ inline Matrix<N, M, value_type> operator - (const Matrix<N, M, value_type>& a, v
 // Cofactor Matrix
 // https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
 template <size_t N1, size_t N2 = N1 - 1, typename value_type>
-inline Matrix<N2, N2> cofactor(const Matrix<N1, N1, value_type>& m, int p, int q) {
+inline Matrix<N2, N2> cofactor(const Matrix<N1, N1, value_type>& m, size_t p, size_t q) {
     assert(p < N1 && q < N1);
 
     Matrix<N2, N2> result;
 
     // Looping for each element of the matrix
-    int i = 0, j = 0;
-    for (int row = 0; row < N1; row++) {
-        for (int col = 0; col < N1; col++) {
+    size_t i = 0, j = 0;
+    for (size_t row = 0; row < N1; row++) {
+        for (size_t col = 0; col < N1; col++) {
             //  Copying into temporary matrix only those element
             //  which are not in given row and column
             if (row != p && col != q) {
@@ -497,7 +507,7 @@ inline value_type determinant(const Matrix<N, N, value_type>& m) {
     value_type sign = 1;
     value_type result = 0;
     // Iterate for each element of first row
-    for (int f = 0; f < N; f++) {
+    for (size_t f = 0; f < N; f++) {
         result += sign * m[0][f] * determinant(cofactor(m, 0, f));
         // terms are to be added with alternate sign
         sign = -sign;
@@ -520,8 +530,8 @@ inline Matrix<N, N, value_type> adjoint(const Matrix<N, N, value_type>& m) {
     Matrix<N, N, value_type> adj;
 
     value_type sign = 1;
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
             // sign of adj[j][i] positive if sum of row
             // and column indexes is even.
             sign = ((i + j) % 2 == 0) ? 1 : -1;
@@ -541,69 +551,76 @@ inline Matrix<1, 1, value_type> adjoint(const Matrix<1, 1, value_type>& m) {
     return { 1 };
 }
 
-//// Inverse Matrix: inverse(m) = adj(m)/det(m)
-//// https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
-//template <size_t N, typename value_type>
-//inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
-//    value_type det = determinant(m);
-//    if (det == 0) {
-//        throw std::range_error("null determinant");
-//    }
-//
-//    Matrix<N, N, value_type> inverse;
-//    const auto adj = adjoint(m);
-//    for (int i = 0; i < N; i++)
-//        for (int j = 0; j < N; j++) inverse[i][j] = adj[i][j] / det;
-//
-//    return inverse;
-//}
+// Inverse Matrix using Cramer's rule - Pretty much always slower than Gauss-Jordan
+// https://en.wikipedia.org/wiki/Minor_(linear_algebra)#Inverse_of_a_matrix
+template <size_t N, typename value_type>
+inline Matrix<N, N, value_type> cramerInverse(const Matrix<N, N, value_type>& m) {
+    value_type det = determinant(m);
+    if (det == 0) {
+        throw std::domain_error("Singular Matrix.");
+    }
 
-// --- Large Matrix Inversion ---
+    Matrix<N, N, value_type> inverse;
+    const auto adj = adjoint(m);
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
+            inverse[i][j] = adj[i][j] / det;
+        }
+    }
+
+    return inverse;
+}
+
+// --- Large Matrix Inversion using Gauss-Jordan ---
 
 template <size_t N, size_t M, typename value_type>
-void swap_rows(gls::Matrix<N, M, value_type>& m, size_t i, size_t j) {
+void swap_rows(Matrix<N, M, value_type>& m, size_t i, size_t j) {
     for (size_t column = 0; column < M; column++)
         std::swap(m[i][column], m[j][column]);
 }
 
 // Convert matrix to reduced row echelon form
+// NOTE: This is only numerically stable in double precision
 template <size_t N, size_t M, typename value_type>
-void rref(gls::Matrix<N, M, value_type>& m) {
+void to_reduced_row_echelon_form(Matrix<N, M, value_type>& m) {
     for (size_t row = 0, lead = 0; row < N && lead < M; ++row, ++lead) {
-        size_t i = row;
+        auto i = row;
         while (m[i][lead] == 0) {
             if (++i == N) {
                 i = row;
-                if (++lead == M)
+                if (++lead == M) {
                     return;
+                }
             }
         }
         swap_rows(m, i, row);
-        if (m[row][lead] != 0) {
-            value_type f = m[row][lead];
-            for (size_t column = 0; column < M; ++column)
-                m[row][column] /= f;
+
+        const auto f = m[row][lead];
+        if (m[row][lead] == 0) {
+            throw std::domain_error("Singular Matrix.");
         }
+        m[row] /= f;
+
         for (size_t j = 0; j < N; ++j) {
-            if (j == row)
-                continue;
-            value_type f = m[j][lead];
-            for (size_t column = 0; column < M; ++column)
-                m[j][column] -= f * m[row][column];
+            if (j != row) {
+                m[j] -= m[j][lead] * m[row];
+            }
         }
     }
 }
 
+// Gauss-Jordan Matrix Inversion
 template <size_t N, typename value_type>
-gls::Matrix<N, N, value_type> inverse(const gls::Matrix<N, N, value_type>& m) {
-    gls::Matrix<N, 2 * N, value_type> tmp;
+inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
+    // NOTE: With float data this method is prone to gross errors
+    Matrix<N, 2 * N, double> tmp;
     for (size_t row = 0; row < N; ++row) {
         for (size_t column = 0; column < N; ++column)
             tmp[row][column] = m[row][column];
         tmp[row][row + N] = 1;
     }
-    rref(tmp);
-    gls::Matrix<N, N, value_type> inv;
+    to_reduced_row_echelon_form(tmp);
+    Matrix<N, N, value_type> inv;
     for (size_t row = 0; row < N; ++row) {
         for (size_t column = 0; column < N; ++column)
             inv[row][column] = tmp[row][column + N];
@@ -613,31 +630,31 @@ gls::Matrix<N, N, value_type> inverse(const gls::Matrix<N, N, value_type>& m) {
 
 // From DCRaw (https://www.dechifro.org/dcraw/)
 template <size_t size, typename value_type>
-gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, value_type>& in) {
-    gls::Matrix<3,6> work;
+Matrix<size, 3> pseudoinverse(const Matrix<size, 3, value_type>& in) {
+    Matrix<3,6> work;
 
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 6; j++) {
+    for (size_t i = 0; i < 3; i++) {
+        for (size_t j = 0; j < 6; j++) {
             work[i][j] = j == i + 3;
         }
-        for (int j = 0; j < 3; j++) {
-            for (int k = 0; k < size; k++) work[i][j] += in[k][i] * in[k][j];
+        for (size_t j = 0; j < 3; j++) {
+            for (size_t k = 0; k < size; k++) work[i][j] += in[k][i] * in[k][j];
         }
     }
-    for (int i = 0; i < 3; i++) {
+    for (size_t i = 0; i < 3; i++) {
         value_type num = work[i][i];
-        for (int j = 0; j < 6; j++) work[i][j] /= num;
-        for (int k = 0; k < 3; k++) {
+        for (size_t j = 0; j < 6; j++) work[i][j] /= num;
+        for (size_t k = 0; k < 3; k++) {
             if (k == i) continue;
             num = work[k][i];
-            for (int j = 0; j < 6; j++) work[k][j] -= work[i][j] * num;
+            for (size_t j = 0; j < 6; j++) work[k][j] -= work[i][j] * num;
         }
     }
-    gls::Matrix<size, 3> out;
-    for (int i = 0; i < size; i++) {
-        for (int j = 0; j < 3; j++) {
+    Matrix<size, 3> out;
+    for (size_t i = 0; i < size; i++) {
+        for (size_t j = 0; j < 3; j++) {
             out[i][j] = 0;
-            for (int k = 0; k < 3; k++) {
+            for (size_t k = 0; k < 3; k++) {
                 out[i][j] += work[j][k + 3] * in[i][k];
             }
         }
@@ -649,7 +666,7 @@ gls::Matrix<size, 3> pseudoinverse(const gls::Matrix<size, 3, value_type>& in) {
 
 template <size_t N, typename value_type>
 inline std::ostream& operator<<(std::ostream& os, const Vector<N, value_type>& v) {
-    for (int i = 0; i < N; i++) {
+    for (size_t i = 0; i < N; i++) {
         os << v[i];
         if (i < N - 1) {
             os << ", ";
@@ -660,7 +677,7 @@ inline std::ostream& operator<<(std::ostream& os, const Vector<N, value_type>& v
 
 template <size_t N, size_t M, typename value_type>
 inline std::ostream& operator<<(std::ostream& os, const Matrix<N, M, value_type>& m) {
-    for (int j = 0; j < N; j++) {
+    for (size_t j = 0; j < N; j++) {
         os << m[j] << ",";
         if (j < N-1) {
             os << std::endl;
@@ -673,11 +690,11 @@ inline std::ostream& operator<<(std::ostream& os, const Matrix<N, M, value_type>
 
 namespace std {
 
-// Useful for printing a gls::Matrix on a single line
+// Useful for printing a Matrix on a single line
 
 template <typename value_type>
 inline std::ostream& operator<<(std::ostream& os, const std::span<value_type>& s) {
-    for (int i = 0; i < s.size(); i++) {
+    for (size_t i = 0; i < s.size(); i++) {
         os << s[i];
         if (i < s.size() - 1) {
             os << ", ";
