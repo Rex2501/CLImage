@@ -32,6 +32,7 @@
 		E51AACE727E1548400E99B58 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
 		E5345EE428D4F8A100FC57FA /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE128D4F8A100FC57FA /* SURF.cpp */; };
 		E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */; };
+		E5470D3B28F6347C003C0B18 /* homography.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5470D3828F63473003C0B18 /* homography.cpp */; };
 		E554E3EB28DB90DD0095F20D /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E554E3E928DB90DD0095F20D /* RANSAC.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
@@ -150,6 +151,8 @@
 		E5345EE228D4F8A100FC57FA /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = SURF.hpp; path = ../../CLImage/app/src/main/cpp/SURF.hpp; sourceTree = "<group>"; };
 		E5345EE328D4F8A100FC57FA /* feature2d.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = feature2d.hpp; path = ../../CLImage/app/src/main/cpp/feature2d.hpp; sourceTree = "<group>"; };
 		E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ImageRegistration.cpp; path = ../../CLImage/app/src/main/cpp/ImageRegistration.cpp; sourceTree = "<group>"; };
+		E5470D3828F63473003C0B18 /* homography.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = homography.cpp; path = ../../CLImage/app/src/main/cpp/homography.cpp; sourceTree = "<group>"; };
+		E5470D3928F63473003C0B18 /* homography.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = homography.hpp; path = ../../CLImage/app/src/main/cpp/homography.hpp; sourceTree = "<group>"; };
 		E554E3E928DB90DD0095F20D /* RANSAC.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = RANSAC.cpp; path = ../../CLImage/app/src/main/cpp/RANSAC.cpp; sourceTree = "<group>"; };
 		E554E3EA28DB90DD0095F20D /* RANSAC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = RANSAC.hpp; path = ../../CLImage/app/src/main/cpp/RANSAC.hpp; sourceTree = "<group>"; };
 		E554E3EC28E4B1E60095F20D /* gls_geometry.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_geometry.hpp; path = ../../src/gls_geometry.hpp; sourceTree = "<group>"; };
@@ -263,10 +266,12 @@
 				E50D253D2837FB53003305E9 /* CameraCalibration.hpp */,
 				E5AB797F27EAD0D7008B3D30 /* raw_pipeline.cpp */,
 				E5345EE328D4F8A100FC57FA /* feature2d.hpp */,
-				E5345EE128D4F8A100FC57FA /* SURF.cpp */,
+				E5470D3928F63473003C0B18 /* homography.hpp */,
+				E5470D3828F63473003C0B18 /* homography.cpp */,
 				E5345EE228D4F8A100FC57FA /* SURF.hpp */,
-				E554E3E928DB90DD0095F20D /* RANSAC.cpp */,
+				E5345EE128D4F8A100FC57FA /* SURF.cpp */,
 				E554E3EA28DB90DD0095F20D /* RANSAC.hpp */,
+				E554E3E928DB90DD0095F20D /* RANSAC.cpp */,
 				E554E3ED28E4B5D00095F20D /* PRNG.h */,
 			);
 			name = App;
@@ -565,6 +570,7 @@
 				E5E9EAA628B8D9030079A5C0 /* gls_dng_lossless_jpeg.hpp in Sources */,
 				E5E9EAA728B8D9030079A5C0 /* gls_dng_lossless_jpeg.cpp in Sources */,
 				E5E9EAA828B8D9030079A5C0 /* gls_color_science.cpp in Sources */,
+				E5470D3B28F6347C003C0B18 /* homography.cpp in Sources */,
 				E5E9EAA928B8D9030079A5C0 /* gls_color_science.hpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

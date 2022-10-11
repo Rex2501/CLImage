@@ -1,15 +1,26 @@
+// Copyright (c) 2021-2022 Glass Imaging Inc.
+// Author: Fabio Riccardi <fabio@glass-imaging.com>
 //
-//  RANSAC.cpp
-//  ImageRegistration
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//  Created by Fabio Riccardi on 9/21/22.
+//    http://www.apache.org/licenses/LICENSE-2.0
 //
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include "RANSAC.hpp"
 
 #include <float.h>
 
 #include "gls_linalg.hpp"
+#include "homography.hpp"
+
+#define USE_SIMPLE_PERSPECTIVE_TRANSFORM false
 
 #define PSEUDO_RANDOM_TEST_SEQUENCE true
 
@@ -19,6 +30,7 @@
 
 namespace gls {
 
+#if USE_SIMPLE_PERSPECTIVE_TRANSFORM
 gls::image<float> MatrixMultiply(const gls::image<float>& X1, const gls::image<float>& X2) {
     assert(X1.width == X2.height);
 
@@ -38,7 +50,9 @@ gls::image<float> MatrixMultiply(const gls::image<float>& X1, const gls::image<f
 
 template <typename TA, typename TB>
 void getPerspectiveTransformAB(const std::vector<Point2f>& src, const std::vector<Point2f>& dst, TA& a, TB& b) {
-    int count = (int) src.size();
+    const int count = (int) src.size();
+    assert(a.width == 8 && a.height == 2 * count);
+    assert(b.width == 1 && b.height == 2 * count);
 
     for (int i = 0; i < count; i++) {
         a[i][0] = a[i + count][3] = src[i].x;
@@ -54,66 +68,88 @@ void getPerspectiveTransformAB(const std::vector<Point2f>& src, const std::vecto
     }
 }
 
-template <size_t NN=8>
-gls::Vector<NN> getPerspectiveTransformIata(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
-    gls::Matrix<NN, NN> a;
-    gls::Matrix<NN, 1> b;
+gls::Matrix<3, 3> getPerspectiveTransformIata(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+    assert(src.size() == 4 && dst.size() == 4);
+
+    gls::Matrix<8, 8> a;
+    gls::Matrix<8, 1> b;
     getPerspectiveTransformAB(src, dst, a, b);
 
-    gls::Matrix<NN, NN> at = transpose(a);
-    gls::Matrix<NN, NN> ata = at * a;
-    gls::Vector<NN> atb = at * b;
+    gls::Matrix<8, 8> at = transpose(a);
+    gls::Matrix<8, 8> ata = at * a;
+    gls::Vector<8> atb = at * b;
 
-    // TODO: replace this with a proper solver
-    // return inverse(ata) * atb;
-    return LUSolve(ata, atb);
+    const auto h = LUSolve(ata, atb);
+
+    return {
+        h[0], h[1], h[2],
+        h[3], h[4], h[5],
+        h[6], h[7], 1
+    };
 }
 
-template <size_t NN=8>
-gls::Vector<NN> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+template <typename T>
+gls::image<T> transpose(const gls::image<T>& a) {
+    auto at = gls::image<float>(a.height, a.width);
+    for (int j = 0; j < a.height; j++) {
+        for (int i = 0; i < a.width; i++) {  // find the transpose of a
+            at[i][j] = a[j][i];
+        }
+    }
+    return at;
+}
+
+gls::Matrix<3, 3> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
     int count = (int) src.size();
 
-    auto a = gls::image<float>(NN, 2 * count);
+    auto a = gls::image<float>(8, 2 * count);
     auto b = gls::image<float>(1, 2 * count);
 
     getPerspectiveTransformAB(src, dst, a, b);
 
-    auto at = gls::image<float>(a.height, NN);
-    for (int i = 0; i < NN; i++) {
-        for (int j = 0; j < 2 * count; j++) {
-            at[i][j] = a[j][i];
-        }
-    }
-
+    /* Normal matrix to find least squares */
+    const auto at = transpose(a);
     const auto ata = MatrixMultiply(at, a);
     const auto atb = MatrixMultiply(at, b);
 
-    gls::Matrix<NN, NN> aa;
-    gls::Vector<NN> bb;
-    for (int i = 0; i < NN; i++) {
-        for (int j = 0; j < NN; j++) {
+    gls::Matrix<8, 8> aa;
+    gls::Vector<8> bb;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
             aa[i][j] = ata[i][j];
         }
     }
-    for (int i = 0; i < NN; i++) {
+    for (int i = 0; i < 8; i++) {
         bb[i] = atb[i][0];
     }
 
     // TODO: replace this with a proper solver
     // return inverse(aa) * bb;
-    return LUSolve(aa, bb);
+    const auto h = LUSolve(aa, bb);
+
+    return {
+        h[0], h[1], h[2],
+        h[3], h[4], h[5],
+        h[6], h[7], 1
+    };
+}
+#endif
+
+Point2f transform(const Point2f& p, const gls::Matrix<3, 3>& homography) {
+    gls::Vector<3> pv = { p.x, p.y, 1 };
+    const auto op = homography * pv;            // Transformed point in homogeneous coordinates
+    return { op[0] / op[2], op[1] / op[2] };    // Converted to cartesian coordinates
 }
 
-gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
+gls::Matrix<3, 3> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
     assert(p1.size() > 0 && p2.size() > 0);
 
     // Calculate the maximum set of interior points
     int max_iters = 2000;
     int iters = max_iters;
-    int innerP, max_innerP = 0;
+    int max_innerP = 0;
     std::vector<int> innerPvInd;  // Inner point set index - temporary
     std::vector<int> innerPvInd_i;
-    std::vector<Point2f> selectP1, selectP2;
     // generate random table
     int selectIndex[2000][4];
 
@@ -148,34 +184,36 @@ gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Poin
 
     int k = 0;
     for (; k < iters; k++) {
-        selectP1.push_back(p1[selectIndex[k][0]]);
-        selectP1.push_back(p1[selectIndex[k][1]]);
-        selectP1.push_back(p1[selectIndex[k][2]]);
-        selectP1.push_back(p1[selectIndex[k][3]]);
-        selectP2.push_back(p2[selectIndex[k][0]]);
-        selectP2.push_back(p2[selectIndex[k][1]]);
-        selectP2.push_back(p2[selectIndex[k][2]]);
-        selectP2.push_back(p2[selectIndex[k][3]]);
+        const std::vector<Point2f> selectP1 = {
+            p1[selectIndex[k][0]],
+            p1[selectIndex[k][1]],
+            p1[selectIndex[k][2]],
+            p1[selectIndex[k][3]]
+        };
+        const std::vector<Point2f> selectP2 = {
+            p2[selectIndex[k][0]],
+            p2[selectIndex[k][1]],
+            p2[selectIndex[k][2]],
+            p2[selectIndex[k][3]]
+        };
 
         // Calculate the perspective transformation matrix
         // (currently the singular matrix inverse cannot be solved, and the
         // singular decomposition inversion method will be improved in the future)
         try {
-            gls::Vector<8> trans = getPerspectiveTransformIata(selectP1, selectP2);
-
+#if USE_SIMPLE_PERSPECTIVE_TRANSFORM
+            const auto homography = getPerspectiveTransformIata(selectP1, selectP2);
+#else
+            const auto homography = findHomography(selectP1, selectP2);
+#endif
             // Calculate the model parameter error, if the error is greater than the threshold, discard
             // this set of model parameters
-            innerP = 0;
-            float u, v, w;
-            float errX, errY;
+            int innerP = 0;
             for (int i = 0; i < p1.size(); i++) {
-                errX = errY = 0;
-                u = p1[i].x * trans[0] + p1[i].y * trans[1] + trans[2];
-                v = p1[i].x * trans[3] + p1[i].y * trans[4] + trans[5];
-                w = p1[i].x * trans[6] + p1[i].y * trans[7] + 1;
-                errX = fabs(u / w - p2[i].x);
-                errY = fabs(v / w - p2[i].y);
-                if (threshold > (errX * errX + errY * errY)) {
+                const auto p1t = transform(p1[i], homography);
+                const auto diff = gls::Vector<2>(p1t) - gls::Vector<2>(p2[i]);
+                const auto errSquare = dot(diff, diff);
+                if (errSquare < threshold) {
                     innerP++;
                     innerPvInd.push_back(i);
                 }
@@ -203,9 +241,6 @@ gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Poin
         } catch (const std::logic_error& e) {
             printf("Perspective transformation matrix transformation error");
         }
-
-        selectP1.clear();
-        selectP2.clear();
     }
     printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, p1.size(), k);
 
@@ -217,7 +252,11 @@ gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Poin
         _p2[i] = p2[innerPvInd_i[i]];
     }
 
+#if USE_SIMPLE_PERSPECTIVE_TRANSFORM
     return getPerspectiveTransformLSM2(_p1, _p2);
+#else
+    return findHomography(_p1, _p2);
+#endif
 }
 
 } // namespace gls

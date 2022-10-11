@@ -276,6 +276,10 @@ inline Vector<N, value_type> sqrt(const Vector<N, value_type>& v) {
 
 template <size_t N, size_t M, typename value_type>
 struct Matrix : public std::array<Vector<M, value_type>, N> {
+    // Give Matrix some Image traits
+    static const constexpr int width = M;
+    static const constexpr int height = N;
+
     Matrix() {}
 
     Matrix(const Vector<N * M, value_type>& v) {
@@ -307,6 +311,38 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
         for (const auto& v : list) {
             std::copy(v.begin(), v.end(), span(row++).begin());
         }
+    }
+
+    template <typename T>
+    Matrix& operator += (const T& v) {
+        for (int i = 0; i < N; i++) {
+            (*this)[i] += v;
+        }
+        return *this;
+    }
+
+    template <typename T>
+    Matrix& operator -= (const T& v) {
+        for (int i = 0; i < N; i++) {
+            (*this)[i] -= v;
+        }
+        return *this;
+    }
+
+    template <typename T>
+    Matrix& operator *= (const T& v) {
+        for (int i = 0; i < N; i++) {
+            (*this)[i] *= v;
+        }
+        return *this;
+    }
+
+    template <typename T>
+    Matrix& operator /= (const T& v) {
+        for (int i = 0; i < N; i++) {
+            (*this)[i] /= v;
+        }
+        return *this;
     }
 
     // Matrix Raw Data
@@ -631,10 +667,11 @@ inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
     return inv;
 }
 
+// LU Decomposition Solver
+// Based on Wikipidia's C code example: https://en.wikipedia.org/wiki/LU_decomposition#C_code_example
 template <size_t N, typename value_type>
 void LUPDecompose(Matrix<N, N, value_type>& A,
-                  Vector<N + 1, int>& P,
-                  value_type Tol) {
+                  Vector<N + 1, int>& P) {
     for (int i = 0; i <= N; i++) {
         P[i] = i; // Unit permutation matrix, P[N] initialized with N
     }
@@ -651,8 +688,8 @@ void LUPDecompose(Matrix<N, N, value_type>& A,
             }
         }
 
-        if (maxA < Tol) {
-            throw std::domain_error("Degenerate Matrix.");
+        if (maxA <= std::numeric_limits<value_type>::epsilon()) {
+            throw std::domain_error("Singular Matrix.");
         }
 
         if (imax != i) {
@@ -679,6 +716,7 @@ gls::Vector<N, value_type> LUPSolve(const Matrix<N, N, A_type>&A,
                                     const Vector<N + 1, int>& P,
                                     const Vector<N, value_type>& b) {
     Vector<N, value_type> x;
+
     for (int i = 0; i < N; i++) {
         x[i] = b[P[i]];
         for (int k = 0; k < i; k++) {
@@ -695,17 +733,52 @@ gls::Vector<N, value_type> LUPSolve(const Matrix<N, N, A_type>&A,
 }
 
 template <size_t N, typename value_type>
-gls::Vector<N, value_type> LUSolve2(const gls::Matrix<N, N, value_type>& m,
-                                    const gls::Vector<N, value_type>& b) {
-    Matrix<N, N, double> A(m);
-    Vector<N + 1, int> P;
-    LUPDecompose(A, P, 1e-12);
-    return LUPSolve(A, P, b);
+void LUPInvert(const Matrix<N, N, value_type>& A, const Vector<N + 1, int>& P) {
+    const Matrix<N, N, value_type> IA;
+
+    for (int j = 0; j < N; j++) {
+        for (int i = 0; i < N; i++) {
+            IA[i][j] = P[i] == j ? 1.0 : 0.0;
+
+            for (int k = 0; k < i; k++) {
+                IA[i][j] -= A[i][k] * IA[k][j];
+            }
+        }
+
+        for (int i = N - 1; i >= 0; i--) {
+            for (int k = i + 1; k < N; k++) {
+                IA[i][j] -= A[i][k] * IA[k][j];
+            }
+            IA[i][j] /= A[i][i];
+        }
+    }
+    return IA;
+}
+
+template <size_t N, typename value_type>
+value_type LUPDeterminant(const Matrix<N, N, value_type>& A, const Vector<N + 1, int>& P) {
+    value_type det = A[0][0];
+
+    for (int i = 1; i < N; i++) {
+        det *= A[i][i];
+    }
+    return (P[N] - N) % 2 == 0 ? det : -det;
 }
 
 template <size_t N, typename value_type>
 gls::Vector<N, value_type> LUSolve(const gls::Matrix<N, N, value_type>& m,
-                                   const gls::Vector<N, value_type>& rightPart) {
+                                   const gls::Vector<N, value_type>& b) {
+    Matrix<N, N, double> A(m);
+    Vector<N + 1, int> P;
+    LUPDecompose(A, P);
+    return LUPSolve(A, P, b);
+}
+
+// Alternative LU Decomposition Solver
+// Based on Wikipidia's C# code example: https://en.wikipedia.org/wiki/LU_decomposition#C#_code_example
+template <size_t N, typename value_type>
+gls::Vector<N, value_type> LUSolveAlt(const gls::Matrix<N, N, value_type>& m,
+                                      const gls::Vector<N, value_type>& b) {
     // decomposition of matrix
     gls::Matrix<N, N, double> lu;
     for (int i = 0; i < N; i++) {
@@ -733,7 +806,7 @@ gls::Vector<N, value_type> LUSolve(const gls::Matrix<N, N, value_type>& m,
         for (int k = 0; k < i; k++) {
             sum += lu[i][k] * y[k];
         }
-        y[i] = rightPart[i] - sum;
+        y[i] = b[i] - sum;
     }
     // find solution of Ux = y
     gls::Vector<N, value_type> x;

@@ -16,6 +16,8 @@
 #ifndef gls_geometry_h
 #define gls_geometry_h
 
+#include "gls_linalg.hpp"
+
 namespace gls {
 
 template <typename T>
@@ -113,7 +115,15 @@ struct basic_point {
         y -= other.y;
         return *this;
     }
+
+    operator gls::Vector<2, T>() const { return {x, y}; }
 };
+
+template <typename value_type>
+inline std::ostream& operator<<(std::ostream& os, const basic_point<value_type>& p) {
+    os << "x: " << p.x << ", y: " << p.y;
+    return os;
+}
 
 template <typename T>
 bool operator == (const basic_point<T>& a, const basic_point<T>& b) {

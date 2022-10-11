@@ -13,41 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
- Expected output on Leica phone with half size input
-
- resizing dets and traces vectors to 16
- --> SURF Creation Time: 177.59ms
- --> Integral Image Time: 60.82ms
- enqueueing 16 calcLayerDetAndTrace
- enqueueing 8 findMaximaInLayer
- keyPointMaxima: 18970
- Features Finding Time: 178.97ms
- enqueueing 16 calcLayerDetAndTrace
- enqueueing 8 findMaximaInLayer
- keyPointMaxima: 16867
- Features Finding Time: 162.37ms
- --> SURF Detection Time: 412.41ms
-  ----------
-  Detected feature points: 18970      16867
- keypoints1 erase: 300 keypoints2 erase: 300
- --> Keypoint Erase Time: 0.01ms
- --> Integral Image Mapping Time: 0.23ms
- enqueueing 8 computeRange
- enqueueing 8 computeRange
- --> SURF Descriptor Time: 81.34ms
- --> Integral Image Unmapping Time: 0.15ms
- --> Keypoint Matching & Sorting Time: 25.47ms
- --> Features Finding Time: 696.98ms
- isFeatureDection: 1
-  RANSAC interior point ratio - number of loops: 101 150 82
-   Transformation matrix parameter:
-  0.989899 0.027832 83.250000
- -0.030464 0.993225 119.750000
- -0.000002 -0.000002 1
- Elapsed Time: 702.232552
- */
-
 #include "SURF.hpp"
 
 #include <float.h>
@@ -1119,34 +1084,12 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
             DetAndTraceHaarPattern haarPattern(sum[0]->width, sum[0]->height, sizes[i], sampleSteps[i]);
 
 #if USE_INTEGRAL_PYRAMID
-            /*
-                 RANSAC interior point ratio - number of loops: 133 150 31
-                  Transformation matrix parameter:
-                 0.989563 0.027557 84.000000
-                -0.030586 0.992798 120.687500
-                -0.000002 -0.000002 1
-             */
             // Rescale sampling points to the pyramid level
             haarPattern.rescale(sampleSteps[i]);
 
             const int idx = sampleSteps[i] == 8 ? 3 : sampleSteps[i] == 4 ? 2 : sampleSteps[i] == 2 ? 1 : 0;
             clCalcDetAndTrace(*sum[idx], dets[i].get(), traces[i].get(), 1, haarPattern);
 #else
-            /* without pyramid emulation
-                 RANSAC interior point ratio - number of loops: 121 150 39
-                  Transformation matrix parameter:
-                 0.989685 0.027618 84.000000
-                -0.030334 0.993164 119.187500
-                -0.000002 -0.000002 1
-             */
-            /* with pyramid emulation
-                 RANSAC interior point ratio - number of loops: 133 150 31
-                  Transformation matrix parameter:
-                 0.989563 0.027557 84.000000
-                -0.030586 0.992798 120.687500
-                -0.000002 -0.000002 1
-             */
-
 //            // Emulate the integral pyramid scaling roundoff
 //            haarPattern.rescale(sampleSteps[i]);
 //            haarPattern.upscale(sampleSteps[i]);

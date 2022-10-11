@@ -67,19 +67,13 @@ void testSURF() {
     assert(matchpoints1.size() == matchpoints2.size());
     printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
-    const auto transParameter = gls::getRANSAC2(matchpoints1, matchpoints2, 9, (int) matchpoints1.size());
+    const auto homography = gls::getRANSAC2(matchpoints1, matchpoints2, /*threshold=*/ 9, (int) matchpoints1.size());
+
+    std::cout << "Homography:\n" << homography << std::endl;
 
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
 
-    printf(" Transformation matrix parameter: \n ");
-    for (int i = 0; i < transParameter.size(); i++) {
-        printf("%lf ", transParameter[i]);
-        if ((i + 1) % 3 == 0) {
-            printf("\n");
-        }
-    }
-    printf("1\n");
     printf("Elapsed Time: %f\n", elapsed_time_ms);
 
     auto inputImage1 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
@@ -99,12 +93,6 @@ void testSURF() {
     inputImage2.unmapImage(inputImage2Cpu);
 
     auto outputImage = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
-
-    gls::Matrix<3, 3> homography = {
-        { transParameter[0], transParameter[1], transParameter[2] },
-        { transParameter[3], transParameter[4], transParameter[5] },
-        { transParameter[6], transParameter[7], 1 }
-    };
 
     gls::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
 

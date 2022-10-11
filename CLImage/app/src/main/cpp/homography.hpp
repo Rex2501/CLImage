@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RANSAC_hpp
-#define RANSAC_hpp
+#ifndef homography_hpp
+#define homography_hpp
 
 #include <vector>
 
-#include "feature2d.hpp"
 #include "gls_linalg.hpp"
+#include "feature2d.hpp"
 
 namespace gls {
 
-gls::Matrix<3, 3> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
+Matrix<3, 3> findHomography(const std::vector<Point2f>& points1, const std::vector<Point2f>& points2);
 
-} // namespace gls
+}  // namespace gls
 
-#endif /* RANSAC_hpp */
+#endif /* homography_hpp */
