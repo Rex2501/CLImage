@@ -348,14 +348,6 @@ kernel void integral_sum_rows_image(global const float* buf_ptr, int buf_width,
     }
 }
 
-float L1Norm(global const float4* p1, global const float4* p2, int n) {
-    float4 sum = 0;
-    for (int i = 0; i < n; i++) {
-        sum += fabs(p1[i] - p2[i]);
-    }
-    return sum.x + sum.y + sum.z + sum.w;
-}
-
 float L2Norm(global const float4* p1, global const float4* p2, int n) {
     float4 sum = 0;
     for (int i = 0; i < n; i++) {

@@ -201,6 +201,7 @@ inline bool solve3x3(const gls::Matrix<3, 3>& A, const gls::Vector<3>& b, gls::V
         } / det;
         return true;
     }
+    printf("solve3x3: Singular Matrix!\n");
     return false;
 }
 
@@ -931,9 +932,8 @@ public:
                           gls::image<float>::unique_ptr* _descriptors,
                           gls::size sections = { 1, 1 });
 
-    void clMatchKeyPoints(const gls::image<float>& descriptor1,
-                          const gls::image<float>& descriptor2,
-                          std::vector<DMatch>* matchedPoints);
+    std::vector<DMatch> clMatchKeyPoints(const gls::image<float>& descriptor1,
+                                         const gls::image<float>& descriptor2);
 };
 
 void SURF::clIntegral(const gls::image<float>& img,
@@ -1304,14 +1304,6 @@ void SURF::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_
     sort(keypoints->begin(), keypoints->end(), KeypointGreater());
 }
 
-static inline float L1Norm(float* p1, float* p2, int n) {
-    float sum = 0;
-    for (int i = 0; i < n; i++) {
-        sum += fabs(p1[i] - p2[i]);
-    }
-    return sum;
-}
-
 static inline float L2Norm(const float* p1, const float* p2, int n) {
     float sum = 0;
     for (int i = 0; i < n; i++) {
@@ -1534,9 +1526,8 @@ cl::Buffer bufferFromImage(const gls::image<T>& source) {
     return buffer;
 }
 
-void SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
-                            const gls::image<float>& descriptor2,
-                            std::vector<DMatch>* matchedPoints) {
+std::vector<DMatch> SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
+                                           const gls::image<float>& descriptor2) {
     auto descriptor1Buffer = bufferFromImage(descriptor1);
     auto descriptor2Buffer = bufferFromImage(descriptor2);
 
@@ -1565,9 +1556,14 @@ void SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
 
     // Collect results
     const auto matches = (DMatch *) cl::enqueueMapBuffer(matchesBuffer, true, CL_MAP_READ, 0, sizeof(DMatch) * descriptor1.height);
+
+    // Build result vector
     std::span<DMatch> newElements(matches, descriptor1.height);
-    matchedPoints->insert(end(*matchedPoints), begin(newElements), end(newElements));
+    std::vector<DMatch> matchedPoints(begin(newElements), end(newElements));
+
     cl::enqueueUnmapMemObject(matchesBuffer, (void*)matches);
+
+    return matchedPoints;
 }
 
 struct refineMatch {
@@ -1597,8 +1593,8 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     auto keypoints2 = std::make_unique<std::vector<KeyPoint>>();
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {2, 2});
-    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {2, 2});
+    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {1, 1});
+    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {1, 1});
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
@@ -1606,9 +1602,7 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     printf(" ---------- \n Detected feature points: %ld, %ld\n", keypoints1->size(), keypoints2->size());
 
     // (4) Match feature points
-    std::vector<DMatch> matchedPoints;
-    // matchKeyPoints(*descriptor1, *descriptor2, &matchedPoints);
-    surf.clMatchKeyPoints(*descriptor1, *descriptor2, &matchedPoints);
+    std::vector<DMatch> matchedPoints = surf.clMatchKeyPoints(*descriptor1, *descriptor2);
 
     auto t_match = std::chrono::high_resolution_clock::now();
     printf("--> Keypoint Matching: %.2fms\n", timeDiff(t_detect, t_match));
