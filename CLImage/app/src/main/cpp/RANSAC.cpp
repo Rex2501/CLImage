@@ -65,7 +65,8 @@ gls::Vector<NN> getPerspectiveTransformIata(const std::vector<Point2f>& src, con
     gls::Vector<NN> atb = at * b;
 
     // TODO: replace this with a proper solver
-    return inverse(ata) * atb;
+    // return inverse(ata) * atb;
+    return LUSolve(ata, atb);
 }
 
 template <size_t NN=8>
@@ -99,7 +100,8 @@ gls::Vector<NN> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, con
     }
 
     // TODO: replace this with a proper solver
-    return inverse(aa) * bb;
+    // return inverse(aa) * bb;
+    return LUSolve(aa, bb);
 }
 
 gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count) {
@@ -209,10 +211,10 @@ gls::Vector<8> getRANSAC2(const std::vector<Point2f>& p1, const std::vector<Poin
 
     // Calculate projection matrix parameters based on interior points
 
-    std::vector<Point2f> _p1, _p2;
+    std::vector<Point2f> _p1(max_innerP), _p2(max_innerP);
     for (int i = 0; i < max_innerP; i++) {
-        _p1.push_back(Point2f(p1[innerPvInd_i[i]].x, p1[innerPvInd_i[i]].y));
-        _p2.push_back(Point2f(p2[innerPvInd_i[i]].x, p2[innerPvInd_i[i]].y));
+        _p1[i] = p1[innerPvInd_i[i]];
+        _p2[i] = p2[innerPvInd_i[i]];
     }
 
     return getPerspectiveTransformLSM2(_p1, _p2);

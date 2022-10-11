@@ -367,10 +367,11 @@ inline Matrix<M, N, value_type> operator * (const Matrix<M, K, value_type>& a, c
     const auto bt = transpose(b);
     for (size_t j = 0; j < M; j++) {
         for (size_t i = 0; i < N; i++) {
-            result[j][i] = 0;
+            value_type sum = 0;
             for (size_t k = 0; k < K; k++) {
-                result[j][i] += a[j][k] * bt[i][k];
+                sum += a[j][k] * bt[i][k];
             }
+            result[j][i] = sum;
         }
     }
     return result;
@@ -596,13 +597,15 @@ void to_reduced_row_echelon_form(Matrix<N, M, value_type>& m) {
         swap_rows(m, i, row);
 
         const auto f = m[row][lead];
-        if (m[row][lead] == 0) {
+        if (f == 0) {
             throw std::domain_error("Singular Matrix.");
         }
+        // Divide row by f
         m[row] /= f;
 
         for (size_t j = 0; j < N; ++j) {
             if (j != row) {
+                // Subtract current row multiplied by m[j][lead] from row j
                 m[j] -= m[j][lead] * m[row];
             }
         }
@@ -626,6 +629,122 @@ inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
             inv[row][column] = tmp[row][column + N];
     }
     return inv;
+}
+
+template <size_t N, typename value_type>
+void LUPDecompose(Matrix<N, N, value_type>& A,
+                  Vector<N + 1, int>& P,
+                  value_type Tol) {
+    for (int i = 0; i <= N; i++) {
+        P[i] = i; // Unit permutation matrix, P[N] initialized with N
+    }
+
+    for (int i = 0; i < N; i++) {
+        value_type maxA = 0.0;
+        int imax = i;
+
+        for (int k = i; k < N; k++) {
+            value_type absA = fabs(A[k][i]);
+            if (absA > maxA) {
+                maxA = absA;
+                imax = k;
+            }
+        }
+
+        if (maxA < Tol) {
+            throw std::domain_error("Degenerate Matrix.");
+        }
+
+        if (imax != i) {
+            // pivoting P
+            std::swap(P[i], P[imax]);
+
+            // pivoting rows of A
+            swap_rows(A, i, imax);
+
+            // counting pivots starting from N (for determinant)
+            P[N]++;
+        }
+
+        for (int j = i + 1; j < N; j++) {
+            A[j][i] /= A[i][i];
+            for (int k = i + 1; k < N; k++)
+                A[j][k] -= A[j][i] * A[i][k];
+        }
+    }
+}
+
+template <size_t N, typename A_type, typename value_type>
+gls::Vector<N, value_type> LUPSolve(const Matrix<N, N, A_type>&A,
+                                    const Vector<N + 1, int>& P,
+                                    const Vector<N, value_type>& b) {
+    Vector<N, value_type> x;
+    for (int i = 0; i < N; i++) {
+        x[i] = b[P[i]];
+        for (int k = 0; k < i; k++) {
+            x[i] -= A[i][k] * x[k];
+        }
+    }
+    for (int i = N - 1; i >= 0; i--) {
+        for (int k = i + 1; k < N; k++) {
+            x[i] -= A[i][k] * x[k];
+        }
+        x[i] /= A[i][i];
+    }
+    return x;
+}
+
+template <size_t N, typename value_type>
+gls::Vector<N, value_type> LUSolve2(const gls::Matrix<N, N, value_type>& m,
+                                    const gls::Vector<N, value_type>& b) {
+    Matrix<N, N, double> A(m);
+    Vector<N + 1, int> P;
+    LUPDecompose(A, P, 1e-12);
+    return LUPSolve(A, P, b);
+}
+
+template <size_t N, typename value_type>
+gls::Vector<N, value_type> LUSolve(const gls::Matrix<N, N, value_type>& m,
+                                   const gls::Vector<N, value_type>& rightPart) {
+    // decomposition of matrix
+    gls::Matrix<N, N, double> lu;
+    for (int i = 0; i < N; i++) {
+        for (int j = i; j < N; j++) {
+            double sum = 0;
+            for (int k = 0; k < i; k++) {
+                sum += lu[i][k] * lu[k][j];
+            }
+            lu[i][j] = m[i][j] - sum;
+        }
+        for (int j = i + 1; j < N; j++) {
+            double sum = 0;
+            for (int k = 0; k < i; k++) {
+                sum += lu[j][k] * lu[k][i];
+            }
+            lu[j][i] = (1 / lu[i][i]) * (m[j][i] - sum);
+        }
+    }
+
+    // lu = L+U-I
+    // find solution of Ly = b
+    gls::Vector<N, double> y;
+    for (int i = 0; i < N; i++) {
+        double sum = 0;
+        for (int k = 0; k < i; k++) {
+            sum += lu[i][k] * y[k];
+        }
+        y[i] = rightPart[i] - sum;
+    }
+    // find solution of Ux = y
+    gls::Vector<N, value_type> x;
+    for (int i = N - 1; i >= 0; i--) {
+        double sum = 0;
+        for (int k = i + 1; k < N; k++) {
+            sum += lu[i][k] * x[k];
+        }
+        x[i] = (1 / lu[i][i]) * (y[i] - sum);
+    }
+    return x;
 }
 
 // From DCRaw (https://www.dechifro.org/dcraw/)
