@@ -170,6 +170,7 @@ add_executable(
         climage/gls_cl.cpp
         climage/gls_color_science.cpp
         ThreadPool.cpp
+        homography.cpp
         SURF.cpp
         RANSAC.cpp
         ImageRegistration.cpp

@@ -25,6 +25,8 @@ namespace gls {
 
 Matrix<3, 3> findHomography(const std::vector<Point2f>& points1, const std::vector<Point2f>& points2);
 
+gls::Matrix<3, 3> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst);
+
 }  // namespace gls
 
 #endif /* homography_hpp */

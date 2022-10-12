@@ -67,7 +67,7 @@ void testSURF() {
     assert(matchpoints1.size() == matchpoints2.size());
     printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
 
-    const auto homography = gls::getRANSAC2(matchpoints1, matchpoints2, /*threshold=*/ 9, (int) matchpoints1.size());
+    const auto homography = gls::RANSAC(matchpoints1, matchpoints2, /*threshold=*/ 9, (int) matchpoints1.size());
 
     std::cout << "Homography:\n" << homography << std::endl;
 

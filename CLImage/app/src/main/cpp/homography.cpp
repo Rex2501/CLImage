@@ -14,14 +14,190 @@
 // limitations under the License.
 
 /*
- NOTE: This code is derived from OpenCV
+ NOTE: Some of this code is derived from OpenCV
  */
 
 #include "homography.hpp"
 
+#include "SVD.hpp"
+
 namespace gls {
 
-typedef gls::basic_point<double> Point2d;
+template <typename T>
+gls::image<T> MatrixMultiply(const gls::image<T>& X1, const gls::image<T>& X2) {
+    assert(X1.width == X2.height);
+
+    auto result = gls::image<T>(X2.width, X1.height);
+
+    for (int i = 0; i < result.height; i++) {
+        for (int j = 0; j < result.width; j++) {
+            T sum = 0;
+            for (int ki = 0; ki < X1.width; ki++) {
+                sum += X1[i][ki] * X2[ki][j];
+            }
+            result[i][j] = sum;
+        }
+    }
+    return result;
+}
+
+template <typename T>
+gls::image<T> transpose(const gls::image<T>& a) {
+    auto at = gls::image<T>(a.height, a.width);
+    for (int j = 0; j < a.height; j++) {
+        for (int i = 0; i < a.width; i++) {  // find the transpose of a
+            at[i][j] = a[j][i];
+        }
+    }
+    return at;
+}
+
+template <typename T, size_t N>
+gls::Vector<N, T> minEigenvectorSVD(gls::Matrix<N, N, T> A) {
+    gls::Matrix<N, N, T> tU;
+    gls::Vector<N, T> tS;
+    gls::Matrix<N, N, T> tVT;
+
+    // Compute SVD
+    svd(A, tS, tU, tVT);
+
+    // Find the index of the smallest eigenvalue
+    double min_s = std::numeric_limits<double>::max();
+    int idx_s = 0;
+    for (int i = 0; i < N; i++) {
+        if (tS[i] < min_s) {
+            min_s = tS[i];
+            idx_s = i;
+        }
+    }
+
+    return tU[idx_s];
+}
+
+template <typename TP>
+void buildHomogeneousLinearLeastSquaresMatrix(const std::vector<Point2f>& src, const std::vector<Point2f>& dst, TP& P) {
+    const int count = (int) src.size();
+    assert(dst.size() == count);
+    assert(P.width == 9 && P.height == 2 * count);
+
+    for (int i = 0; i < count; i++) {
+        const gls::basic_point<double> p1 = { src[i].x, src[i].y };
+        const gls::basic_point<double> p2 = { dst[i].x, dst[i].y };
+
+        gls::Vector<9, double> dx = { -p1.x,   -p1.y, -1, 0, 0, 0, p1.x * p2.x, p1.y * p2.x, p2.x };
+        gls::Vector<9, double> dy = { 0, 0, 0, -p1.x, -p1.y, -1,   p1.x * p2.y, p1.y * p2.y, p2.y };
+
+        for (int j = 0; j < 9; j++) {
+            P[2 * i][j]     = dx[j];
+            P[2 * i + 1][j] = dy[j];
+        }
+    }
+}
+
+gls::Matrix<3, 3> getPerspectiveTransformSVD(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+    gls::Matrix<9, 9, double> ata;
+
+    if (src.size() == 4 && dst.size() == 4) {
+        gls::Matrix<8, 9, double> A;
+        buildHomogeneousLinearLeastSquaresMatrix(src, dst, A);
+
+        ata = transpose(A) * A;
+    } else {
+        int count = (int) src.size();
+
+        auto A = gls::image<double>(9, 2 * count);
+        buildHomogeneousLinearLeastSquaresMatrix(src, dst, A);
+
+        /* Normal matrix to find least squares */
+        const auto iat = transpose(A);
+        const auto iata = MatrixMultiply(iat, A);
+
+        for (int i = 0; i < 9; i++) {
+            for (int j = 0; j < 9; j++) {
+                ata[i][j] = iata[i][j];
+            }
+        }
+    }
+
+    const auto me = minEigenvectorSVD(ata);
+
+    gls::Matrix<3, 3> H = {
+        (float) me[0], (float) me[1], (float) me[2],
+        (float) me[3], (float) me[4], (float) me[5],
+        (float) me[6], (float) me[7], (float) me[8]
+    };
+
+    H /= H[2][2];
+
+    return H;
+}
+
+template <typename TA, typename TB>
+void getPerspectiveTransformAB(const std::vector<Point2f>& src, const std::vector<Point2f>& dst, TA& a, TB& b) {
+    const int count = (int) src.size();
+    assert(a.width == 8 && a.height == 2 * count);
+    assert(b.width == 1 && b.height == 2 * count);
+
+    for (int i = 0; i < count; i++) {
+        const auto& p1 = src[i];
+        const auto& p2 = dst[i];
+
+        a[i][0] = a[i + count][3] = p1.x;
+        a[i][1] = a[i + count][4] = p1.y;
+        a[i][2] = a[i + count][5] = 1;
+        a[i][3] = a[i][4] = a[i][5] = a[i + count][0] = a[i + count][1] = a[i + count][2] = 0;
+        a[i][6] = -p1.x * p2.x;
+        a[i][7] = -p1.y * p2.x;
+        a[i + count][6] = -p1.x * p2.y;
+        a[i + count][7] = -p1.y * p2.y;
+        b[i][0] = p2.x;
+        b[i + count][0] = p2.y;
+    }
+}
+
+gls::Matrix<3, 3> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, const std::vector<Point2f>& dst) {
+    int count = (int) src.size();
+    gls::Matrix<8, 8> ata;
+    gls::Vector<8> atb;
+
+    if (count == 4) {
+        gls::Matrix<8, 8> a;
+        gls::Matrix<8, 1> b;
+        getPerspectiveTransformAB(src, dst, a, b);
+
+        const auto at = transpose(a);
+        ata = at * a;
+        atb = at * b;
+    } else {
+        auto a = gls::image<float>(8, 2 * count);
+        auto b = gls::image<float>(1, 2 * count);
+
+        getPerspectiveTransformAB(src, dst, a, b);
+
+        /* Normal matrix to find least squares */
+        const auto iat = transpose(a);
+        const auto iata = MatrixMultiply(iat, a);
+        const auto iatb = MatrixMultiply(iat, b);
+
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                ata[i][j] = iata[i][j];
+            }
+        }
+        for (int i = 0; i < 8; i++) {
+            atb[i] = iatb[i][0];
+        }
+    }
+
+    // return inverse(aa) * bb;
+    const auto h = LUSolve(ata, atb);
+
+    return {
+        h[0], h[1], h[2],
+        h[3], h[4], h[5],
+        h[6], h[7], 1
+    };
+}
 
 // Copies the left or the right half of a square matrix to its another half
 template <size_t N, typename T>
@@ -107,7 +283,11 @@ void Jacobi(const gls::Matrix<N, N, T>& A, gls::Vector<N, T>* W, gls::Matrix<N, 
             }
 
             T p = AW[k][l];
-            if (std::abs(p) <= eps) break;
+            // Convergence test
+            if (std::abs(p) <= eps) {
+                break;
+            }
+
             T y = (T)(((*W)[l] - (*W)[k]) * 0.5);
             T t = std::abs(y) + hypot(p, y);
             T s = hypot(p, t);
@@ -184,55 +364,53 @@ void Jacobi(const gls::Matrix<N, N, T>& A, gls::Vector<N, T>* W, gls::Matrix<N, 
 }
 
 gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vector<Point2f>& m) {
-    const int count = (int)M.size();
+    const int count = (int) M.size();
 
-    gls::Matrix<9, 9, double> LtL;
-    gls::Vector<9, double> matW;
-    gls::Matrix<9, 9, double> matV;
-    gls::Matrix<3, 3, double> Htemp;
+    gls::Vector<2, double> cM(gls::vector::zeros);
+    gls::Vector<2, double> cm(gls::vector::zeros);
+    gls::Vector<2, double> sM(gls::vector::zeros);
+    gls::Vector<2, double> sm(gls::vector::zeros);
 
-    Point2d cM(0, 0), cm(0, 0), sM(0, 0), sm(0, 0);
-
+    // Find the barycenter of the point set
     for (int i = 0; i < count; i++) {
-        cm.x += m[i].x;
-        cm.y += m[i].y;
-        cM.x += M[i].x;
-        cM.y += M[i].y;
+        cm += gls::Vector<2, double> { m[i].x, m[i].y };
+        cM += gls::Vector<2, double> { M[i].x, M[i].y };
     }
+    cm /= (double) count;
+    cM /= (double) count;
 
-    cm.x /= count;
-    cm.y /= count;
-    cM.x /= count;
-    cM.y /= count;
-
+    // Find the mean distance from the barycenter
     for (int i = 0; i < count; i++) {
-        sm.x += fabs(m[i].x - cm.x);
-        sm.y += fabs(m[i].y - cm.y);
-        sM.x += fabs(M[i].x - cM.x);
-        sM.y += fabs(M[i].y - cM.y);
+        sm += abs(gls::Vector<2, double> { m[i].x, m[i].y } - cm);
+        sM += abs(gls::Vector<2, double> { M[i].x, M[i].y } - cM);
     }
+    sm /= (double) count;
+    sM /= (double) count;
 
-    double deps = std::numeric_limits<double>::epsilon();
-
-    if (fabs(sm.x) < deps || fabs(sm.y) < deps || fabs(sM.x) < deps || fabs(sM.y) < deps) {
+    double eps = std::numeric_limits<double>::epsilon();
+    if (fabs(sm[0]) < eps || fabs(sm[1]) < eps || fabs(sM[0]) < eps || fabs(sM[1]) < eps) {
         throw std::range_error("Solution not available.");
     }
 
-    sm.x = count / sm.x;
-    sm.y = count / sm.y;
-    sM.x = count / sM.x;
-    sM.y = count / sM.y;
-
-    const gls::Matrix<3, 3, double> invHnorm = {1. / sm.x, 0, cm.x, 0, 1. / sm.y, cm.y, 0, 0, 1};
-    const gls::Matrix<3, 3, double> Hnorm2 = {sM.x, 0, -cM.x * sM.x, 0, sM.y, -cM.y * sM.y, 0, 0, 1};
-
+    gls::Matrix<9, 9, double> LtL;
     for (int i = 0; i < count; i++) {
-        const double x = (m[i].x - cm.x) * sm.x;
-        const double y = (m[i].y - cm.y) * sm.y;
-        const double X = (M[i].x - cM.x) * sM.x;
-        const double Y = (M[i].y - cM.y) * sM.y;
-        const double Lx[] = {X, Y, 1, 0, 0, 0, -x * X, -x * Y, -x};
-        const double Ly[] = {0, 0, 0, X, Y, 1, -y * X, -y * Y, -y};
+        // Normalize the point set coordinates
+        const double x = (m[i].x - cm[0]) / sm[0];
+        const double y = (m[i].y - cm[1]) / sm[1];
+        const double X = (M[i].x - cM[0]) / sM[0];
+        const double Y = (M[i].y - cM[1]) / sM[1];
+
+        // Efficiently build the Homogeneous Linear Least Squares Matrix
+        const double Lx[] = {
+            X, Y, 1,
+            0, 0, 0,
+            -x * X, -x * Y, -x
+        };
+        const double Ly[] = {
+            0, 0, 0,
+            X, Y, 1,
+            -y * X, -y * Y, -y
+        };
 
         for (int j = 0; j < 9; j++) {
             for (int k = j; k < 9; k++) {
@@ -242,6 +420,16 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
     }
     completeSymm(LtL);
 
+#if USE_SVD
+    const auto me = minEigenvectorSVD(LtL);
+    gls::Matrix<3, 3, double> H0 = {
+        me[0], me[1], me[2],
+        me[3], me[4], me[5],
+        me[6], me[7], me[8]
+    };
+#else
+    gls::Vector<9, double> matW;
+    gls::Matrix<9, 9, double> matV;
     Jacobi(LtL, &matW, &matV);
 
     gls::Matrix<3, 3, double> H0 = {
@@ -249,18 +437,28 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
         matV[8][3], matV[8][4], matV[8][5],
         matV[8][6], matV[8][7], matV[8][8]
     };
+#endif
 
-    Htemp = invHnorm * H0;
-    H0 = Htemp * Hnorm2;
+    // Invert the point set coordinates scaling
+    const gls::Matrix<3, 3, double> invHnorm = {
+        sm[0], 0, cm[0],
+        0, sm[1], cm[1],
+        0, 0, 1
+    };
+    const gls::Matrix<3, 3, double> Hnorm2 = {
+        1 / sM[0], 0, -cM[0] / sM[0],
+        0, 1 / sM[1], -cM[1] / sM[1],
+        0, 0, 1
+    };
 
-    const auto H0Data = H0.span();
-    gls::Matrix<3, 3> model;
-    auto modelData = model.span();
-    for (int i = 0; i < H0Data.size(); i++) {
-        modelData[i] = H0Data[i] / H0[2][2];
-    }
+    H0 = invHnorm * H0 * Hnorm2;
 
-    return model;
+    gls::Matrix<3, 3> model = {
+        (float) H0[0][0], (float) H0[0][1], (float) H0[0][2],
+        (float) H0[1][0], (float) H0[1][1], (float) H0[1][2],
+        (float) H0[2][0], (float) H0[2][1], (float) H0[2][2]
+    };
+    return model / model[2][2];
 }
 
 }  // namespace gls

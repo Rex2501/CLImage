@@ -153,6 +153,7 @@
 		E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ImageRegistration.cpp; path = ../../CLImage/app/src/main/cpp/ImageRegistration.cpp; sourceTree = "<group>"; };
 		E5470D3828F63473003C0B18 /* homography.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = homography.cpp; path = ../../CLImage/app/src/main/cpp/homography.cpp; sourceTree = "<group>"; };
 		E5470D3928F63473003C0B18 /* homography.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = homography.hpp; path = ../../CLImage/app/src/main/cpp/homography.hpp; sourceTree = "<group>"; };
+		E5470D3C28F71FBC003C0B18 /* SVD.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = SVD.hpp; path = ../../CLImage/app/src/main/cpp/SVD.hpp; sourceTree = "<group>"; };
 		E554E3E928DB90DD0095F20D /* RANSAC.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = RANSAC.cpp; path = ../../CLImage/app/src/main/cpp/RANSAC.cpp; sourceTree = "<group>"; };
 		E554E3EA28DB90DD0095F20D /* RANSAC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = RANSAC.hpp; path = ../../CLImage/app/src/main/cpp/RANSAC.hpp; sourceTree = "<group>"; };
 		E554E3EC28E4B1E60095F20D /* gls_geometry.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_geometry.hpp; path = ../../src/gls_geometry.hpp; sourceTree = "<group>"; };
@@ -268,6 +269,7 @@
 				E5345EE328D4F8A100FC57FA /* feature2d.hpp */,
 				E5470D3928F63473003C0B18 /* homography.hpp */,
 				E5470D3828F63473003C0B18 /* homography.cpp */,
+				E5470D3C28F71FBC003C0B18 /* SVD.hpp */,
 				E5345EE228D4F8A100FC57FA /* SURF.hpp */,
 				E5345EE128D4F8A100FC57FA /* SURF.cpp */,
 				E554E3EA28DB90DD0095F20D /* RANSAC.hpp */,
