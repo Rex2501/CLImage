@@ -29,33 +29,13 @@ namespace gls {
 
 template<size_t M, size_t N, typename value_type = float> struct Matrix;
 
-namespace vector {
-
-enum initialization {
-    noinit,
-    zeros,
-    ones
-};
-
-}
-
 // ---- Vector Type ----
 template <size_t N, typename value_type = float>
 struct Vector : public std::array<value_type, N> {
-    Vector(vector::initialization init = vector::noinit) {
-        switch (init) {
-            case vector::zeros:
-                this->fill(0);
-                break;
-            case vector::ones:
-                this->fill(1);
-                break;
-            default:
+    Vector() {
 #if DEBUG_ARRAY_INITIALIZATION
-                this->fill(0);
+        this->fill(0);
 #endif
-                break;
-        }
     }
 
     Vector(const value_type(&il)[N]) {
@@ -82,6 +62,18 @@ struct Vector : public std::array<value_type, N> {
     Vector(const Matrix<P, Q>& m) {
         const auto ms = m.span();
         std::copy(ms.begin(), ms.end(), this->begin());
+    }
+
+    static Vector<N, value_type> zeros() {
+        Vector<N, value_type> v;
+        v.fill(0);
+        return v;
+    }
+
+    static Vector<N, value_type> ones() {
+        Vector<N, value_type> v;
+        v.fill(1);
+        return v;
     }
 
     template <typename T>
@@ -338,24 +330,7 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
     static const constexpr int width = M;
     static const constexpr int height = N;
 
-    Matrix(matrix::initialization init = matrix::noinit) {
-        switch (init) {
-            case matrix::zeros:
-            case matrix::ones:
-                for (int i = 0; i < N; i++) {
-                    (*this)[i].fill(init == matrix::ones ? 1 : 0);
-                }
-                break;
-            case matrix::identity:
-                for (int i = 0; i < N; i++) {
-                    for (int j = 0; j < M; j++) {
-                        (*this)[i][j] = i == j ? 1 : 0;
-                    }
-                }
-            default:
-                break;
-        }
-    }
+    Matrix() { }
 
     Matrix(const Vector<N * M, value_type>& v) {
         std::copy(v.begin(), v.end(), span().begin());
@@ -388,10 +363,32 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
         }
     }
 
-    void izeros() {
+    void fill(value_type val) {
         for (int i = 0; i < N; i++) {
-            (*this)[i].fill(0);
+            (*this)[i].fill(val);
         }
+    }
+
+    static Matrix<N, M, value_type> zeros() {
+        Matrix<N, M, value_type> m;
+        m.fill(0);
+        return m;
+    }
+
+    static Matrix<N, M, value_type> ones() {
+        Matrix<N, M, value_type> m;
+        m.fill(0);
+        return m;
+    }
+
+    static Matrix<N, M, value_type> identity() {
+        Matrix<N, M, value_type> m;
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < M; j++) {
+                m[i][j] = i == j ? 1 : 0;
+            }
+        }
+        return m;
     }
 
     template <typename T>
