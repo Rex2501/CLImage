@@ -15,6 +15,12 @@
 
 #include <span>
 #include <vector>
+#include <stdint.h>
+
+#ifdef __linux__ 
+#include <cstring>
+#include <stdexcept>
+#endif
 
 namespace gls {
 
@@ -34,7 +40,7 @@ class dng_stream {
 
     void Put(const void* data, uint32_t count) {
         if (_position + count < _buffer.size()) {
-            memcpy(_buffer.data() + _position, data, count);
+            std::memcpy(_buffer.data() + _position, data, count);
             _position += count;
         } else {
             throw std::runtime_error("buffer overrun");
