@@ -159,7 +159,7 @@ gls::Matrix<3, 3> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, c
 
         const auto at = transpose(a);
         ata = at * a;
-        atb = at * b;
+        atb = gls::Vector<8> (at * b);
     } else {
         auto a = gls::image<float>(8, 2 * count);
         auto b = gls::image<float>(1, 2 * count);
