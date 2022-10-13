@@ -15,9 +15,9 @@
 
 #include <span>
 #include <vector>
-#include <stdint.h>
 
 #ifdef __linux__ 
+#include <stdint.h>
 #include <cstring>
 #include <stdexcept>
 #endif
