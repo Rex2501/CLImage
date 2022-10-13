@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16) # TODO: Is that ok?
+cmake_minimum_required(VERSION 3.16) 
 
 project("climage")
 
@@ -7,8 +7,7 @@ set_target_properties( libz PROPERTIES IMPORTED_LOCATION /usr/lib32/libz.a )
 add_library( libpng STATIC IMPORTED )
 set_target_properties( libpng PROPERTIES IMPORTED_LOCATION /usr/lib/x86_64-linux-gnu/libpng.a )
 add_library( libjpg STATIC IMPORTED )
-# set_target_properties( libjpg PROPERTIES IMPORTED_LOCATION /usr/lib32/libjpeg-turbo.a ) # TODO: Where is turbo??
-set_target_properties( libjpg PROPERTIES IMPORTED_LOCATION /usr/lib32/libjpeg.a )
+set_target_properties( libjpg PROPERTIES IMPORTED_LOCATION /usr/lib32/libjpeg.a ) #TODO: Possibly use jpeg-turbo
 add_library( libtiff STATIC IMPORTED )
 set_target_properties( libpng PROPERTIES IMPORTED_LOCATION /usr/lib/x86_64-linux-gnu/libtiff.a )
 
