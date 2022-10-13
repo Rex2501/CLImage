@@ -41,6 +41,14 @@
 #include <CL/cl_ext.h>
 #include <CL/opencl.hpp>
 
+#elif __linux__ 
+
+#define CL_TARGET_OPENCL_VERSION 200
+#define CL_HPP_TARGET_OPENCL_VERSION 200
+
+#include <CL/cl_ext.h>
+#include <CL/opencl.hpp>
+
 #endif
 
 namespace gls {

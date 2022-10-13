@@ -20,6 +20,11 @@
 #include <span>
 #include <string>
 
+#ifdef __linux__ 
+#include <stdexcept>
+#include <memory>
+#endif
+
 namespace gls {
 
 void read_jpeg_file(const std::string& filename, int pixel_channels, int pixel_bit_depth,
