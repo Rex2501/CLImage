@@ -247,9 +247,9 @@ template <size_t N, size_t M, size_t DMIN = std::min(M, N), class T>
 inline void svd(const gls::Matrix<N, M, T>& A, gls::Vector<DMIN, T>& S, gls::Matrix<DMIN, M, T>& U, gls::Matrix<N, DMIN, T>& VT) {
     const constexpr size_t DMAX = std::max(M, N);
 
-    gls::Matrix<DMAX, DMAX, T> U_(gls::matrix::zeros);
-    gls::Matrix<DMIN, DMIN, T> V_(gls::matrix::zeros);
-    gls::Matrix<DMAX, DMIN, T> S_;
+    auto U_ = gls::Matrix<DMAX, DMAX, T>::zeros();
+    auto V_ = gls::Matrix<DMIN, DMIN, T>::zeros();
+    auto S_ = gls::Matrix<DMAX, DMIN, T>();
 
     if (DMIN == M) {
         for (size_t i = 0; i < DMAX; i++)

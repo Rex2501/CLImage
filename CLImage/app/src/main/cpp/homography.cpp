@@ -362,10 +362,10 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
 
     typedef gls::Vector<2, double> vec2;
 
-    vec2 cM(gls::vector::zeros);
-    vec2 cm(gls::vector::zeros);
-    vec2 sM(gls::vector::zeros);
-    vec2 sm(gls::vector::zeros);
+    auto cM = vec2::zeros();
+    auto cm = vec2::zeros();
+    auto sM = vec2::zeros();
+    auto sm = vec2::zeros();
 
     // Find the barycenter of the point set
     for (int i = 0; i < count; i++) {
@@ -389,7 +389,7 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
     }
 
     // Efficiently build the Homogeneous Linear Least Squares Matrix (LtL = transpose(L) * L)
-    gls::Matrix<9, 9, double> LtL(gls::matrix::zeros);
+    auto LtL = gls::Matrix<9, 9, double>::zeros();
     for (int i = 0; i < count; i++) {
         // Scale and Normalize the point set coordinates
         const auto p1 = (vec2(M[i]) - cM) / sM;
