@@ -28,7 +28,7 @@
 #include <float.h>
 #include <math.h>
 
-#ifndef __linux__ // Exists already in math.h
+#if defined(__APPLE__) || defined(__ANDROID__)
 /* linear interpolation function, is 'a' when c == 0.0 and 'b' when c == 1.0 */
 inline float lerp(float a, float b, float c) {
     return (b - a) * c + a;
