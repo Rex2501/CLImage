@@ -112,6 +112,29 @@ struct Vector : public std::array<value_type, N> {
     operator const value_type*() const {
         return this->data();
     }
+
+    // Cast to a Vector with a different value_type
+    template <typename T>
+    operator gls::Vector<N, T>() const {
+        gls::Vector<N, T> result;
+        for (int j = 0; j < N; j++) {
+            result[j] = (T) (*this)[j];
+        }
+        return result;
+    }
+
+    // Cast Vector elements to a Matrix of compatible dimensions and of any given value_type T
+    template <size_t K, size_t M, typename T>
+    requires (K * M == N)
+    operator gls::Matrix<K, M, T>() const {
+        gls::Matrix<K, M, T> result;
+        for (int j = 0; j < K; j++) {
+            for (int i = 0; i < M; i++) {
+                result[j][i] = (T) (*this)[j * M + i];
+            }
+        }
+        return result;
+    }
 };
 
 template <size_t N>
@@ -427,6 +450,30 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
     }
 
     typedef value_type (*opPtr)(value_type a, value_type b);
+
+    // Cast to a Matrix with a different value_type
+    template <typename T>
+    operator gls::Matrix<N, M, T>() const {
+        gls::Matrix<N, M, T> result;
+        for (int j = 0; j < N; j++) {
+            for (int i = 0; i < N; i++) {
+                result[j][i] = (T) (*this)[j][i];
+            }
+        }
+        return result;
+    }
+
+    // Cast Matrix elements to a Vector of any given value_type T
+    template <typename T>
+    operator gls::Vector<N * M, T>() const {
+        gls::Vector<N * M, T> result;
+        for (int j = 0; j < N; j++) {
+            for (int i = 0; i < M; i++) {
+                result[j * M + i] = (T) (*this)[j][i];
+            }
+        }
+        return result;
+    }
 };
 
 template <size_t N, size_t M>

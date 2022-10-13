@@ -119,17 +119,9 @@ gls::Matrix<3, 3> getPerspectiveTransformSVD(const std::vector<Point2f>& src, co
         }
     }
 
-    const auto me = minEigenvectorSVD(ata);
-
-    gls::Matrix<3, 3> H = {
-        (float) me[0], (float) me[1], (float) me[2],
-        (float) me[3], (float) me[4], (float) me[5],
-        (float) me[6], (float) me[7], (float) me[8]
-    };
-
-    H /= H[2][2];
-
-    return H;
+    // Convert solution eigenvector to a 3x3 Matrix
+    const auto H = gls::Matrix<3, 3, float>(minEigenvectorSVD(ata));
+    return H / H[2][2];
 }
 
 template <typename TA, typename TB>
@@ -198,6 +190,8 @@ gls::Matrix<3, 3> getPerspectiveTransformLSM2(const std::vector<Point2f>& src, c
         h[6], h[7], 1
     };
 }
+
+// Jacobi Solver - Computes Eigenvalues and Eigenvectors of Symmetric Square Matrices
 
 // Copies the left or the right half of a square matrix to its another half
 template <size_t N, typename T>
@@ -366,52 +360,45 @@ void Jacobi(const gls::Matrix<N, N, T>& A, gls::Vector<N, T>* W, gls::Matrix<N, 
 gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vector<Point2f>& m) {
     const int count = (int) M.size();
 
-    gls::Vector<2, double> cM(gls::vector::zeros);
-    gls::Vector<2, double> cm(gls::vector::zeros);
-    gls::Vector<2, double> sM(gls::vector::zeros);
-    gls::Vector<2, double> sm(gls::vector::zeros);
+    typedef gls::Vector<2, double> vec2;
+
+    vec2 cM(gls::vector::zeros);
+    vec2 cm(gls::vector::zeros);
+    vec2 sM(gls::vector::zeros);
+    vec2 sm(gls::vector::zeros);
 
     // Find the barycenter of the point set
     for (int i = 0; i < count; i++) {
-        cm += gls::Vector<2, double> { m[i].x, m[i].y };
-        cM += gls::Vector<2, double> { M[i].x, M[i].y };
+        cm += vec2(m[i]);
+        cM += vec2(M[i]);
     }
     cm /= (double) count;
     cM /= (double) count;
 
     // Find the mean distance from the barycenter
     for (int i = 0; i < count; i++) {
-        sm += abs(gls::Vector<2, double> { m[i].x, m[i].y } - cm);
-        sM += abs(gls::Vector<2, double> { M[i].x, M[i].y } - cM);
+        sm += abs(vec2(m[i]) - cm);
+        sM += abs(vec2(M[i]) - cM);
     }
     sm /= (double) count;
     sM /= (double) count;
 
-    double eps = std::numeric_limits<double>::epsilon();
+    const auto eps = std::numeric_limits<double>::epsilon();
     if (fabs(sm[0]) < eps || fabs(sm[1]) < eps || fabs(sM[0]) < eps || fabs(sM[1]) < eps) {
         throw std::range_error("Solution not available.");
     }
 
-    gls::Matrix<9, 9, double> LtL;
+    // Efficiently build the Homogeneous Linear Least Squares Matrix (LtL = transpose(L) * L)
+    gls::Matrix<9, 9, double> LtL(gls::matrix::zeros);
     for (int i = 0; i < count; i++) {
-        // Normalize the point set coordinates
-        const double x = (m[i].x - cm[0]) / sm[0];
-        const double y = (m[i].y - cm[1]) / sm[1];
-        const double X = (M[i].x - cM[0]) / sM[0];
-        const double Y = (M[i].y - cM[1]) / sM[1];
+        // Scale and Normalize the point set coordinates
+        const auto p1 = (vec2(M[i]) - cM) / sM;
+        const auto p2 = (vec2(m[i]) - cm) / sm;
 
-        // Efficiently build the Homogeneous Linear Least Squares Matrix
-        const double Lx[] = {
-            X, Y, 1,
-            0, 0, 0,
-            -x * X, -x * Y, -x
-        };
-        const double Ly[] = {
-            0, 0, 0,
-            X, Y, 1,
-            -y * X, -y * Y, -y
-        };
+        const gls::Vector<9, double> Lx = { p1[0], p1[1], 1, 0, 0, 0, -p2[0] * p1[0], -p2[0] * p1[1], -p2[0] };
+        const gls::Vector<9, double> Ly = { 0, 0, 0, p1[0], p1[1], 1, -p2[1] * p1[0], -p2[1] * p1[1], -p2[1] };
 
+        // Only build the top diagonal elements, replicate the rest with completeSymm (see below)
         for (int j = 0; j < 9; j++) {
             for (int k = j; k < 9; k++) {
                 LtL[j][k] += Lx[j] * Lx[k] + Ly[j] * Ly[k];
@@ -421,25 +408,15 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
     completeSymm(LtL);
 
 #if USE_SVD
-    const auto me = minEigenvectorSVD(LtL);
-    gls::Matrix<3, 3, double> H0 = {
-        me[0], me[1], me[2],
-        me[3], me[4], me[5],
-        me[6], me[7], me[8]
-    };
+    const auto H0 = gls::Matrix<3, 3, double>(minEigenvectorSVD(LtL));
 #else
     gls::Vector<9, double> matW;
     gls::Matrix<9, 9, double> matV;
     Jacobi(LtL, &matW, &matV);
-
-    gls::Matrix<3, 3, double> H0 = {
-        matV[8][0], matV[8][1], matV[8][2],
-        matV[8][3], matV[8][4], matV[8][5],
-        matV[8][6], matV[8][7], matV[8][8]
-    };
+    // Convert solution eigenvector to a 3x3 Matrix
+    const auto H0 = gls::Matrix<3, 3, double>(matV[8]);
 #endif
 
-    // Invert the point set coordinates scaling
     const gls::Matrix<3, 3, double> invHnorm = {
         sm[0], 0, cm[0],
         0, sm[1], cm[1],
@@ -451,14 +428,11 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
         0, 0, 1
     };
 
-    H0 = invHnorm * H0 * Hnorm2;
+    // Invert the point set coordinates scaling
+    const auto H = invHnorm * H0 * Hnorm2;
 
-    gls::Matrix<3, 3> model = {
-        (float) H0[0][0], (float) H0[0][1], (float) H0[0][2],
-        (float) H0[1][0], (float) H0[1][1], (float) H0[1][2],
-        (float) H0[2][0], (float) H0[2][1], (float) H0[2][2]
-    };
-    return model / model[2][2];
+    // Convert to a float 3x3 Matrix and normalize
+    return gls::Matrix<3, 3, float>(H) / (float) H[2][2];
 }
 
 }  // namespace gls
