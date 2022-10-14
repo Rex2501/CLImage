@@ -30,7 +30,7 @@
 #include "gls_image_png.h"
 #include "gls_image_tiff.h"
 
-#if defined(__linux__) && defined(__ANDROID__) //On Android and Apple
+#if defined(__APPLE__) || defined(__ANDROID__) //On Android and Apple
 #define USE_FP16_FLOATS true
 #endif
 

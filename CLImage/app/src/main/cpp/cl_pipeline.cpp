@@ -26,7 +26,6 @@ int blur(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel>
         const auto blurProgram = glsContext->loadProgram("blur");
 
         // Bind the kernel parameters
-        printf("blurKernel\n");
         auto blurKernel = cl::KernelFunctor<cl::Image2D,  // input
                                             cl::Image2D   // output
                                             >(blurProgram, "blur");

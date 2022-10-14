@@ -102,52 +102,6 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _
     _clContext = cl::Context::getDefault();
 }
 
-#elif false // Non-Android Linux
-
-OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _shadersRootPath(shadersRootPath) {
-    // // Load libOpenCL
-    // CL_WRAPPER_NS::bindOpenCLLibrary();
-
-    std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
-    cl::Platform platform;
-    for (auto &p : platforms) {
-        std::string version = p.getInfo<CL_PLATFORM_VERSION>();
-        if (version.find("OpenCL 1.2") != std::string::npos ||
-            version.find("OpenCL 2.") != std::string::npos ||
-            version.find("OpenCL 3.") != std::string::npos) {
-            platform = p;
-        }
-    }
-    if (platform() == nullptr) {
-        throw cl::Error(-1, "No OpenCL 2.0 platform found.");
-    }
-
-    cl::Platform defaultPlatform = cl::Platform::setDefault(platform);
-    if (defaultPlatform != platform) {
-        throw cl::Error(-1, "Error setting default platform.");
-    }
-    cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties) (platform)(),
-                                          0};
-    cl::Context context(CL_DEVICE_TYPE_ALL, properties);
-
-    cl::Device d = cl::Device::getDefault();
-    if (!quiet) {
-        LOG_INFO(TAG) << "- Device: " << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-        LOG_INFO(TAG) << "- Device Version: " << d.getInfo<CL_DEVICE_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Driver Version: " << d.getInfo<CL_DRIVER_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- OpenCL C Version: " << d.getInfo<CL_DEVICE_OPENCL_C_VERSION>() << std::endl;
-        LOG_INFO(TAG) << "- Compute Units: " << d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_MAX_WORK_GROUP_SIZE: "
-                      << d.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
-        LOG_INFO(TAG) << "- CL_DEVICE_EXTENSIONS: " << d.getInfo<CL_DEVICE_EXTENSIONS>() << std::endl;
-    }
-
-    // opencl.hpp relies on a default context
-    cl::Context::setDefault(context);
-    _clContext = cl::Context::getDefault();
-}
-
 #endif
 
 std::string OpenCLContext::OpenCLSource(const std::string& shaderName) {
