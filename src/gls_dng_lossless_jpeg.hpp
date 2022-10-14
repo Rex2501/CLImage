@@ -16,7 +16,7 @@
 #include <span>
 #include <vector>
 
-#ifdef __linux__ 
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <stdint.h>
 #include <cstring>
 #include <stdexcept>
