@@ -65,7 +65,7 @@ public:
     }
 
     // Calculate error between the mean and given datum
-    virtual double ComputeError(const gls::Matrix<3, 3>& homography, const std::pair<Point2f, Point2f>& datum) {
+    virtual float ComputeError(const gls::Matrix<3, 3>& homography, const std::pair<Point2f, Point2f>& datum) {
         const auto p1t = applyHomography(datum.first, homography);
         const auto diff = gls::Vector<2>(p1t - datum.second);
         return dot(diff, diff);
@@ -78,7 +78,7 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
     gls::Matrix<3, 3> model;
     ransac.SetParamThreshold(threshold);
     ransac.SetParamIteration(max_iterations);
-    double loss = ransac.FindBest(model, matchpoints, (int) matchpoints.size(), 4);
+    const auto loss = ransac.FindBest(model, matchpoints, (int) matchpoints.size(), 4);
 
     std::cout << "RTL RANSAC loss: " << loss << std::endl;
 
@@ -96,7 +96,7 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
     std::vector<int> innerPvInd;  // Inner point set index - temporary
     std::vector<int> innerPvInd_i;
     // generate random table
-    int selectIndex[2000][4];
+    auto selectIndex = new int[max_iterations][4];
 
 #if PSEUDO_RANDOM_TEST_SEQUENCE
     const std::array<uint64_t, 16> prng_seed = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -186,6 +186,8 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
             printf("Perspective transformation matrix error.");
         }
     }
+    delete [] selectIndex;
+
     printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, matchpoints.size(), k);
 
     // Calculate projection matrix parameters based on interior points
