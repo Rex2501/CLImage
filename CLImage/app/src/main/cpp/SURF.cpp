@@ -1523,8 +1523,9 @@ struct refineMatch {
     }
 };
 
-bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
-                    std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2) {
+std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLContext,
+                                                        const gls::image<float>& srcIMAGE1,
+                                                        const gls::image<float>& srcIMAGE2) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
     SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.1);
@@ -1556,11 +1557,12 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     printf("--> Keypoint Sorting: %.2fms\n", timeDiff(t_match, t_sort));
 
     // Convert to Point2D format
-    matchpoints1->resize(matchedPoints.size());
-    matchpoints2->resize(matchedPoints.size());
+    std::vector<std::pair<Point2f, Point2f>> result(matchedPoints.size());
     for (int i = 0; i < matchedPoints.size(); i++) {
-        (*matchpoints1)[i] = (*keypoints1)[matchedPoints[i].queryIdx].pt;
-        (*matchpoints2)[i] = (*keypoints2)[matchedPoints[i].trainIdx].pt;
+        result[i] = std::pair {
+            (*keypoints1)[matchedPoints[i].queryIdx].pt,
+            (*keypoints2)[matchedPoints[i].trainIdx].pt
+        };
     }
 
     auto t_end = std::chrono::high_resolution_clock::now();
@@ -1569,7 +1571,7 @@ bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcI
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
     printf("--> Features Finding Time: %.2fms\n", elapsed_time_ms);
 
-    return !matchpoints1->empty() && !matchpoints2->empty();
+    return result;
 }
 
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,

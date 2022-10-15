@@ -23,8 +23,9 @@ namespace gls {
 
 typedef gls::basic_point<float> Point2f;
 
-bool SURF_Detection(gls::OpenCLContext* cLContext, const gls::image<float>& srcIMAGE1, const gls::image<float>& srcIMAGE2,
-                    std::vector<Point2f>* matchpoints1, std::vector<Point2f>* matchpoints2);
+std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLContext,
+                                                        const gls::image<float>& srcIMAGE1,
+                                                        const gls::image<float>& srcIMAGE2);
 
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,
                        const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,

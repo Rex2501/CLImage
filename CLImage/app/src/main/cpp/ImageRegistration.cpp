@@ -59,18 +59,15 @@ void testSURF() {
         *p = std::clamp((pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114) / 255.0, 0.0, 1.0);
     });
 
-    std::vector<gls::Point2f> matchpoints1, matchpoints2;
-
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    bool success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
+    const auto matchpoints = gls::SURF_Detection(glsContext, srcImg1, srcImg2);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
 
-    assert(matchpoints1.size() == matchpoints2.size());
-    printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
+    printf("Feature Dection matched %d features\n", (int) matchpoints.size());
 
-    const auto homography = gls::RANSAC(matchpoints1, matchpoints2, /*threshold=*/ 9, /*max_iterations=*/ 2000);
+    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 9, /*max_iterations=*/ 2000);
 
     std::cout << "Homography:\n" << homography << std::endl;
 

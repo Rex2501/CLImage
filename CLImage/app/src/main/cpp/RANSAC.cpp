@@ -21,201 +21,64 @@
 #include "gls_geometry.hpp"
 #include "homography.hpp"
 
-#define USE_SIMPLE_PERSPECTIVE_TRANSFORM false
+#define USE_RTL true
 
+#if USE_RTL
+#include "rtl/RTL.hpp"
+#else
+#define USE_SIMPLE_PERSPECTIVE_TRANSFORM false
 #define PSEUDO_RANDOM_TEST_SEQUENCE true
 
 #if PSEUDO_RANDOM_TEST_SEQUENCE
 #include "PRNG.h"
 #endif
-
-//#define USE_GRANSAC true
-#define USE_RTL true
-
-#if USE_GRANSAC
-#include "GRANSAC/GRANSAC.hpp"
-#elif USE_RTL
-#include "rtl/RTL.hpp"
 #endif
 
 namespace gls {
 
-// --- GRANSAC ---
+#if USE_RTL
 
-#if USE_GRANSAC
-typedef gls::basic_point<GRANSAC::VPFloat> VPPoint;
-
-struct MatchedPoints : public GRANSAC::AbstractParameter {
-    VPPoint p1, p2;
-
-    MatchedPoints(const VPPoint& _p1, const VPPoint& _p2) : p1(_p1), p2(_p2) { }
-};
-
-class HomographyModel : public GRANSAC::AbstractModel<4> {
-   protected:
-    std::array<std::shared_ptr<GRANSAC::AbstractParameter>, 4> m_MinModelParams;
-
-    gls::Matrix<3, 3> homography;
-
-    GRANSAC::VPFloat ComputeDistanceMeasure(std::shared_ptr<GRANSAC::AbstractParameter> Param) override {
-        auto pair = std::dynamic_pointer_cast<MatchedPoints>(Param);
-        if (pair == nullptr)
-            throw std::runtime_error(
-                "HomographyModel::ComputeDistanceMeasure() - Passed parameter are not instances of MatchedPoints.");
-
-        const auto p1t = applyHomography(Point2f(pair->p1), homography);
-        const auto diff = gls::Vector<2>(p1t) - gls::Vector<2>(pair->p2);
-        return dot(diff, diff);  // error squared
-    }
-
-   public:
-    HomographyModel(const std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> &InputParams) {
-        Initialize(InputParams);
-    };
-
-    void Initialize(const std::vector<std::shared_ptr<GRANSAC::AbstractParameter>>& InputParams) override {
-        if (InputParams.size() != 4)
-            throw std::runtime_error("HomographyModel - Number of input parameters does not match minimum number required for this model.");
-
-        // Check for AbstractParamter types
-        auto pair1 = std::dynamic_pointer_cast<MatchedPoints>(InputParams[0]);
-        auto pair2 = std::dynamic_pointer_cast<MatchedPoints>(InputParams[1]);
-        auto pair3 = std::dynamic_pointer_cast<MatchedPoints>(InputParams[2]);
-        auto pair4 = std::dynamic_pointer_cast<MatchedPoints>(InputParams[3]);
-
-        if (pair1 == nullptr || pair2 == nullptr || pair3 == nullptr || pair4 == nullptr)
-            throw std::runtime_error("HomographyModel - InputParams type mismatch. It is not an instance of MatchedPoints.");
-
-        std::copy(InputParams.begin(), InputParams.end(), m_MinModelParams.begin());
-
-        const std::vector<Point2f> selectP1 = {
-            pair1->p1,
-            pair2->p1,
-            pair3->p1,
-            pair4->p1
-        };
-        const std::vector<Point2f> selectP2 = {
-            pair1->p2,
-            pair2->p2,
-            pair3->p2,
-            pair4->p2
-        };
-
-        // Calculate the perspective transformation matrix
-        try {
-            homography = findHomography(selectP1, selectP2);
-        } catch (const std::logic_error& e) {
-            printf("Perspective transformation matrix transformation error");
-        }
-    }
-
-    std::pair<GRANSAC::VPFloat, std::vector<std::shared_ptr<GRANSAC::AbstractParameter>>> Evaluate(
-        const std::vector<std::shared_ptr<GRANSAC::AbstractParameter>>& EvaluateParams,
-        GRANSAC::VPFloat Threshold) override {
-            std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> Inliers;
-            int nTotalParams = (int) EvaluateParams.size();
-            int nInliers = 0;
-
-            for (auto& Param : EvaluateParams) {
-                if (ComputeDistanceMeasure(Param) < Threshold) {
-                    Inliers.push_back(Param);
-                    nInliers++;
-                }
-            }
-
-            GRANSAC::VPFloat InlierFraction = GRANSAC::VPFloat(nInliers) / GRANSAC::VPFloat(nTotalParams); // This is the inlier fraction
-
-            return std::make_pair(InlierFraction, Inliers);
-    }
-};
-
-
-gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& matchpoints1, const std::vector<Point2f>& matchpoints2, float threshold, int max_iterations) {
-    gls::Matrix<3, 3> homography;
-
-    const auto nPoints = matchpoints1.size();
-
-    std::vector<std::shared_ptr<GRANSAC::AbstractParameter>> matches(nPoints);
-    for (int i = 0; i < nPoints; ++i) {
-        matches[i] = std::make_shared<MatchedPoints>(MatchedPoints { VPPoint(matchpoints1[i]), VPPoint(matchpoints2[i]) });
-    }
-
-    GRANSAC::RANSAC<HomographyModel, 4> Estimator;
-    Estimator.Initialize(threshold, max_iterations); // Threshold, iterations
-    Estimator.Estimate(matches);
-
-    auto bestInliers = Estimator.GetBestInliers();
-    const int inliersCount = (int) bestInliers.size();
-    if (inliersCount > 0) {
-        std::vector<Point2f> _p1(inliersCount), _p2(inliersCount);
-
-        for (int i = 0; i < inliersCount; i++) {
-            auto RPt = std::dynamic_pointer_cast<MatchedPoints>(bestInliers[i]);
-
-            _p1[i] = RPt->p1;
-            _p2[i] = RPt->p2;
-        }
-
-        homography = findHomography(_p1, _p2);
-
-        std::cout << "GRANSAC found " << inliersCount << " inliers, homography:\n" << homography << std::endl;
-    }
-
-    return homography;
-}
-
-#elif USE_RTL
-// --- RTL ---
-
-struct MatchedPoints {
-    Point2f p1, p2;
-};
-
-// A mean calculator
-class HomographyEstimator : public RTL::Estimator<gls::Matrix<3, 3>, MatchedPoints, std::vector<MatchedPoints>> {
+class HomographyEstimator : public RTL::Estimator<
+                                        /*MODEL=*/ gls::Matrix<3, 3>,
+                                        /*DATUM=*/ std::pair<Point2f, Point2f>,
+                                        /*DATA=*/  std::vector<std::pair<Point2f, Point2f>>> {
 public:
     // Calculate the mean of data at the sample indices
-    virtual gls::Matrix<3, 3> ComputeModel(const std::vector<MatchedPoints>& data, const std::set<int>& samples) {
+    virtual gls::Matrix<3, 3> ComputeModel(const std::vector<std::pair<Point2f, Point2f>>& data, const std::set<int>& samples) {
         assert(samples.size() == 4);
 
         std::vector<Point2f> selectP1(4);
         std::vector<Point2f> selectP2(4);
         int i = 0;
         for (auto itr = samples.begin(); itr != samples.end(); itr++, i++) {
-            selectP1[i] = data[*itr].p1;
-            selectP2[i] = data[*itr].p2;
+            const auto& p = data[*itr];
+            selectP1[i] = p.first;
+            selectP2[i] = p.second;
         }
 
         try {
             return findHomography(selectP1, selectP2);
         } catch (const std::logic_error& e) {
-            printf("Perspective transformation matrix transformation error");
+            printf("Perspective transformation matrix error.");
             return gls::Matrix<3, 3>::identity();
         }
     }
 
     // Calculate error between the mean and given datum
-    virtual double ComputeError(const gls::Matrix<3, 3>& homography, const MatchedPoints& datum) {
-        const auto p1t = applyHomography(datum.p1, homography);
-        const auto diff = gls::Vector<2>(p1t) - gls::Vector<2>(datum.p2);
+    virtual double ComputeError(const gls::Matrix<3, 3>& homography, const std::pair<Point2f, Point2f>& datum) {
+        const auto p1t = applyHomography(datum.first, homography);
+        const auto diff = gls::Vector<2>(p1t - datum.second);
         return dot(diff, diff);
     }
 };
 
-gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& matchpoints1, const std::vector<Point2f>& matchpoints2, float threshold, int max_iterations) {
-    const auto nPoints = matchpoints1.size();
-
-    std::vector<MatchedPoints> matches(nPoints);
-    for (int i = 0; i < nPoints; ++i) {
-        matches[i] = MatchedPoints { matchpoints1[i], matchpoints2[i] };
-    }
-
+gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
     HomographyEstimator estimator;
-    RTL::RANSAC<gls::Matrix<3, 3>, MatchedPoints, std::vector<MatchedPoints> > ransac(&estimator);
+    RTL::RANSAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
     gls::Matrix<3, 3> model;
     ransac.SetParamThreshold(threshold);
     ransac.SetParamIteration(max_iterations);
-    double loss = ransac.FindBest(model, matches, (int) matches.size(), 4);
+    double loss = ransac.FindBest(model, matchpoints, (int) matchpoints.size(), 4);
 
     std::cout << "RTL RANSAC loss: " << loss << std::endl;
 
@@ -223,10 +86,9 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& matchpoints1, const std::ve
 }
 
 #else
-// --- ORIGINAL ---
 
-gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int max_iterations) {
-    assert(p1.size() > 0 && p2.size() > 0);
+gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
+    assert(matchpoints.size() > 0);
 
     // Calculate the maximum set of interior points
     int iters = max_iterations;
@@ -242,7 +104,7 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point
 #else
     srand((unsigned) time(NULL));  // Use time as seed, each time the random number is different
 #endif
-    int pCount = (int)p1.size();
+    int pCount = (int)matchpoints.size();
 
     for (int i = 0; i < max_iterations; i++) {
         for (int j = 0; j < 4; j++) {
@@ -267,18 +129,14 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point
 
     int k = 0;
     for (; k < iters; k++) {
-        const std::vector<Point2f> selectP1 = {
-            p1[selectIndex[k][0]],
-            p1[selectIndex[k][1]],
-            p1[selectIndex[k][2]],
-            p1[selectIndex[k][3]]
-        };
-        const std::vector<Point2f> selectP2 = {
-            p2[selectIndex[k][0]],
-            p2[selectIndex[k][1]],
-            p2[selectIndex[k][2]],
-            p2[selectIndex[k][3]]
-        };
+        std::vector<Point2f> selectP1(4);
+        std::vector<Point2f> selectP2(4);
+
+        for (int i = 0; i < 4; i++) {
+            const auto& p = matchpoints[selectIndex[k][i]];
+            selectP1[i] = p.first;
+            selectP2[i] = p.second;
+        }
 
         // Calculate the perspective transformation matrix
         try {
@@ -290,9 +148,10 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point
             // Calculate the model parameter error, if the error is greater than the threshold, discard
             // this set of model parameters
             int innerP = 0;
-            for (int i = 0; i < p1.size(); i++) {
-                const auto p1t = applyHomography(p1[i], homography);
-                const auto diff = gls::Vector<2>(p1t) - gls::Vector<2>(p2[i]);
+            for (int i = 0; i < matchpoints.size(); i++) {
+                const auto& p = matchpoints[i];
+                const auto p1t = applyHomography(p.first, homography);
+                const auto diff = gls::Vector<2>(p1t - p.second);
                 const auto errSquare = dot(diff, diff);
                 if (errSquare < threshold) {
                     innerP++;
@@ -305,7 +164,7 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point
 
                 // update the number of iterations
                 const float p = 0.995;
-                float ep = (float)(p1.size() - innerP) / p1.size();
+                float ep = (float)(matchpoints.size() - innerP) / matchpoints.size();
 
                 // avoid inf's & nan's
                 const float eps = std::numeric_limits<float>::epsilon();
@@ -324,17 +183,18 @@ gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point
             }
             innerPvInd.clear();
         } catch (const std::logic_error& e) {
-            printf("Perspective transformation matrix transformation error");
+            printf("Perspective transformation matrix error.");
         }
     }
-    printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, p1.size(), k);
+    printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, matchpoints.size(), k);
 
     // Calculate projection matrix parameters based on interior points
 
     std::vector<Point2f> _p1(max_innerP), _p2(max_innerP);
     for (int i = 0; i < max_innerP; i++) {
-        _p1[i] = p1[innerPvInd_i[i]];
-        _p2[i] = p2[innerPvInd_i[i]];
+        const auto& p = matchpoints[innerPvInd_i[i]];
+        _p1[i] = p.first;
+        _p2[i] = p.second;
     }
 
 #if USE_SIMPLE_PERSPECTIVE_TRANSFORM
