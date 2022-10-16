@@ -72,9 +72,16 @@ public:
     }
 };
 
+#define USE_MLESAC true
+
 gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
     HomographyEstimator estimator;
+#if USE_MLESAC
+    RTL::MLESAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
+    ransac.SetParamSigmaScale(2 * 1.96);
+#else
     RTL::RANSAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
+#endif
     gls::Matrix<3, 3> model;
     ransac.SetParamThreshold(threshold);
     ransac.SetParamIteration(max_iterations);
@@ -82,6 +89,19 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
 
     std::cout << "RTL RANSAC loss: " << loss << std::endl;
 
+    // Refine RANSAC projection matrix parameters using the best interior points
+    constexpr bool interiorPointsProjection = true;
+    if (interiorPointsProjection) {
+        const auto inliers = ransac.FindInliers(model, matchpoints, (int) matchpoints.size());
+
+        std::vector<Point2f> p1(inliers.size()), p2(inliers.size());
+        for (int i = 0; i < inliers.size(); i++) {
+            const auto& p = matchpoints[inliers[i]];
+            p1[i] = p.first;
+            p2[i] = p.second;
+        }
+        model = findHomography(p1, p2);
+    }
     return model;
 }
 

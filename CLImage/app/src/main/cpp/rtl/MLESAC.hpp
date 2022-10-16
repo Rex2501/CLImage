@@ -40,7 +40,6 @@ template <class Model, class Datum, class Data>
 class MLESAC : virtual public RANSAC<Model, Datum, Data> {
    public:
     MLESAC(Estimator<Model, Datum, Data>* estimator) : RANSAC<Model, Datum, Data>(estimator) {
-        dataError2 = NULL;
         SetParamIterationEM();
         SetParamSigmaScale();
     }
@@ -56,10 +55,9 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
    protected:
     virtual void Initialize(const Data& data, int N) {
         RANSAC<Model, Datum, Data>::Initialize(data, N);
-        dataError2 = new float[N];
-        assert(dataError2 != NULL);
-        float sigma = RANSAC<Model, Datum, Data>::paramThreshold / paramSigmaScale;
-        dataSigma2 = sigma * sigma;
+        dataError2.resize(N);
+        dataSigma = RANSAC<Model, Datum, Data>::paramThreshold / paramSigmaScale;
+        dataSigma2 = dataSigma * dataSigma;
     }
 
     virtual float EvaluateModel(const Model& model, const Data& data, int N) {
@@ -83,7 +81,13 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
                 float probInlier = probInlierCoeff * std::exp(-0.5 * dataError2[i] / dataSigma2);
                 sumPosteriorProb += probInlier / (probInlier + probOutlier);
             }
+            float prev_gamma = gamma;
             gamma = sumPosteriorProb / N;
+
+            // EM convergence check
+            if (std::abs(prev_gamma - gamma) < 1.0e-5) {
+                break;
+            }
         }
 
         // Evaluate the model
@@ -92,16 +96,28 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
         const float probInlierCoeff = gamma / std::sqrt(2 * M_PI * dataSigma2);
         for (int i = 0; i < N; i++) {
             float probInlier = probInlierCoeff * std::exp(-0.5 * dataError2[i] / dataSigma2);
-            sumLogLikelihood = sumLogLikelihood - std::log(probInlier + probOutlier);
+            sumLogLikelihood -= std::log(probInlier + probOutlier);
         }
+
+        // Adaptive Termination
+        if (sumLogLikelihood < minSumLogLikelihood) {
+            const float beta = 3; // Error tolerance
+            const float k = std::erf(beta / (M_SQRT2 * dataSigma));
+            const float denom = std::log(1.0 - std::pow(k, 4) * std::pow(gamma, 4));
+            if (std::abs(denom) > FLT_EPSILON) {
+                constexpr float successProbability = 0.99;
+                const int newMaxIteration = (int)std::floor(std::log(1 - successProbability) / denom);
+                if (newMaxIteration < RANSAC<Model, Datum, Data>::paramIteration) {
+                    RANSAC<Model, Datum, Data>::paramIteration = newMaxIteration;
+                }
+                minSumLogLikelihood = sumLogLikelihood;
+            }
+        }
+
         return sumLogLikelihood;
     }
 
     virtual void Terminate(const Data& data, int N, const Model& bestModel) {
-        if (dataError2 != NULL) {
-            delete[] dataError2;
-            dataError2 = NULL;
-        }
         RANSAC<Model, Datum, Data>::Terminate(bestModel, data, N);
     }
 
@@ -109,9 +125,11 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
 
     float paramSigmaScale;
 
-    float* dataError2;
+    std::vector<float> dataError2;
 
+    float dataSigma;
     float dataSigma2;
+    float minSumLogLikelihood = std::numeric_limits<double>::max();
 };
 
 }  // namespace RTL
