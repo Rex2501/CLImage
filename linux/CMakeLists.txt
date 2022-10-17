@@ -19,7 +19,8 @@ add_library( libtiffxx STATIC IMPORTED )
 set_target_properties( libtiffxx PROPERTIES IMPORTED_LOCATION /usr/local/lib/libtiffxx.a )
 
 
-set (CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 20)
+set(ROOT_DIR ${CMAKE_SOURCE_DIR}/../)
 
 ###
 # The following library and executable will probably not be used - actual library for bindings is compiled in other repo.
@@ -32,15 +33,15 @@ set (CMAKE_CXX_STANDARD 20)
 add_library(
     climage
     STATIC
-    src/gls_cl.cpp
-    src/gls_cl_error.cpp
-    src/gls_color_science.cpp
-    src/gls_dng_lossless_jpeg.cpp
-    src/gls_image_jpeg.cpp
-    src/gls_image_png.cpp
-    src/gls_image_tiff.cpp
-    src/gls_logging.cpp
-    src/gls_tiff_metadata.cpp
+    ${ROOT_DIR}/src/gls_cl.cpp
+    ${ROOT_DIR}/src/gls_cl_error.cpp
+    ${ROOT_DIR}/src/gls_color_science.cpp
+    ${ROOT_DIR}/src/gls_dng_lossless_jpeg.cpp
+    ${ROOT_DIR}/src/gls_image_jpeg.cpp
+    ${ROOT_DIR}/src/gls_image_png.cpp
+    ${ROOT_DIR}/src/gls_image_tiff.cpp
+    ${ROOT_DIR}/src/gls_logging.cpp
+    ${ROOT_DIR}/src/gls_tiff_metadata.cpp
 )
 
 target_link_libraries(
@@ -48,28 +49,31 @@ target_link_libraries(
     libjpeg
     libpng
     libz
-    cl
+    OpenCL
 )
 
 ###
 ### Demo pipeline
 ###
 
+# Copy blur kernel
+file(COPY ${ROOT_DIR}/CLImage/app/src/main/cpp/OpenCL/blur.cl DESTINATION ${ROOT_DIR}/build/OpenCL)
+
 add_executable(
         climage-test
-        src/gls_cl.cpp
-        src/gls_image_png.cpp
-        src/gls_image_jpeg.cpp
-        src/gls_image_tiff.cpp
-        src/gls_tiff_metadata.cpp
-        src/gls_dng_lossless_jpeg.cpp
-        src/gls_cl_error.cpp
-        src/gls_logging.cpp
-        CLImage/app/src/main/cpp/cl_pipeline.cpp
-        CLImage/app/src/main/cpp/main.cpp
+        ${ROOT_DIR}/src/gls_cl.cpp
+        ${ROOT_DIR}/src/gls_image_png.cpp
+        ${ROOT_DIR}/src/gls_image_jpeg.cpp
+        ${ROOT_DIR}/src/gls_image_tiff.cpp
+        ${ROOT_DIR}/src/gls_tiff_metadata.cpp
+        ${ROOT_DIR}/src/gls_dng_lossless_jpeg.cpp
+        ${ROOT_DIR}/src/gls_cl_error.cpp
+        ${ROOT_DIR}/src/gls_logging.cpp
+        ${ROOT_DIR}/CLImage/app/src/main/cpp/cl_pipeline.cpp
+        ${ROOT_DIR}/CLImage/app/src/main/cpp/main.cpp
 )
 
-target_include_directories( climage-test PRIVATE ${CMAKE_SOURCE_DIR}/src )
+target_include_directories( climage-test PRIVATE ${ROOT_DIR}/src )
 
 target_link_libraries(
     climage-test
