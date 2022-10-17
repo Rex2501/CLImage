@@ -53,16 +53,16 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
     float GetParamSigmaScale(void) { return paramSigmaScale; }
 
    protected:
-    virtual void Initialize(const Data& data, int N) {
+    void Initialize(const Data& data, int N) override {
         RANSAC<Model, Datum, Data>::Initialize(data, N);
         dataError2.resize(N);
         dataSigma = RANSAC<Model, Datum, Data>::paramThreshold / paramSigmaScale;
         dataSigma2 = dataSigma * dataSigma;
     }
 
-    virtual float EvaluateModel(const Model& model, const Data& data, int N) {
+    float EvaluateModel(const Model& model, const Data& data, int N) override {
         // Calculate squared errors
-        float minError = HUGE_VAL, maxError = -HUGE_VAL;
+        float minError = HUGE_VALF, maxError = -HUGE_VALF;
         for (int i = 0; i < N; i++) {
             float error = RANSAC<Model, Datum, Data>::toolEstimator->ComputeError(model, data[i]);
             if (error < minError) minError = error;
@@ -100,21 +100,27 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
         }
 
         // Adaptive Termination
+        // TODO: this should ideally live within IsContinued, some refactoring might be necessary
         if (sumLogLikelihood < minSumLogLikelihood) {
-            const float beta = 3; // Error tolerance
+            minSumLogLikelihood = sumLogLikelihood;
+
+            const float beta = RANSAC<Model, Datum, Data>::paramThreshold; // Error tolerance - the threshold is probably a good quantifier
             const float k = std::erf(beta / (M_SQRT2 * dataSigma));
             const float denom = std::log(1.0 - std::pow(k, 4) * std::pow(gamma, 4));
             if (std::abs(denom) > FLT_EPSILON) {
-                constexpr float successProbability = 0.99;
+                constexpr float successProbability = 0.991;
                 const int newMaxIteration = (int)std::floor(std::log(1 - successProbability) / denom);
                 if (newMaxIteration < RANSAC<Model, Datum, Data>::paramIteration) {
                     RANSAC<Model, Datum, Data>::paramIteration = newMaxIteration;
                 }
-                minSumLogLikelihood = sumLogLikelihood;
             }
         }
 
         return sumLogLikelihood;
+    }
+
+    bool IsContinued(int iteration) override {
+        return RANSAC<Model, Datum, Data>::IsContinued(iteration);
     }
 
     virtual void Terminate(const Data& data, int N, const Model& bestModel) {
@@ -129,7 +135,7 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
 
     float dataSigma;
     float dataSigma2;
-    float minSumLogLikelihood = std::numeric_limits<double>::max();
+    float minSumLogLikelihood = FLT_MAX;
 };
 
 }  // namespace RTL

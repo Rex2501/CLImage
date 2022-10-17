@@ -67,7 +67,7 @@ void testSURF() {
 
     printf("Feature Dection matched %d features\n", (int) matchpoints.size());
 
-    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 9, /*max_iterations=*/ 2000);
+    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 3, /*max_iterations=*/ 2000);
 
     std::cout << "Homography:\n" << homography << std::endl;
 

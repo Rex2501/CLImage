@@ -22,6 +22,7 @@
 #include "homography.hpp"
 
 #define USE_RTL true
+#define USE_MLESAC true
 
 #if USE_RTL
 #include "rtl/RTL.hpp"
@@ -72,22 +73,30 @@ public:
     }
 };
 
-#define USE_MLESAC true
-
 gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
     HomographyEstimator estimator;
 #if USE_MLESAC
     RTL::MLESAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
-    ransac.SetParamSigmaScale(2 * 1.96);
 #else
     RTL::RANSAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
 #endif
     gls::Matrix<3, 3> model;
     ransac.SetParamThreshold(threshold);
     ransac.SetParamIteration(max_iterations);
-    const auto loss = ransac.FindBest(model, matchpoints, (int) matchpoints.size(), 4);
+    const auto ransac_loss = ransac.FindBest(model, matchpoints, (int) matchpoints.size(), 4);
 
-    std::cout << "RTL RANSAC loss: " << loss << std::endl;
+    std::cout << "RTL RANSAC loss: " << ransac_loss << std::endl;
+
+//    RTL::LMedS<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > lmeds(&estimator);
+//    lmeds.SetParamThreshold(1);
+//    lmeds.SetParamIteration(max_iterations);
+//    const auto ransac_inlier_indices = ransac.FindInliers(model, matchpoints, (int) matchpoints.size());
+//    std::vector<std::pair<Point2f, Point2f>> ransac_inliers(ransac_inlier_indices.size());
+//    for (int i = 0; i < ransac_inlier_indices.size(); i++) {
+//        ransac_inliers[i] = matchpoints[ransac_inlier_indices[i]];
+//    }
+//    const auto lmeds_loss = lmeds.FindBest(model, ransac_inliers, (int) ransac_inliers.size(), 4);
+//    std::cout << "RTL LMedS loss: " << lmeds_loss << std::endl;
 
     // Refine RANSAC projection matrix parameters using the best interior points
     constexpr bool interiorPointsProjection = true;

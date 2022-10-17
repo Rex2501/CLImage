@@ -40,7 +40,7 @@ class LMedS : virtual public RANSAC<Model, Datum, Data> {
     LMedS(Estimator<Model, Datum, Data>* estimator) : RANSAC<Model, Datum, Data>(estimator) {}
 
    protected:
-    virtual float EvaluateModel(const Model& model, const Data& data, int N) {
+    float EvaluateModel(const Model& model, const Data& data, int N) override {
         std::vector<float> errors(N);
         for (int i = 0; i < N; i++)
             errors[i] =

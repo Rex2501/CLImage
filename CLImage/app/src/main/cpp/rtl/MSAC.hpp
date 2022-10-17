@@ -38,7 +38,7 @@ class MSAC : virtual public RANSAC<Model, Datum, Data> {
     MSAC(Estimator<Model, Datum, Data>* estimator) : RANSAC<Model, Datum, Data>(estimator) {}
 
    protected:
-    virtual inline float EvaluateModel(const Model& model, const Data& data, int N) {
+    inline float EvaluateModel(const Model& model, const Data& data, int N) override {
         float loss = 0;
         for (int i = 0; i < N; i++) {
             float error = RANSAC<Model, Datum, Data>::toolEstimator->ComputeError(model, data[i]);
