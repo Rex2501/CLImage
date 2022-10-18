@@ -835,7 +835,7 @@ gls::Vector<N, value_type> LUPSolve(const Matrix<N, N, A_type>&A,
 }
 
 template <size_t N, typename value_type>
-void LUPInvert(const Matrix<N, N, value_type>& A, const Vector<N + 1, int>& P) {
+Matrix<N, N, value_type> LUPInvert(const Matrix<N, N, value_type>& A, const Vector<N + 1, int>& P) {
     const Matrix<N, N, value_type> IA;
 
     for (int j = 0; j < N; j++) {
