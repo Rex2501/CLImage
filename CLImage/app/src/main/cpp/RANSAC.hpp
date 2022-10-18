@@ -23,7 +23,7 @@
 
 namespace gls {
 
-gls::Matrix<3, 3> RANSAC(const std::vector<Point2f>& p1, const std::vector<Point2f>& p2, float threshold, int count);
+gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations);
 
 } // namespace gls
 

@@ -19,10 +19,10 @@
 #include <string>
 #include <cmath>
 #include <chrono>
+#include <memory>
 
 #include "gls_logging.h"
 #include "gls_image.hpp"
-
 #include "gls_linalg.hpp"
 
 #include "SURF.hpp"
@@ -59,22 +59,25 @@ void testSURF() {
         *p = std::clamp((pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114) / 255.0, 0.0, 1.0);
     });
 
-    std::vector<gls::Point2f> matchpoints1, matchpoints2;
-
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    bool success = gls::SURF_Detection(glsContext, srcImg1, srcImg2, &matchpoints1, &matchpoints2);
-    assert(matchpoints1.size() == matchpoints2.size());
-    printf("Feature Dection successful: %d, matched %d features\n", success, (int) matchpoints1.size());
+    const auto matchpoints = gls::SURF_Detection(glsContext, srcImg1, srcImg2);
 
-    const auto homography = gls::RANSAC(matchpoints1, matchpoints2, /*threshold=*/ 9, (int) matchpoints1.size());
+    auto t_surf = std::chrono::high_resolution_clock::now();
+
+    printf("Feature Dection matched %d features\n", (int) matchpoints.size());
+
+    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 9, /*max_iterations=*/ 2000);
 
     std::cout << "Homography:\n" << homography << std::endl;
 
     auto t_end = std::chrono::high_resolution_clock::now();
-    double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
 
-    printf("Elapsed Time: %f\n", elapsed_time_ms);
+    double surf_time_ms = std::chrono::duration<double, std::milli>(t_surf-t_start).count();
+    double ransac_time_ms = std::chrono::duration<double, std::milli>(t_end-t_surf).count();
+    double total_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
+
+    printf("SURF Time: %f, RANSAC Time: %f, Total Execution Time: %f\n", surf_time_ms, ransac_time_ms, total_time_ms);
 
     auto inputImage1 = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
     auto inputImage1Cpu = inputImage1.mapImage(CL_MAP_WRITE);

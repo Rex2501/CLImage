@@ -119,6 +119,11 @@ struct basic_point {
     // Cast to a 2D Vector of any type TV
     template <typename TV>
     operator gls::Vector<2, TV>() const { return { (TV) x, (TV) y}; }
+
+    template <typename T2>
+    operator basic_point<T2>() const {
+        return { (T2) x, (T2) y };
+    }
 };
 
 template <typename value_type>
