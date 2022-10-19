@@ -25,7 +25,7 @@ namespace gls {
 
 static const char* TAG = "CLImage";
 
-#ifdef __APPLE__
+#ifndef __ANDROID__ // On Apple and Linux
 
 OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _shadersRootPath(shadersRootPath) {
     _clContext = cl::Context::getDefault();
@@ -56,7 +56,7 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _
     }
 }
 
-#elif __ANDROID__
+#else // Android
 
 OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _shadersRootPath(shadersRootPath) {
     // Load libOpenCL
@@ -101,6 +101,7 @@ OpenCLContext::OpenCLContext(const std::string& shadersRootPath, bool quiet) : _
     cl::Context::setDefault(context);
     _clContext = cl::Context::getDefault();
 }
+
 #endif
 
 std::string OpenCLContext::OpenCLSource(const std::string& shaderName) {

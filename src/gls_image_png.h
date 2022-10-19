@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-#ifdef __linux__ 
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <stdexcept>
 #endif
 

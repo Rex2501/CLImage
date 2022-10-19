@@ -28,7 +28,7 @@ int main(int argc, const char* argv[]) {
 
     if (argc > 1) {
         // Initialize the OpenCL environment and get the context
-        gls::OpenCLContext glsContext("");
+        gls::OpenCLContext glsContext("./");
         auto clContext = glsContext.clContext();
 
         // Read the input file into an image object
