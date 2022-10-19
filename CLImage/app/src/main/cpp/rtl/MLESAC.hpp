@@ -123,10 +123,6 @@ class MLESAC : virtual public RANSAC<Model, Datum, Data> {
         return RANSAC<Model, Datum, Data>::IsContinued(iteration);
     }
 
-    virtual void Terminate(const Data& data, int N, const Model& bestModel) {
-        RANSAC<Model, Datum, Data>::Terminate(bestModel, data, N);
-    }
-
     int paramIterationEM;
 
     float paramSigmaScale;
