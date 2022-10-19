@@ -221,13 +221,19 @@ The full code from main.cpp shows how everything connects together:
 
 ## Compilation under Linux
 CLImage can be compiled as a library and test executable on Linux using the following procedure.
-- Install the required jpeg-dev, libz-dev, libpng-dev, libtiff-dev
+- Install the required jpeg-dev, libz-dev, libpng-dev, libtiff-dev and so on
 - Provide an up-to-date compiler, e.g. gcc 10
+- Provide an up-to-date version of the clang compiler (e.g. 10 and above)
 - Copy OpenCL C++ header `opencl.hpp` https://github.com/KhronosGroup/OpenCL-CLHPP/blob/main/include/CL/opencl.hpp into include path
+- Compile libtiff ourselves with `cmake -Djbig=OFF -Djpeg=OFF -Dzstd=OFF ..` to prevent linker errors
 
 ````
 # From the project root
-mkdir build && cd build
-cmake -D CMAKE_C_COMPILER=gcc-10 -D CMAKE_CXX_COMPILER=g++-10 -std=c++20 ../
+mkdir build && cd build && mkdir OpenCL
+cmake -D CMAKE_C_COMPILER=gcc-10 -D CMAKE_CXX_COMPILER=g++-10 -std=c++20 ../linux/ # g++
+cmake -D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++ -std=c++20 ../linux/ # Clang
 make
+
+# From the build dir
+./
 ````

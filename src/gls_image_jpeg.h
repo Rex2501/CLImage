@@ -20,7 +20,7 @@
 #include <span>
 #include <string>
 
-#ifdef __linux__ 
+#if defined(__linux__) && !defined(__ANDROID__)
 #include <stdexcept>
 #include <memory>
 #endif
