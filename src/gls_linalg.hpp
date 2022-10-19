@@ -38,16 +38,16 @@ struct Vector : public std::array<value_type, N> {
 #endif
     }
 
+    Vector(const std::array<value_type, N>& v) {
+        assert(v.size() == N);
+        std::copy(v.begin(), v.end(), this->begin());
+    }
+
     Vector(const value_type(&il)[N]) {
         std::copy(il, il + N, this->begin());
     }
 
     Vector(const std::vector<value_type>& v) {
-        assert(v.size() == N);
-        std::copy(v.begin(), v.end(), this->begin());
-    }
-
-    Vector(const std::array<value_type, N>& v) {
         assert(v.size() == N);
         std::copy(v.begin(), v.end(), this->begin());
     }
@@ -129,36 +129,7 @@ struct Vector : public std::array<value_type, N> {
     }
 };
 
-template <size_t N>
-struct DVector : public Vector<N, double> {
-    DVector() { }
-
-    DVector(const double(&il)[N]) {
-        std::copy(il, il + N, this->begin());
-    }
-
-    DVector(const std::vector<double>& v) {
-        assert(v.size() == N);
-        std::copy(v.begin(), v.end(), this->begin());
-    }
-
-    DVector(const std::array<double, N>& v) {
-        assert(v.size() == N);
-        std::copy(v.begin(), v.end(), this->begin());
-    }
-
-    DVector(std::initializer_list<double> list) {
-        assert(list.size() == N);
-        std::copy(list.begin(), list.end(), this->begin());
-    }
-
-    template<size_t P, size_t Q>
-    requires (P * Q == N)
-    DVector(const Matrix<P, Q>& m) {
-        const auto ms = m.span();
-        std::copy(ms.begin(), ms.end(), this->begin());
-    }
-};
+template <size_t N> using DVector = Vector<N, double>;
 
 // Vector - Vector Addition (component-wise)
 template <size_t N, typename value_type>
@@ -313,17 +284,6 @@ inline Vector<N, value_type> sqrt(const Vector<N, value_type>& v) {
 
 // ---- Matrix Type ----
 
-namespace matrix {
-
-enum initialization {
-    noinit,
-    zeros,
-    ones,
-    identity
-};
-
-};
-
 template <size_t N, size_t M, typename value_type>
 struct Matrix : public std::array<Vector<M, value_type>, N> {
     // Give Matrix some Image traits
@@ -473,8 +433,7 @@ struct Matrix : public std::array<Vector<M, value_type>, N> {
     }
 };
 
-template <size_t N, size_t M>
-struct DMatrix : public Matrix<N, M, double> { };
+template <size_t N, size_t M> using DMatrix = Matrix<N, M, double>;
 
 template <size_t N, size_t M, typename value_type>
 std::span<value_type> span(Matrix<N, M, value_type>& m) {
@@ -998,6 +957,6 @@ inline std::ostream& operator<<(std::ostream& os, const std::span<value_type>& s
     return os;
 }
 
-} // namespace std
+} // namespace gls
 
 #endif /* gls_linalg_h */
