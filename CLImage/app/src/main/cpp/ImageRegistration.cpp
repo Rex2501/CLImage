@@ -29,7 +29,7 @@
 #include "RANSAC.hpp"
 
 #if __APPLE__
-#define PATH "/Users/fabio/work/ImageRegistration/"
+#define PATH "/Users/fabio/work/ImageRegistration/LabShots/"
 #else
 #define PATH "/data/local/tmp/"
 #endif
@@ -37,8 +37,8 @@
 void testSURF() {
     auto glsContext = new gls::OpenCLContext("");
 
-    const auto srcImg1_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8601.jpg");
-    const auto srcImg2_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "DSCF8603.jpg");
+    auto srcImg1_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "IMG_1994.JPG");
+    auto srcImg2_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "IMG_2009.JPG");
 
 //    const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
 //    const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
@@ -61,13 +61,21 @@ void testSURF() {
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    const auto matchpoints = gls::SURF_Detection(glsContext, srcImg1, srcImg2);
+    auto matchpoints = gls::SURF_Detection(glsContext, srcImg1, srcImg2);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
 
     printf("Feature Dection matched %d features\n", (int) matchpoints.size());
 
-    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 3, /*max_iterations=*/ 2000);
+    // Limit the max number of matches
+    int max_matches = 300;
+    if (matchpoints.size() > max_matches) {
+        printf("SURF_Detection - dropping: %d features out of %d\n", (int) matchpoints.size() - max_matches, (int) matchpoints.size());
+        matchpoints.erase(matchpoints.begin() + max_matches, matchpoints.end());
+    }
+
+    std::vector<int> inliers;
+    const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 1, /*max_iterations=*/ 2000, &inliers);
 
     std::cout << "Homography:\n" << homography << std::endl;
 
@@ -96,13 +104,49 @@ void testSURF() {
     inputImage2.unmapImage(inputImage2Cpu);
 
     auto outputImage = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), srcImg1_->width, srcImg1_->height);
+    {
+        gls::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
 
-    gls::clRegisterAndFuse(glsContext, inputImage1, inputImage2, &outputImage, homography);
+        auto outputImageCpu = outputImage.mapImage(CL_MAP_READ);
 
-    auto outputImageCpu = outputImage.mapImage(CL_MAP_READ);
-    outputImageCpu.write_png_file(PATH "fused.png", /*skip_alpha=*/ true);
-    outputImage.unmapImage(outputImageCpu);
-}
+        for (const auto& mp : matchpoints) {
+            outputImageCpu[(int) mp.first.y][(int) mp.first.x] = {255, 0, 0, 255};
+        }
+        for (const auto& i : inliers) {
+            const auto& mp = matchpoints[i];
+            outputImageCpu[(int) mp.first.y][(int) mp.first.x] = {0, 255, 0, 255};
+        }
+
+        outputImageCpu.write_png_file(PATH "fused.png", /*skip_alpha=*/ true);
+        outputImage.unmapImage(outputImageCpu);
+    }
+    {
+        gls::clRegisterImage(glsContext, inputImage2, &outputImage, homography);
+
+        auto outputImageCpu = outputImage.mapImage(CL_MAP_READ | CL_MAP_WRITE);
+        outputImageCpu.write_png_file(PATH "registered.png", /*skip_alpha=*/ true);
+        outputImage.unmapImage(outputImageCpu);
+    }
+    {
+        for (const auto& mp : matchpoints) {
+            (*srcImg1_)[(int) mp.first.y][(int) mp.first.x] = {255, 0, 0};
+        }
+        for (const auto& i : inliers) {
+            const auto& mp = matchpoints[i];
+            (*srcImg1_)[(int) mp.first.y][(int) mp.first.x] = {0, 255, 0};
+        }
+        srcImg1_->write_png_file(PATH "srcImg1MatchPoints.png", /*skip_alpha=*/ true);
+    }
+    {
+        for (const auto& mp : matchpoints) {
+            (*srcImg2_)[(int) mp.second.y][(int) mp.second.x] = {255, 0, 0};
+        }
+        for (const auto& i : inliers) {
+            const auto& mp = matchpoints[i];
+            (*srcImg2_)[(int) mp.second.y][(int) mp.second.x] = {0, 255, 0};
+        }
+        srcImg2_->write_png_file(PATH "srcImg2MatchPoints.png", /*skip_alpha=*/ true);
+    }}
 
 int main(int argc, const char * argv[]) {
     std::cout << "ImageRegistration Tests!\n";

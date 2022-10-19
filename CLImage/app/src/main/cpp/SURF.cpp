@@ -73,6 +73,11 @@ struct SurfHF {
     SurfHF() : p({gls::point{0, 0}, gls::point{0, 0}, gls::point{0, 0}, gls::point{0, 0}}), w(0) {}
 };
 
+inline std::ostream& operator<<(std::ostream& os, const SurfHF& hf) {
+    os << "SurfHF - " << hf.p[0] << ", " << hf.p[1] << ", " << hf.p[2] << ", " << hf.p[3] << ", " << std::endl;
+    return os;
+}
+
 float integralRectangle(float topRight, float topLeft, float bottomRight, float bottomLeft) {
     // Use Signed Offset Pixel Representation to improve Integral Image precision, see Integral Image code below
     return 0.5 + (topRight - topLeft) - (bottomRight - bottomLeft);
@@ -800,10 +805,12 @@ class SURF {
 private:
     gls::OpenCLContext* _glsContext;
 
-    int _width;
-    int _height;
-
-    std::mutex _keypointsMutex;
+    const int _width;
+    const int _height;
+    const int _max_features;
+    const int _nOctaves;
+    const int _nOctaveLayers;
+    const float _hessianThreshold;
 
     gls::cl_image_buffer_2d<float>::unique_ptr _integralInputImage = nullptr;
     cl::Buffer _integralTmpBuffer;
@@ -812,10 +819,6 @@ private:
 
     std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> _dets;
     std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> _traces;
-
-    const int _nOctaves;
-    const int _nOctaveLayers;
-    const float _hessianThreshold;
 
     /* Sampling step along image x and y axes at first octave. This is doubled
        for each additional octave. WARNING: Increasing this improves speed,
@@ -854,10 +857,11 @@ private:
                              int nOctaveLayers, float hessianThreshold);
 
 public:
-    SURF(gls::OpenCLContext* glsContext, int width, int height, int nOctaves = 4, int nOctaveLayers = 2, float hessianThreshold = 0.02) :
+    SURF(gls::OpenCLContext* glsContext, int width, int height, int max_features = -1, int nOctaves = 4, int nOctaveLayers = 2, float hessianThreshold = 0.02) :
         _glsContext(glsContext),
         _width(width),
         _height(height),
+        _max_features(max_features),
         _nOctaves(nOctaves),
         _nOctaveLayers(nOctaveLayers),
         _hessianThreshold(hessianThreshold) {
@@ -1048,7 +1052,7 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
     assert(_nOctaves * layers == N);
 
     for (int octave = 0; octave < _nOctaves; octave++) {
-#if false // __ANDROID__
+#if __ANDROID__
         const int i = octave * layers;
 
         std::array<DetAndTraceHaarPattern, 4> haarPatterns = {
@@ -1082,6 +1086,8 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
         for (int layer = 0; layer < layers; layer++) {
             const int i = octave * layers + layer;
             DetAndTraceHaarPattern haarPattern(sum[0]->width, sum[0]->height, sizes[i], sampleSteps[i]);
+
+//            std::cout << "DetAndTraceHaarPattern: " << sum[0]->width << ", " << sum[0]->height << ", " << sizes[i] << ", " << sampleSteps[i] << std::endl;
 
 #if USE_INTEGRAL_PYRAMID
             // Rescale sampling points to the pyramid level
@@ -1386,6 +1392,12 @@ void SURF::detectAndCompute(const gls::image<float>& img,
 
         fastHessianDetector(sum, tileKeypoints.get(), _nOctaves, _nOctaveLayers, _hessianThreshold);
 
+        // Limit the max number of feature points
+        if (tileKeypoints->size() > _max_features) {
+            printf("detectAndCompute - dropping: %d features out of %d\n", (int) tileKeypoints->size() - _max_features, (int) tileKeypoints->size());
+            tileKeypoints->erase(tileKeypoints->begin() + _max_features, tileKeypoints->end());
+        }
+
         int N = (int) tileKeypoints->size();
 
         std::cout << "tileKeypoints: " << N << std::endl;
@@ -1528,7 +1540,7 @@ std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLCo
                                                         const gls::image<float>& srcIMAGE2) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.1);
+    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*max_features=*/ 1500, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.02);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
     printf("--> SURF Creation Time: %.2fms\n", timeDiff(t_start, t_surf));
@@ -1601,4 +1613,28 @@ void clRegisterAndFuse(gls::OpenCLContext* cLContext,
            inputImage0.getImage2D(), inputImage1.getImage2D(), outputImage->getImage2D(), homography, linear_sampler);
 }
 
+void clRegisterImage(gls::OpenCLContext* cLContext,
+                     const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
+                     gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                     const gls::Matrix<3, 3>& homography) {
+    // Load the shader source
+    const auto program = cLContext->loadProgram("SURF");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,        // inputImage
+                                    cl::Image2D,        // outputImage
+                                    gls::Matrix<3, 3>,  // homography
+                                    cl::Sampler         // linear_sampler
+                                    >(program, "registerImage");
+
+    const auto linear_sampler = cl::Sampler(cLContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
+    kernel(
+#if __APPLE__
+           gls::OpenCLContext::buildEnqueueArgs(inputImage.width, inputImage.height),
+#else
+           cl::EnqueueArgs(cl::NDRange(inputImage.width, inputImage.height), cl::NDRange(32, 32)),
+#endif
+           inputImage.getImage2D(), outputImage->getImage2D(), homography, linear_sampler);
+}
 } // namespace surf

@@ -33,6 +33,11 @@ void clRegisterAndFuse(gls::OpenCLContext* cLContext,
                        gls::cl_image_2d<gls::rgba_pixel>* outputImage,
                        const gls::Matrix<3, 3>& homography);
 
+void clRegisterImage(gls::OpenCLContext* cLContext,
+                     const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
+                     gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                     const gls::Matrix<3, 3>& homography);
+
 } // namespace surf
 
 #endif /* SURF_hpp */

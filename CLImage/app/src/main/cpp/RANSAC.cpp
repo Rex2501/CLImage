@@ -26,13 +26,6 @@
 
 #if USE_RTL
 #include "rtl/RTL.hpp"
-#else
-#define USE_SIMPLE_PERSPECTIVE_TRANSFORM false
-#define PSEUDO_RANDOM_TEST_SEQUENCE true
-
-#if PSEUDO_RANDOM_TEST_SEQUENCE
-#include "PRNG.h"
-#endif
 #endif
 
 namespace gls {
@@ -59,8 +52,8 @@ public:
 
         try {
             return findHomography(selectP1, selectP2);
-        } catch (const std::logic_error& e) {
-            printf("Perspective transformation matrix error.");
+        } catch (const std::range_error& e) {
+            std::cout << "Couldn't find homography: " << e.what() << std::endl;
             return gls::Matrix<3, 3>::identity();
         }
     }
@@ -73,7 +66,7 @@ public:
     }
 };
 
-gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
+gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations, std::vector<int>* inlier_indices) {
     HomographyEstimator estimator;
 #if USE_MLESAC
     RTL::MLESAC<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > ransac(&estimator);
@@ -87,36 +80,38 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
 
     std::cout << "RTL RANSAC loss: " << ransac_loss << std::endl;
 
-//    RTL::LMedS<gls::Matrix<3, 3>, std::pair<Point2f, Point2f>, std::vector<std::pair<Point2f, Point2f>> > lmeds(&estimator);
-//    lmeds.SetParamThreshold(1);
-//    lmeds.SetParamIteration(max_iterations);
-//    const auto ransac_inlier_indices = ransac.FindInliers(model, matchpoints, (int) matchpoints.size());
-//    std::vector<std::pair<Point2f, Point2f>> ransac_inliers(ransac_inlier_indices.size());
-//    for (int i = 0; i < ransac_inlier_indices.size(); i++) {
-//        ransac_inliers[i] = matchpoints[ransac_inlier_indices[i]];
-//    }
-//    const auto lmeds_loss = lmeds.FindBest(model, ransac_inliers, (int) ransac_inliers.size(), 4);
-//    std::cout << "RTL LMedS loss: " << lmeds_loss << std::endl;
-
     // Refine RANSAC projection matrix parameters using the best interior points
-    constexpr bool interiorPointsProjection = true;
-    if (interiorPointsProjection) {
-        const auto inliers = ransac.FindInliers(model, matchpoints, (int) matchpoints.size());
+    const auto inliers = ransac.FindInliers(model, matchpoints, (int) matchpoints.size());
+    std::cout << "RANSAC found " << inliers.size() << " inliers" << std::endl;
 
-        std::vector<Point2f> p1(inliers.size()), p2(inliers.size());
-        for (int i = 0; i < inliers.size(); i++) {
-            const auto& p = matchpoints[inliers[i]];
-            p1[i] = p.first;
-            p2[i] = p.second;
+    if (!inliers.empty()) {
+        // Copy out the inliers
+        if (inlier_indices) {
+            inlier_indices->resize(inliers.size());
+            std::copy(inliers.begin(), inliers.end(), inlier_indices->begin());
         }
-        model = findHomography(p1, p2);
+
+        // Refine the best homography with the least mean square result from the inliers
+        if (inliers.size() >= 4) {
+            std::vector<Point2f> p1(inliers.size()), p2(inliers.size());
+            for (int i = 0; i < inliers.size(); i++) {
+                const auto& p = matchpoints[inliers[i]];
+                p1[i] = p.first;
+                p2[i] = p.second;
+            }
+            try {
+                model = findHomography(p1, p2);
+            } catch (const std::range_error& e) {
+                std::cout << "Couldn't find homography: " << e.what() << std::endl;
+            }
+        }
     }
     return model;
 }
 
 #else
 
-gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations) {
+gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoints, float threshold, int max_iterations, std::vector<int>* inlier_indices) {
     assert(matchpoints.size() > 0);
 
     // Calculate the maximum set of interior points
@@ -124,17 +119,12 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
     int max_innerP = 0;
     std::vector<int> innerPvInd;  // Inner point set index - temporary
     std::vector<int> innerPvInd_i;
-    // generate random table
-    auto selectIndex = new int[max_iterations][4];
+    std::vector<std::array<int, 4>> selectIndex(max_iterations);
 
-#if PSEUDO_RANDOM_TEST_SEQUENCE
-    const std::array<uint64_t, 16> prng_seed = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-    PRNG prng(prng_seed);
-#else
     srand((unsigned) time(NULL));  // Use time as seed, each time the random number is different
-#endif
     int pCount = (int)matchpoints.size();
 
+    // generate random table
     for (int i = 0; i < max_iterations; i++) {
         for (int j = 0; j < 4; j++) {
             int ii = 0;
@@ -142,11 +132,7 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
             selectIndex[i][0] = selectIndex[i][1] = selectIndex[i][2] = selectIndex[i][3] =
             pCount + 1;
             while (ii < 4) {
-#if PSEUDO_RANDOM_TEST_SEQUENCE
-                temp = prng.getRandomInt(0, RAND_MAX) % pCount;
-#else
                 temp = rand() % pCount;
-#endif
                 if (temp != selectIndex[i][0] && temp != selectIndex[i][1] &&
                     temp != selectIndex[i][2] && temp != selectIndex[i][3]) {
                     selectIndex[i][ii] = temp;
@@ -156,6 +142,9 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
         }
     }
 
+    auto homography = gls::Matrix<3, 3>::identity();
+
+    // Compute the hompgraphy
     int k = 0;
     for (; k < iters; k++) {
         std::vector<Point2f> selectP1(4);
@@ -167,13 +156,10 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
             selectP2[i] = p.second;
         }
 
-        // Calculate the perspective transformation matrix
+        // Find the best homography with RANSAC
         try {
-#if USE_SIMPLE_PERSPECTIVE_TRANSFORM
-            const auto homography = getPerspectiveTransformLSM2(selectP1, selectP2);
-#else
-            const auto homography = findHomography(selectP1, selectP2);
-#endif
+            homography = findHomography(selectP1, selectP2);
+
             // Calculate the model parameter error, if the error is greater than the threshold, discard
             // this set of model parameters
             int innerP = 0;
@@ -207,32 +193,42 @@ gls::Matrix<3, 3> RANSAC(const std::vector<std::pair<Point2f, Point2f>> matchpoi
                     float num = log(num_);
                     float denom = log(denom_);
                     iters = (denom >= 0 || -num >= max_iterations * (-denom) ? max_iterations : (int)(num / denom));
-                    // std::cout << "Updated iters to " << iters << std::endl;
+                    std::cout << "Updated iters to " << iters << std::endl;
                 }
             }
             innerPvInd.clear();
-        } catch (const std::logic_error& e) {
-            printf("Perspective transformation matrix error.");
+        } catch (const std::range_error& e) {
+            std::cout << "Couldn't find homography: " << e.what() << std::endl;
         }
     }
-    delete [] selectIndex;
 
     printf(" RANSAC interior point ratio - number of loops: %d %ld %d \t\n ", max_innerP, matchpoints.size(), k);
 
-    // Calculate projection matrix parameters based on interior points
+    if (!innerPvInd_i.empty()) {
+        // Copy out the inliers
+        if (inlier_indices && !innerPvInd_i.empty()) {
+            std::cout << "RANSAC found " << innerPvInd_i.size() << " inliers" << std::endl;
 
-    std::vector<Point2f> _p1(max_innerP), _p2(max_innerP);
-    for (int i = 0; i < max_innerP; i++) {
-        const auto& p = matchpoints[innerPvInd_i[i]];
-        _p1[i] = p.first;
-        _p2[i] = p.second;
+            inlier_indices->resize(innerPvInd_i.size());
+            std::copy(innerPvInd_i.begin(), innerPvInd_i.end(), inlier_indices->begin());
+        }
+
+        // Refine the best homography with the least mean square result from the inliers
+        if (innerPvInd_i.size() >= 4) {
+            std::vector<Point2f> _p1(max_innerP), _p2(max_innerP);
+            for (int i = 0; i < max_innerP; i++) {
+                const auto& p = matchpoints[innerPvInd_i[i]];
+                _p1[i] = p.first;
+                _p2[i] = p.second;
+            }
+            try {
+                homography = findHomography(_p1, _p2);
+            } catch (const std::range_error& e) {
+                std::cout << "Couldn't find homography: " << e.what() << std::endl;
+            }
+        }
     }
-
-#if USE_SIMPLE_PERSPECTIVE_TRANSFORM
-    return getPerspectiveTransformLSM2(_p1, _p2);
-#else
-    return findHomography(_p1, _p2);
-#endif
+    return homography;
 }
 
 #endif

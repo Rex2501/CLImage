@@ -385,7 +385,7 @@ gls::Matrix<3, 3> findHomography(const std::vector<Point2f>& M, const std::vecto
 
     const auto eps = std::numeric_limits<double>::epsilon();
     if (fabs(sm[0]) < eps || fabs(sm[1]) < eps || fabs(sM[0]) < eps || fabs(sM[1]) < eps) {
-        throw std::range_error("Solution not available.");
+        throw std::range_error("Can't generate homography from input points.");
     }
 
     // Efficiently build the Homogeneous Linear Least Squares Matrix (LtL = transpose(L) * L)
