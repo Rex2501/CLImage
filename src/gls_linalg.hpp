@@ -756,9 +756,10 @@ inline Matrix<N, N, value_type> inverse(const Matrix<N, N, value_type>& m) {
     // NOTE: With float data this method is prone to gross errors
     Matrix<N, 2 * N, double> tmp;
     for (size_t row = 0; row < N; ++row) {
-        for (size_t column = 0; column < N; ++column)
+        for (size_t column = 0; column < N; ++column) {
             tmp[row][column] = m[row][column];
-        tmp[row][row + N] = 1;
+            tmp[row][column + N] = row == column ? 1 : 0;
+        }
     }
     to_reduced_row_echelon_form(tmp);
     Matrix<N, N, value_type> inv;
