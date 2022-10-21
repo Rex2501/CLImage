@@ -9,6 +9,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CLImage">
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
         <activity
             android:name=".TestCLImage"
             android:exported="true">
@@ -19,5 +22,4 @@
             </intent-filter>
         </activity>
     </application>
-
 </manifest>
