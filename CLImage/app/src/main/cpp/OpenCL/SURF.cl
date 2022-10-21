@@ -246,7 +246,7 @@ kernel void findMaximaInLayer(read_only image2d_t detImage0, read_only image2d_t
 
 // Integral Image
 
-#define LOCAL_SUM_SIZE      16
+#define LOCAL_SUM_SIZE      8
 
 kernel void integral_sum_cols_image(read_only image2d_t sourceImage, global float *buf_ptr, int buf_width) {
     const int lid = get_local_id(0);

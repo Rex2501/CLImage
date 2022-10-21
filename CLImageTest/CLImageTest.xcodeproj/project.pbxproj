@@ -34,7 +34,27 @@
 		E5345EE628D4F93700FC57FA /* ImageRegistration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE528D4F93700FC57FA /* ImageRegistration.cpp */; };
 		E5470D3B28F6347C003C0B18 /* homography.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5470D3828F63473003C0B18 /* homography.cpp */; };
 		E5470D4628F9FC50003C0B18 /* cl_pipeline.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5470D4528F9FC50003C0B18 /* cl_pipeline.cpp */; };
+		E5470DB02900C017003C0B18 /* pyramidFusion.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5470DAF2900C017003C0B18 /* pyramidFusion.cpp */; };
 		E554E3EB28DB90DD0095F20D /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E554E3E928DB90DD0095F20D /* RANSAC.cpp */; };
+		E556BD3E2900C133009FA1E9 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD628C276178580055F712 /* OpenCL.framework */; };
+		E556BD3F2900C133009FA1E9 /* libjpeg.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624B27616D7E0055F712 /* libjpeg.dylib */; };
+		E556BD402900C133009FA1E9 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
+		E556BD412900C133009FA1E9 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
+		E556BD422900C133009FA1E9 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
+		E556BD4D2900C2C5009FA1E9 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E556BD4C2900C2C5009FA1E9 /* OpenCL */; };
+		E556BD4E29020608009FA1E9 /* gls_logging.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627E276174FC0055F712 /* gls_logging.cpp */; };
+		E556BD4F29020608009FA1E9 /* gls_image_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6275276174FC0055F712 /* gls_image_jpeg.cpp */; };
+		E556BD5029020608009FA1E9 /* gls_image_png.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6277276174FC0055F712 /* gls_image_png.cpp */; };
+		E556BD5129020608009FA1E9 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
+		E556BD5229020608009FA1E9 /* gls_tiff_metadata.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB799A27ED59C0008B3D30 /* gls_tiff_metadata.cpp */; };
+		E556BD5329020608009FA1E9 /* gls_dng_lossless_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */; };
+		E556BD5429020608009FA1E9 /* gls_cl_error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627C276174FC0055F712 /* gls_cl_error.cpp */; };
+		E556BD5529020608009FA1E9 /* gls_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6276276174FC0055F712 /* gls_cl.cpp */; };
+		E556BD5629020608009FA1E9 /* gls_color_science.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */; };
+		E556BD572902071C009FA1E9 /* homography.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5470D3828F63473003C0B18 /* homography.cpp */; };
+		E556BD582902071C009FA1E9 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE128D4F8A100FC57FA /* SURF.cpp */; };
+		E556BD592902071C009FA1E9 /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E554E3E928DB90DD0095F20D /* RANSAC.cpp */; };
+		E556BD5A2902072D009FA1E9 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2531282DB5BB003305E9 /* ThreadPool.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -91,6 +111,16 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E5470DAB2900C016003C0B18 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				E556BD4D2900C2C5009FA1E9 /* OpenCL in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5AD623A27616ABA0055F712 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 12;
@@ -155,10 +185,14 @@
 		E5470D3C28F71FBC003C0B18 /* SVD.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = SVD.hpp; path = ../../CLImage/app/src/main/cpp/SVD.hpp; sourceTree = "<group>"; };
 		E5470D4228F9FC0B003C0B18 /* rtl */ = {isa = PBXFileReference; lastKnownFileType = folder; name = rtl; path = ../../CLImage/app/src/main/cpp/rtl; sourceTree = "<group>"; };
 		E5470D4528F9FC50003C0B18 /* cl_pipeline.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = cl_pipeline.cpp; path = ../../CLImage/app/src/main/cpp/cl_pipeline.cpp; sourceTree = "<group>"; };
+		E5470DAD2900C016003C0B18 /* PyramidFusion */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PyramidFusion; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5470DAF2900C017003C0B18 /* pyramidFusion.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = pyramidFusion.cpp; sourceTree = "<group>"; };
 		E554E3E928DB90DD0095F20D /* RANSAC.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = RANSAC.cpp; path = ../../CLImage/app/src/main/cpp/RANSAC.cpp; sourceTree = "<group>"; };
 		E554E3EA28DB90DD0095F20D /* RANSAC.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = RANSAC.hpp; path = ../../CLImage/app/src/main/cpp/RANSAC.hpp; sourceTree = "<group>"; };
 		E554E3EC28E4B1E60095F20D /* gls_geometry.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_geometry.hpp; path = ../../src/gls_geometry.hpp; sourceTree = "<group>"; };
 		E554E3ED28E4B5D00095F20D /* PRNG.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PRNG.h; path = ../../CLImage/app/src/main/cpp/PRNG.h; sourceTree = "<group>"; };
+		E556BD4B2900C1E5009FA1E9 /* PyramidFusion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PyramidFusion.entitlements; sourceTree = "<group>"; };
+		E556BD4C2900C2C5009FA1E9 /* OpenCL */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OpenCL; path = ../CLImage/app/src/main/cpp/OpenCL; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -210,6 +244,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5470DAA2900C016003C0B18 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E556BD3E2900C133009FA1E9 /* OpenCL.framework in Frameworks */,
+				E556BD3F2900C133009FA1E9 /* libjpeg.dylib in Frameworks */,
+				E556BD402900C133009FA1E9 /* libpng.dylib in Frameworks */,
+				E556BD412900C133009FA1E9 /* libz.dylib in Frameworks */,
+				E556BD422900C133009FA1E9 /* libtiff.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5AD623927616ABA0055F712 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -237,6 +283,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E5470DAE2900C017003C0B18 /* PyramidFusion */ = {
+			isa = PBXGroup;
+			children = (
+				E556BD4B2900C1E5009FA1E9 /* PyramidFusion.entitlements */,
+				E5470DAF2900C017003C0B18 /* pyramidFusion.cpp */,
+			);
+			path = PyramidFusion;
+			sourceTree = "<group>";
+		};
 		E5AB797E27EAD0B9008B3D30 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -283,8 +338,10 @@
 		E5AD623327616ABA0055F712 = {
 			isa = PBXGroup;
 			children = (
+				E556BD4C2900C2C5009FA1E9 /* OpenCL */,
 				E5AD623E27616ABB0055F712 /* CLImageTest */,
 				E5E9EA8F28B8D86E0079A5C0 /* ImageRegistration */,
+				E5470DAE2900C017003C0B18 /* PyramidFusion */,
 				E5AD623D27616ABA0055F712 /* Products */,
 				E5AD624627616C8B0055F712 /* Frameworks */,
 			);
@@ -296,6 +353,7 @@
 				E5AD623C27616ABA0055F712 /* CLImageTest */,
 				E5188C7F27EA63A700F2332C /* RawPipeline */,
 				E5E9EA8E28B8D86E0079A5C0 /* ImageRegistration */,
+				E5470DAD2900C016003C0B18 /* PyramidFusion */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -383,6 +441,23 @@
 			productReference = E5188C7F27EA63A700F2332C /* RawPipeline */;
 			productType = "com.apple.product-type.tool";
 		};
+		E5470DAC2900C016003C0B18 /* PyramidFusion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5470DB12900C017003C0B18 /* Build configuration list for PBXNativeTarget "PyramidFusion" */;
+			buildPhases = (
+				E5470DA92900C016003C0B18 /* Sources */,
+				E5470DAA2900C016003C0B18 /* Frameworks */,
+				E5470DAB2900C016003C0B18 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PyramidFusion;
+			productName = PyramidFusion;
+			productReference = E5470DAD2900C016003C0B18 /* PyramidFusion */;
+			productType = "com.apple.product-type.tool";
+		};
 		E5AD623B27616ABA0055F712 /* CLImageTest */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E5AD624327616ABB0055F712 /* Build configuration list for PBXNativeTarget "CLImageTest" */;
@@ -427,6 +502,9 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastUpgradeCheck = 1320;
 				TargetAttributes = {
+					E5470DAC2900C016003C0B18 = {
+						CreatedOnToolsVersion = 14.1;
+					};
 					E5AD623B27616ABA0055F712 = {
 						CreatedOnToolsVersion = 13.2;
 					};
@@ -451,6 +529,7 @@
 				E5AD623B27616ABA0055F712 /* CLImageTest */,
 				E5188C6827EA63A700F2332C /* RawPipeline */,
 				E5E9EA8D28B8D86E0079A5C0 /* ImageRegistration */,
+				E5470DAC2900C016003C0B18 /* PyramidFusion */,
 			);
 		};
 /* End PBXProject section */
@@ -522,6 +601,27 @@
 				E5AB79A227F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp in Sources */,
 				E50D253B2832E414003305E9 /* pyramidal_denoise.cpp in Sources */,
 				E5188C7227EA63A700F2332C /* gls_cl_error.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5470DA92900C016003C0B18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E556BD5A2902072D009FA1E9 /* ThreadPool.cpp in Sources */,
+				E556BD572902071C009FA1E9 /* homography.cpp in Sources */,
+				E556BD582902071C009FA1E9 /* SURF.cpp in Sources */,
+				E556BD592902071C009FA1E9 /* RANSAC.cpp in Sources */,
+				E556BD4E29020608009FA1E9 /* gls_logging.cpp in Sources */,
+				E556BD4F29020608009FA1E9 /* gls_image_jpeg.cpp in Sources */,
+				E556BD5029020608009FA1E9 /* gls_image_png.cpp in Sources */,
+				E556BD5129020608009FA1E9 /* gls_image_tiff.cpp in Sources */,
+				E556BD5229020608009FA1E9 /* gls_tiff_metadata.cpp in Sources */,
+				E556BD5329020608009FA1E9 /* gls_dng_lossless_jpeg.cpp in Sources */,
+				E556BD5429020608009FA1E9 /* gls_cl_error.cpp in Sources */,
+				E556BD5529020608009FA1E9 /* gls_cl.cpp in Sources */,
+				E556BD5629020608009FA1E9 /* gls_color_science.cpp in Sources */,
+				E5470DB02900C017003C0B18 /* pyramidFusion.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -604,6 +704,38 @@
 				CODE_SIGN_ENTITLEMENTS = CLImageTest/CLImageTest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/CLImageTest/libs",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		E5470DB22900C017003C0B18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PyramidFusion/PyramidFusion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
+				ENABLE_HARDENED_RUNTIME = NO;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/CLImageTest/libs",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		E5470DB32900C017003C0B18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PyramidFusion/PyramidFusion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
 				ENABLE_HARDENED_RUNTIME = NO;
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
@@ -812,6 +944,15 @@
 			buildConfigurations = (
 				E5188C7D27EA63A700F2332C /* Debug */,
 				E5188C7E27EA63A700F2332C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5470DB12900C017003C0B18 /* Build configuration list for PBXNativeTarget "PyramidFusion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5470DB22900C017003C0B18 /* Debug */,
+				E5470DB32900C017003C0B18 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

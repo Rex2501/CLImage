@@ -16,16 +16,50 @@
 #ifndef SURF_hpp
 #define SURF_hpp
 
+#include <float.h>
+
 #include "gls_cl_image.hpp"
 #include "gls_linalg.hpp"
+
+#include "feature2d.hpp"
 
 namespace gls {
 
 typedef gls::basic_point<float> Point2f;
 
-std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLContext,
-                                                        const gls::image<float>& srcIMAGE1,
-                                                        const gls::image<float>& srcIMAGE2);
+class DMatch {
+   public:
+    DMatch() : queryIdx(-1), trainIdx(-1), distance(FLT_MAX) {}
+    DMatch(int _queryIdx, int _trainIdx, float _distance)
+        : queryIdx(_queryIdx), trainIdx(_trainIdx), distance(_distance) {}
+
+    int queryIdx;  // query descriptor index
+    int trainIdx;  // train descriptor index
+
+    float distance;
+
+    // less is better
+    bool operator < (const DMatch& m) const { return distance < m.distance; }
+};
+
+class SURF {
+public:
+    static std::unique_ptr<SURF> makeInstance(gls::OpenCLContext* glsContext, int width, int height,
+                                              int max_features = -1, int nOctaves = 4,
+                                              int nOctaveLayers = 2, float hessianThreshold = 0.02);
+
+    virtual ~SURF() {}
+
+    virtual void integral(const gls::image<float>& img, const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) = 0;
+
+    virtual void detect(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& integralSum, std::vector<KeyPoint>* keypoints) = 0;
+
+    virtual void detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* keypoints, gls::image<float>::unique_ptr* _descriptors) = 0;
+
+    virtual std::vector<DMatch> matchKeyPoints(const gls::image<float>& descriptor1, const gls::image<float>& descriptor2) = 0;
+
+    static std::vector<std::pair<Point2f, Point2f>> detection(gls::OpenCLContext* cLContext, const gls::image<float>& image1, const gls::image<float>& image2);
+};
 
 void clRegisterAndFuse(gls::OpenCLContext* cLContext,
                        const gls::cl_image_2d<gls::rgba_pixel>& inputImage0,

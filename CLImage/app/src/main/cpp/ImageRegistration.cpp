@@ -29,7 +29,7 @@
 #include "RANSAC.hpp"
 
 #if __APPLE__
-#define PATH "/Users/fabio/work/ImageRegistration/LabShots/"
+#define PATH "/Users/fabio/work/ImageRegistration/RAW/F8/"
 #else
 #define PATH "/data/local/tmp/"
 #endif
@@ -37,8 +37,8 @@
 void testSURF() {
     auto glsContext = new gls::OpenCLContext("");
 
-    auto srcImg1_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "IMG_1994.JPG");
-    auto srcImg2_ = gls::image<gls::rgb_pixel>::read_jpeg_file(PATH "IMG_2009.JPG");
+    auto srcImg1_ = gls::image<gls::rgb_pixel>::read_png_file(PATH "L1008535.png");
+    auto srcImg2_ = gls::image<gls::rgb_pixel>::read_png_file(PATH "L1008536.png");
 
 //    const auto srcImg1_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg1_full, gls::rectangle {0, srcImg1_full->height/2, srcImg1_full->width, srcImg1_full->height/2});
 //    const auto srcImg2_ = std::make_unique<gls::image<gls::rgb_pixel>>(*srcImg2_full, gls::rectangle {0, srcImg2_full->height/2, srcImg2_full->width, srcImg2_full->height/2});
@@ -61,7 +61,7 @@ void testSURF() {
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    auto matchpoints = gls::SURF_Detection(glsContext, srcImg1, srcImg2);
+    auto matchpoints = gls::SURF::detection(glsContext, srcImg1, srcImg2);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
 
@@ -151,11 +151,11 @@ void testSURF() {
 int main(int argc, const char * argv[]) {
     std::cout << "ImageRegistration Tests!\n";
 
-    try {
+//    try {
         testSURF();
-    } catch (const cl::Error& e) {
-        std::cout << "cl::Error " << e.what() << " - " << gls::clStatusToString(e.err()) << std::endl;
-    }
+//    } catch (const cl::Error& e) {
+//        std::cout << "cl::Error " << e.what() << " - " << gls::clStatusToString(e.err()) << std::endl;
+//    }
 
     return 0;
 }

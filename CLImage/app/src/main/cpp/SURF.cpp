@@ -786,22 +786,7 @@ void SURFFind(const gls::image<float>& sum,
     }
 }
 
-class DMatch {
-   public:
-    DMatch() : queryIdx(-1), trainIdx(-1), distance(FLT_MAX) {}
-    DMatch(int _queryIdx, int _trainIdx, float _distance)
-        : queryIdx(_queryIdx), trainIdx(_trainIdx), distance(_distance) {}
-
-    int queryIdx;  // query descriptor index
-    int trainIdx;  // train descriptor index
-
-    float distance;
-
-    // less is better
-    bool operator < (const DMatch& m) const { return distance < m.distance; }
-};
-
-class SURF {
+class SURF_OpenCL : public SURF {
 private:
     gls::OpenCLContext* _glsContext;
 
@@ -821,93 +806,100 @@ private:
     std::vector<gls::cl_image_buffer_2d<float>::unique_ptr> _traces;
 
     /* Sampling step along image x and y axes at first octave. This is doubled
-       for each additional octave. WARNING: Increasing this improves speed,
-       however keypoint extraction becomes unreliable. */
+    for each additional octave. WARNING: Increasing this improves speed,
+    however keypoint extraction becomes unreliable. */
     static const int SAMPLE_STEP0 = 1;
 
-    void clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
-                           gls::cl_image_2d<float>* detImage,
-                           gls::cl_image_2d<float>* traceImage,
-                           const int sampleStep,
-                           const DetAndTraceHaarPattern& haarPattern);
+    void calcDetAndTrace(const gls::cl_image_2d<float>& sumImage, gls::cl_image_2d<float>* detImage,
+                      gls::cl_image_2d<float>* traceImage, const int sampleStep,
+                      const DetAndTraceHaarPattern& haarPattern);
 
-    void clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
-                           const std::array<gls::cl_image_2d<float>*, 4>& detImage,
-                           const std::array<gls::cl_image_2d<float>*, 4>& traceImage,
-                           const int sampleStep,
-                           const std::array<DetAndTraceHaarPattern, 4>& haarPattern);
+    void calcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
+                      const std::array<gls::cl_image_2d<float>*, 4>& detImage,
+                      const std::array<gls::cl_image_2d<float>*, 4>& traceImage, const int sampleStep,
+                      const std::array<DetAndTraceHaarPattern, 4>& haarPattern);
 
-    void clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
-                             const gls::cl_image_2d<float>& traceImage,
-                             const std::array<int, 3>& sizes, int octave,
-                             float hessianThreshold, int sampleStep);
+    void findMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
+                        const gls::cl_image_2d<float>& traceImage, const std::array<int, 3>& sizes, int octave,
+                        float hessianThreshold, int sampleStep);
 
-    void Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
-               const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
-               const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
-               const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces);
+    void Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum, const std::vector<int>& sizes,
+            const std::vector<int>& sampleSteps, const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
+            const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces);
 
     void Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
-              const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces,
-              const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
-              const std::vector<int>& middleIndices, std::vector<KeyPoint>* keypoints,
-              int nOctaveLayers, float hessianThreshold);
+           const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces, const std::vector<int>& sizes,
+           const std::vector<int>& sampleSteps, const std::vector<int>& middleIndices,
+           std::vector<KeyPoint>* keypoints, int nOctaveLayers, float hessianThreshold);
 
-    void fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum, std::vector<KeyPoint>* keypoints, int nOctaves,
-                             int nOctaveLayers, float hessianThreshold);
+    void fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
+                          std::vector<KeyPoint>* keypoints, int nOctaves, int nOctaveLayers, float hessianThreshold);
 
 public:
-    SURF(gls::OpenCLContext* glsContext, int width, int height, int max_features = -1, int nOctaves = 4, int nOctaveLayers = 2, float hessianThreshold = 0.02) :
-        _glsContext(glsContext),
-        _width(width),
-        _height(height),
-        _max_features(max_features),
-        _nOctaves(nOctaves),
-        _nOctaveLayers(nOctaveLayers),
-        _hessianThreshold(hessianThreshold) {
-            int nTotalLayers = (nOctaveLayers + 2) * nOctaves;
+    SURF_OpenCL(gls::OpenCLContext * glsContext, int width, int height,
+                int max_features = -1, int nOctaves = 4,
+                int nOctaveLayers = 2, float hessianThreshold = 0.02);
 
-            if (_dets.size() != nTotalLayers) {
-                printf("resizing dets and traces vectors to %d\n", nTotalLayers);
-                _dets.resize(nTotalLayers);
-                _traces.resize(nTotalLayers);
-            }
+    void integral(const gls::image<float>& img, const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) override;
 
-            // Allocate space for each layer
-            int index = 0, step = SAMPLE_STEP0;
-
-            for (int octave = 0; octave < nOctaves; octave++) {
-                for (int layer = 0; layer < nOctaveLayers + 2; layer++) {
-                    /* The integral image sum is one pixel bigger than the source image*/
-                    if (_dets[index] == nullptr) {
-                        _dets[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(), width / step, height / step);
-                        _traces[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(), width / step, height / step);
-                    }
-                    index++;
-                }
-                step *= 2;
-            }
-        }
-
-    void clIntegral(const gls::image<float>& img,
-                    const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum);
-
-    void detect(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& integralSum, std::vector<KeyPoint>* keypoints) {
+    void detect(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& integralSum, std::vector<KeyPoint>* keypoints) override {
         fastHessianDetector(integralSum, keypoints, _nOctaves, _nOctaveLayers, _hessianThreshold);
     }
 
-    void detectAndCompute(const gls::image<float>& img,
-                          std::vector<KeyPoint>* keypoints,
-                          gls::image<float>::unique_ptr* _descriptors,
-                          gls::size sections = { 1, 1 });
+    void detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* keypoints,
+                          gls::image<float>::unique_ptr* _descriptors) override {
+        detectAndCompute(img, keypoints, _descriptors, {1, 1});
+    }
 
-    std::vector<DMatch> clMatchKeyPoints(const gls::image<float>& descriptor1,
-                                         const gls::image<float>& descriptor2);
+    void detectAndCompute(const gls::image<float>& img, std::vector<KeyPoint>* keypoints,
+                          gls::image<float>::unique_ptr* _descriptors, gls::size sections = {1, 1});
+
+
+    std::vector<DMatch> matchKeyPoints(const gls::image<float>& descriptor1, const gls::image<float>& descriptor2)
+     override;
 };
 
-void SURF::clIntegral(const gls::image<float>& img,
+std::unique_ptr<SURF> SURF::makeInstance(gls::OpenCLContext* glsContext, int width, int height, int max_features, int nOctaves, int nOctaveLayers, float hessianThreshold) {
+    return std::make_unique<SURF_OpenCL>(glsContext, width, height, max_features, nOctaves, nOctaveLayers, hessianThreshold);
+}
+
+SURF_OpenCL::SURF_OpenCL(gls::OpenCLContext* glsContext, int width, int height, int max_features, int nOctaves, int nOctaveLayers, float hessianThreshold)
+    : _glsContext(glsContext),
+      _width(width),
+      _height(height),
+      _max_features(max_features),
+      _nOctaves(nOctaves),
+      _nOctaveLayers(nOctaveLayers),
+      _hessianThreshold(hessianThreshold) {
+    int nTotalLayers = (nOctaveLayers + 2) * nOctaves;
+
+    if (_dets.size() != nTotalLayers) {
+        printf("resizing dets and traces vectors to %d\n", nTotalLayers);
+        _dets.resize(nTotalLayers);
+        _traces.resize(nTotalLayers);
+    }
+
+    // Allocate space for each layer
+    int index = 0, step = SAMPLE_STEP0;
+
+    for (int octave = 0; octave < nOctaves; octave++) {
+        for (int layer = 0; layer < nOctaveLayers + 2; layer++) {
+            /* The integral image sum is one pixel bigger than the source image*/
+            if (_dets[index] == nullptr) {
+                _dets[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(), width / step,
+                                                                                height / step);
+                _traces[index] = std::make_unique<gls::cl_image_buffer_2d<float>>(_glsContext->clContext(),
+                                                                                  width / step, height / step);
+            }
+            index++;
+        }
+        step *= 2;
+    }
+}
+
+void SURF_OpenCL::integral(const gls::image<float>& img,
                       const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) {
-    static const int tileSize = 16;
+    static const int tileSize = 8;
 
     gls::size tmpSize(((_height + tileSize - 1) / tileSize) * tileSize, ((_width + tileSize - 1) / tileSize) * tileSize);
     if (_integralTmpBuffer.get() == 0) {
@@ -952,7 +944,7 @@ void SURF::clIntegral(const gls::image<float>& img,
                       sum[3]->getImage2D());
 }
 
-void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
+void SURF_OpenCL::calcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                              gls::cl_image_2d<float>* detImage,
                              gls::cl_image_2d<float>* traceImage,
                              const int sampleStep,
@@ -990,7 +982,7 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
            sampleStep, { haarPattern.Dx[0].w, haarPattern.Dxy[0].w }, { margin_crop.x, margin_crop.y }, _surfHFDataBuffer);
 }
 
-void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
+void SURF_OpenCL::calcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
                              const std::array<gls::cl_image_2d<float>*, 4>& detImage,
                              const std::array<gls::cl_image_2d<float>*, 4>& traceImage,
                              const int sampleStep,
@@ -1040,7 +1032,7 @@ void SURF::clCalcDetAndTrace(const gls::cl_image_2d<float>& sumImage,
            _surfHFDataBuffer);
 }
 
-void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
+void SURF_OpenCL::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
                  const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
                  const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
                  const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces) {
@@ -1068,7 +1060,7 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
             haarPattern.rescale(sampleSteps[i]);
         }
         int idx = sampleSteps[i] == 8 ? 3 : sampleSteps[i] == 4 ? 2 : sampleSteps[i] == 2 ? 1 : 0;
-        clCalcDetAndTrace(*sum[idx], { dets[i].get(), dets[i + 1].get(), dets[i + 2].get(), dets[i + 3].get() },
+        calcDetAndTrace(*sum[idx], { dets[i].get(), dets[i + 1].get(), dets[i + 2].get(), dets[i + 3].get() },
                           { traces[i].get(), traces[i + 1].get(), traces[i + 2].get(), traces[i + 3].get() },
                           1 /* sampleSteps[i] */, haarPatterns);
 #else
@@ -1078,7 +1070,7 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
 //            haarPattern.upscale(sampleSteps[i]);
 //        }
 
-        clCalcDetAndTrace(*sum[0], { dets[i].get(), dets[i + 1].get(), dets[i + 2].get(), dets[i + 3].get() },
+        calcDetAndTrace(*sum[0], { dets[i].get(), dets[i + 1].get(), dets[i + 2].get(), dets[i + 3].get() },
                           { traces[i].get(), traces[i + 1].get(), traces[i + 2].get(), traces[i + 3].get() },
                           sampleSteps[i], haarPatterns);
 #endif
@@ -1094,13 +1086,13 @@ void SURF::Build(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
             haarPattern.rescale(sampleSteps[i]);
 
             const int idx = sampleSteps[i] == 8 ? 3 : sampleSteps[i] == 4 ? 2 : sampleSteps[i] == 2 ? 1 : 0;
-            clCalcDetAndTrace(*sum[idx], dets[i].get(), traces[i].get(), 1, haarPattern);
+            calcDetAndTrace(*sum[idx], dets[i].get(), traces[i].get(), 1, haarPattern);
 #else
 //            // Emulate the integral pyramid scaling roundoff
 //            haarPattern.rescale(sampleSteps[i]);
 //            haarPattern.upscale(sampleSteps[i]);
 
-            clCalcDetAndTrace(*sum[0], dets[i].get(), traces[i].get(), sampleSteps[i], haarPattern);
+            calcDetAndTrace(*sum[0], dets[i].get(), traces[i].get(), sampleSteps[i], haarPattern);
 #endif
         }
 #endif
@@ -1118,7 +1110,7 @@ typedef struct KeyPointMaxima {
     KeyPoint keyPoints[MaxCount];
 } KeyPointMaxima;
 
-void SURF::clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
+void SURF_OpenCL::findMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 3>& dets,
                                const gls::cl_image_2d<float>& traceImage,
                                const std::array<int, 3>& sizes,
                                int octave, float hessianThreshold, int sampleStep) {
@@ -1161,7 +1153,7 @@ void SURF::clFindMaximaInLayer(const std::array<const gls::cl_image_2d<float>*, 
            margin, octave, hessianThreshold, sampleStep);
 }
 
-void SURF::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
+void SURF_OpenCL::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
                 const std::vector<gls::cl_image_2d<float>::unique_ptr>& traces,
                 const std::vector<int>& sizes, const std::vector<int>& sampleSteps,
                 const std::vector<int>& middleIndices, std::vector<KeyPoint>* keypoints,
@@ -1180,7 +1172,7 @@ void SURF::Find(const std::vector<gls::cl_image_2d<float>::unique_ptr>& dets,
 
         const auto traceImage = traces[layer].get();
 
-        clFindMaximaInLayer(detImages, *traceImage,
+        findMaximaInLayer(detImages, *traceImage,
                             { sizes[layer-1], sizes[layer], sizes[layer+1] },
                             octave, hessianThreshold, sampleSteps[layer]);
     }
@@ -1212,7 +1204,7 @@ struct KeypointGreater {
     }
 };
 
-void SURF::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
+void SURF_OpenCL::fastHessianDetector(const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum,
                                std::vector<KeyPoint>* keypoints,
                                int nOctaves, int nOctaveLayers, float hessianThreshold) {
     int nTotalLayers = (nOctaveLayers + 2) * nOctaves;
@@ -1356,10 +1348,10 @@ static void mergeKeypoints(const std::vector<std::unique_ptr<std::vector<KeyPoin
     assert(outIndex == keypointsCount);
 }
 
-void SURF::detectAndCompute(const gls::image<float>& img,
-                            std::vector<KeyPoint>* keypoints,
-                            gls::image<float>::unique_ptr* descriptors,
-                            gls::size sections) {
+void SURF_OpenCL::detectAndCompute(const gls::image<float>& img,
+                                   std::vector<KeyPoint>* keypoints,
+                                   gls::image<float>::unique_ptr* descriptors,
+                                   gls::size sections) {
     std::vector<gls::rectangle> tiles(sections.width * sections.height);
 
     const int tile_width = img.width / sections.width;
@@ -1386,7 +1378,7 @@ void SURF::detectAndCompute(const gls::image<float>& img,
     for (const auto& tile : tiles) {
         const auto tileImage = gls::image<float>(img, tile);
 
-        clIntegral(tileImage, sum);
+        integral(tileImage, sum);
 
         auto tileKeypoints = std::make_unique<std::vector<KeyPoint>>();
 
@@ -1465,12 +1457,6 @@ void matchKeyPoints(const gls::image<float>& descriptor1,
     }
 }
 
-typedef struct DMatchList {
-    static constexpr int MaxCount = 64000;
-    int count;
-    DMatch matches[MaxCount];
-} DMatchList;
-
 template <typename T>
 cl::Buffer bufferFromImage(const gls::image<T>& source) {
     int bufferSize = source.stride * source.height * sizeof(float);
@@ -1481,7 +1467,21 @@ cl::Buffer bufferFromImage(const gls::image<T>& source) {
     return buffer;
 }
 
-std::vector<DMatch> SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
+struct refineMatch {
+    inline bool operator()(const DMatch& mp1, const DMatch& mp2) const {
+        if (mp1.distance < mp2.distance) return true;
+        if (mp1.distance > mp2.distance) return false;
+        // if (mp1.queryIdx < mp2.queryIdx) return true;
+        // if (mp1.queryIdx > mp2.queryIdx) return false;
+        /*if (mp1.octave > mp2.octave) return true;
+        if (mp1.octave < mp2.octave) return false;
+        if (mp1.pt.y < mp2.pt.y) return false;
+        if (mp1.pt.y > mp2.pt.y) return true;*/
+        return mp1.queryIdx < mp2.queryIdx;
+    }
+};
+
+std::vector<DMatch> SURF_OpenCL::matchKeyPoints(const gls::image<float>& descriptor1,
                                            const gls::image<float>& descriptor2) {
     auto descriptor1Buffer = bufferFromImage(descriptor1);
     auto descriptor2Buffer = bufferFromImage(descriptor2);
@@ -1518,29 +1518,15 @@ std::vector<DMatch> SURF::clMatchKeyPoints(const gls::image<float>& descriptor1,
 
     cl::enqueueUnmapMemObject(matchesBuffer, (void*)matches);
 
+    std::sort(matchedPoints.begin(), matchedPoints.end(), refineMatch());  // feature point sorting
+
     return matchedPoints;
 }
 
-struct refineMatch {
-    inline bool operator()(const DMatch& mp1, const DMatch& mp2) const {
-        if (mp1.distance < mp2.distance) return true;
-        if (mp1.distance > mp2.distance) return false;
-        // if (mp1.queryIdx < mp2.queryIdx) return true;
-        // if (mp1.queryIdx > mp2.queryIdx) return false;
-        /*if (mp1.octave > mp2.octave) return true;
-        if (mp1.octave < mp2.octave) return false;
-        if (mp1.pt.y < mp2.pt.y) return false;
-        if (mp1.pt.y > mp2.pt.y) return true;*/
-        return mp1.queryIdx < mp2.queryIdx;
-    }
-};
-
-std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLContext,
-                                                        const gls::image<float>& srcIMAGE1,
-                                                        const gls::image<float>& srcIMAGE2) {
+std::vector<std::pair<Point2f, Point2f>> SURF::detection(gls::OpenCLContext* cLContext, const gls::image<float>& image1, const gls::image<float>& image2) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    SURF surf(cLContext, srcIMAGE1.width, srcIMAGE1.height, /*max_features=*/ 1500, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.02);
+    auto surf = SURF::makeInstance(cLContext, image1.width, image1.height, /*max_features=*/ 1500, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.02);
 
     auto t_surf = std::chrono::high_resolution_clock::now();
     printf("--> SURF Creation Time: %.2fms\n", timeDiff(t_start, t_surf));
@@ -1549,8 +1535,8 @@ std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLCo
     auto keypoints2 = std::make_unique<std::vector<KeyPoint>>();
     gls::image<float>::unique_ptr descriptor1, descriptor2;
 
-    surf.detectAndCompute(srcIMAGE1, keypoints1.get(), &descriptor1, {1, 1});
-    surf.detectAndCompute(srcIMAGE2, keypoints2.get(), &descriptor2, {1, 1});
+    surf->detectAndCompute(image1, keypoints1.get(), &descriptor1);
+    surf->detectAndCompute(image2, keypoints2.get(), &descriptor2);
 
     auto t_detect = std::chrono::high_resolution_clock::now();
     printf("--> detectAndCompute Time: %.2fms\n", timeDiff(t_surf, t_detect));
@@ -1558,12 +1544,10 @@ std::vector<std::pair<Point2f, Point2f>> SURF_Detection(gls::OpenCLContext* cLCo
     printf(" ---------- \n Detected feature points: %ld, %ld\n", keypoints1->size(), keypoints2->size());
 
     // (4) Match feature points
-    std::vector<DMatch> matchedPoints = surf.clMatchKeyPoints(*descriptor1, *descriptor2);
+    std::vector<DMatch> matchedPoints = surf->matchKeyPoints(*descriptor1, *descriptor2);
 
     auto t_match = std::chrono::high_resolution_clock::now();
     printf("--> Keypoint Matching: %.2fms\n", timeDiff(t_detect, t_match));
-
-    std::sort(matchedPoints.begin(), matchedPoints.end(), refineMatch());  // feature point sorting
 
     auto t_sort = std::chrono::high_resolution_clock::now();
     printf("--> Keypoint Sorting: %.2fms\n", timeDiff(t_match, t_sort));
