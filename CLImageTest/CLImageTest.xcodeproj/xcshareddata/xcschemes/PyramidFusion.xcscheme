@@ -53,7 +53,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/ImageRegistration/RAW/GLS18C_Burst/2/"
+            argument = "/Users/fabio/work/ImageRegistration/RAW/F8/"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

@@ -55,6 +55,14 @@
 		E556BD582902071C009FA1E9 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5345EE128D4F8A100FC57FA /* SURF.cpp */; };
 		E556BD592902071C009FA1E9 /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E554E3E928DB90DD0095F20D /* RANSAC.cpp */; };
 		E556BD5A2902072D009FA1E9 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2531282DB5BB003305E9 /* ThreadPool.cpp */; };
+		E556BD5B29030B4B009FA1E9 /* demosaic_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2528282DB504003305E9 /* demosaic_cl.cpp */; };
+		E556BD5C29030B4B009FA1E9 /* demosaic_utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2525282DB504003305E9 /* demosaic_utils.cpp */; };
+		E556BD5D29030B4B009FA1E9 /* pyramidal_denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253A2832E414003305E9 /* pyramidal_denoise.cpp */; };
+		E556BD5E29030B4B009FA1E9 /* raw_converter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D25372832D41F003305E9 /* raw_converter.cpp */; };
+		E556BD5F29030B4B009FA1E9 /* LeicaQ2Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253C2837FB53003305E9 /* LeicaQ2Calibration.cpp */; };
+		E556BD6029030B4B009FA1E9 /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
+		E556BD6129030B4B009FA1E9 /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
+		E556BD6229030BC6009FA1E9 /* demosaic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB798027EAD0D7008B3D30 /* demosaic.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -608,6 +616,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E556BD6229030BC6009FA1E9 /* demosaic.cpp in Sources */,
+				E556BD5B29030B4B009FA1E9 /* demosaic_cl.cpp in Sources */,
+				E556BD5C29030B4B009FA1E9 /* demosaic_utils.cpp in Sources */,
+				E556BD5D29030B4B009FA1E9 /* pyramidal_denoise.cpp in Sources */,
+				E556BD5E29030B4B009FA1E9 /* raw_converter.cpp in Sources */,
+				E556BD5F29030B4B009FA1E9 /* LeicaQ2Calibration.cpp in Sources */,
+				E556BD6029030B4B009FA1E9 /* IMX571Calibration.cpp in Sources */,
+				E556BD6129030B4B009FA1E9 /* Sonya6400Calibration.cpp in Sources */,
 				E556BD5A2902072D009FA1E9 /* ThreadPool.cpp in Sources */,
 				E556BD572902071C009FA1E9 /* homography.cpp in Sources */,
 				E556BD582902071C009FA1E9 /* SURF.cpp in Sources */,

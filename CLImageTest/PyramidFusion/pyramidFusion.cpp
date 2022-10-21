@@ -26,6 +26,9 @@
 #include "gls_image.hpp"
 #include "gls_linalg.hpp"
 
+#include "raw_converter.hpp"
+#include "CameraCalibration.hpp"
+
 #include "SURF.hpp"
 #include "RANSAC.hpp"
 
@@ -34,7 +37,7 @@ static const char* TAG = "PyramidFusion";
 std::vector<std::filesystem::path> parseDirectory(const std::string& dir) {
     std::set<std::filesystem::path> directory_listing;
     for (const auto &entry : std::filesystem::directory_iterator(dir)) {
-        if (entry.is_regular_file() /* && entry.path().filename().string().starts_with("L100")*/ && entry.path().extension() == ".png") {
+        if (entry.is_regular_file() && (entry.path().extension() == ".dng" || entry.path().extension() == ".DNG")) {
             directory_listing.insert(entry.path());
         }
     }
@@ -54,6 +57,15 @@ gls::image<float> asGrayscaleFloat(const gls::image<T>& image) {
     return grayscale;
 }
 
+gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+    // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
+    // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
+    // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
+    // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
+    // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
+    return demosaicLeicaQ2DNG(rawConverter, input_path);
+}
+
 int main(int argc, const char * argv[]) {
     if (argc < 2) {
         std::cout << "Please provide a directory path..." << std::endl;
@@ -67,12 +79,17 @@ int main(int argc, const char * argv[]) {
     const auto& reference_image_path = input_files[0];
     LOG_INFO(TAG) << "Reference Image: " << reference_image_path.filename() << std::endl;
 
-    const auto reference_image_rgb = gls::image<gls::rgb_pixel>::read_png_file(reference_image_path.string());
+    gls::OpenCLContext glsContext("");
+
+    RawConverter rawConverter(&glsContext);
+
+    const auto reference_image_rgb = demosaicImage(&rawConverter, reference_image_path.string());
+
+    // const auto reference_image_rgb = gls::image<gls::rgb_pixel>::read_png_file(reference_image_path.string());
+
     const auto reference_image = asGrayscaleFloat(*reference_image_rgb);
 
-    auto glsContext = new gls::OpenCLContext("");
-
-    auto surf = gls::SURF::makeInstance(glsContext, reference_image.width, reference_image.height,
+    auto surf = gls::SURF::makeInstance(&glsContext, reference_image.width, reference_image.height,
                                         /*max_features=*/ 1500, /*nOctaves=*/ 4, /*nOctaveLayers=*/ 2, /*hessianThreshold=*/ 0.02);
 
     auto reference_keypoints = std::make_unique<std::vector<KeyPoint>>();
@@ -86,7 +103,8 @@ int main(int argc, const char * argv[]) {
     for (const auto& image_path : std::span(&input_files[1], &input_files[input_files.size()])) {
         LOG_INFO(TAG) << "Processing: " << image_path.filename() << std::endl;
 
-        const auto image_rgb = gls::image<gls::rgba_pixel>::read_png_file(image_path.string());
+        const auto image_rgb = demosaicImage(&rawConverter, image_path.string());
+        // const auto image_rgb = gls::image<gls::rgba_pixel>::read_png_file(image_path.string());
         const auto image = asGrayscaleFloat(*image_rgb);
 
         auto image_keypoints = std::make_unique<std::vector<KeyPoint>>();
@@ -100,22 +118,29 @@ int main(int argc, const char * argv[]) {
 
         // Convert to Point2D format
         std::vector<std::pair<Point2f, Point2f>> matchpoints(max_matches);
-        for (int i = 0; i < max_matches; i++) {
-            matchpoints[i] = std::pair {
-                (*reference_keypoints)[matchedPoints[i].queryIdx].pt,
-                (*image_keypoints)[matchedPoints[i].trainIdx].pt
+        std::transform(&matchedPoints[0], &matchedPoints[max_matches], matchpoints.begin(),
+                       [&reference_keypoints, &image_keypoints](const auto &mp) {
+            return std::pair {
+                (*reference_keypoints)[mp.queryIdx].pt,
+                (*image_keypoints)[mp.trainIdx].pt
             };
-        }
+        });
 
         std::vector<int> inliers;
         const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 1, /*max_iterations=*/ 2000, &inliers);
 
         std::cout << "Homography:\n" << homography << std::endl;
 
-        auto cl_image = gls::cl_image_2d<gls::rgba_pixel>(glsContext->clContext(), *image_rgb);
+        auto cl_image = gls::cl_image_2d<gls::rgba_pixel>(glsContext.clContext(), image_rgb->size());
+        auto cl_image_cpu = cl_image.mapImage(CL_MAP_WRITE);
+        cl_image_cpu.apply([&image_rgb](gls::rgba_pixel *p, int x, int y) {
+            const auto& pin = (*image_rgb)[y][x];
+            *p = { pin.red, pin.green, pin.blue, 255 };
+        });
+        cl_image.unmapImage(cl_image_cpu);
 
-        gls::cl_image_2d<gls::rgba_pixel> registered_image(glsContext->clContext(), image.width, image.height);
-        gls::clRegisterImage(glsContext, cl_image, &registered_image, homography);
+        gls::cl_image_2d<gls::rgba_pixel> registered_image(glsContext.clContext(), image.width, image.height);
+        gls::clRegisterImage(&glsContext, cl_image, &registered_image, homography);
 
         auto registered_image_cpu = registered_image.mapImage(CL_MAP_READ);
         registered_image_cpu.apply([&result_image, fused_images](gls::rgba_pixel *p, int x, int y) {

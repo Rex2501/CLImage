@@ -50,21 +50,21 @@ struct GuidedFastDenoiser : ImageDenoiser {
     }
 };
 
-struct GuidedPreciseDenoiser : ImageDenoiser {
-    GuidedFilter guidedFilter;
-
-    GuidedPreciseDenoiser(gls::OpenCLContext* glsContext, int width, int height) :
-        ImageDenoiser(glsContext, width, height),
-        guidedFilter(glsContext, width, height) { }
-
-    void denoise(gls::OpenCLContext* glsContext,
-                 const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                 const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
-                 gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        guidedFilter.filter(glsContext, inputImage, /*filterSize=*/ 5, var_b, outputImage);
-    }
-};
+//struct GuidedPreciseDenoiser : ImageDenoiser {
+//    GuidedFilter guidedFilter;
+//
+//    GuidedPreciseDenoiser(gls::OpenCLContext* glsContext, int width, int height) :
+//        ImageDenoiser(glsContext, width, height),
+//        guidedFilter(glsContext, width, height) { }
+//
+//    void denoise(gls::OpenCLContext* glsContext,
+//                 const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+//                 const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
+//                 float chromaBoost, float gradientBoost, int pyramidLevel,
+//                 gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
+//        guidedFilter.filter(glsContext, inputImage, /*filterSize=*/ 5, var_b, outputImage);
+//    }
+//};
 
 template <size_t levels>
 PyramidalDenoise<levels>::PyramidalDenoise(gls::OpenCLContext* glsContext, int width, int height, DenoiseAlgorithm denoiseAlgorithm) {
@@ -85,9 +85,9 @@ PyramidalDenoise<levels>::PyramidalDenoise(gls::OpenCLContext* glsContext, int w
                     denoiser[i] = std::make_unique<BilateralDenoiser>(glsContext, width/scale, height/scale);
                 }
                 break;
-            case GuidedPrecise:
-                denoiser[i] = std::make_unique<GuidedPreciseDenoiser>(glsContext, width/scale, height/scale);
-                break;
+//            case GuidedPrecise:
+//                denoiser[i] = std::make_unique<GuidedPreciseDenoiser>(glsContext, width/scale, height/scale);
+//                break;
         }
     }
 }

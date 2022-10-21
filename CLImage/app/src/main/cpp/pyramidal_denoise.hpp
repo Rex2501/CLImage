@@ -19,7 +19,7 @@
 #include "demosaic.hpp"
 #include "demosaic_cl.hpp"
 
-#include "guided_filter.hpp"
+// #include "guided_filter.hpp"
 
 struct ImageDenoiser {
     ImageDenoiser(gls::OpenCLContext* glsContext, int width, int height) {}
@@ -35,7 +35,7 @@ struct ImageDenoiser {
 
 template <size_t levels>
 struct PyramidalDenoise {
-    enum DenoiseAlgorithm { Bilateral, GuidedFast, GuidedPrecise };
+    enum DenoiseAlgorithm { Bilateral, GuidedFast /*, GuidedPrecise*/ };
 
     typedef gls::cl_image_2d<gls::rgba_pixel_float> imageType;
     std::array<imageType::unique_ptr, levels-1> imagePyramid;
