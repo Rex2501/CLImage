@@ -247,14 +247,14 @@ class cl_image_2d_array : public cl_image<T> {
 
     void copyPixelsFrom(const image<T>& other) const {
         assert(other.width == image<T>::width && other.height == image<T>::height * depth);
-        cl::enqueueWriteImage(_image, true, {0, 0, 0}, {(size_t)image<T>::width, (size_t)image<T>::height, depth},
+        cl::enqueueWriteImage(_image, true, {0, 0, 0}, {(size_t)image<T>::width, (size_t)image<T>::height, static_cast<size_t>(depth)},
                               image<T>::pixel_size * image<T>::width,
                               image<T>::width * image<T>::height * image<T>::pixel_size, other.pixels().data());
     }
 
     void copyPixelsTo(image<T>* other) const {
         assert(other->width == image<T>::width && other->height == image<T>::height * depth);
-        cl::enqueueReadImage(_image, true, {0, 0, 0}, {(size_t)image<T>::width, (size_t)image<T>::height, depth},
+        cl::enqueueReadImage(_image, true, {0, 0, 0}, {(size_t)image<T>::width, (size_t)image<T>::height, static_cast<size_t>(depth)},
                              image<T>::pixel_size * image<T>::width,
                              image<T>::width * image<T>::height * image<T>::pixel_size, other->pixels().data());
     }
