@@ -19,6 +19,58 @@
 #include "gls_cl_image.hpp"
 #include "pyramidal_denoise.hpp"
 
+class LocalToneMapping {
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmLFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanLFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanMFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmHFAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanHFAbGfImage;
+    gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr ltmMaskImage;
+
+public:
+    LocalToneMapping(gls::OpenCLContext* glsContext) {
+        auto clContext = glsContext->clContext();
+
+        // Placeholder, only allocated if LTM is used
+        ltmMaskImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, 1, 1);
+    }
+
+    void allocateTextures(gls::OpenCLContext* glsContext, int width, int height) {
+        auto clContext = glsContext->clContext();
+
+        if (ltmMaskImage->width != width || ltmMaskImage->height != height) {
+            ltmMaskImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
+            ltmLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+            ltmMeanLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+            ltmMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+            ltmMeanMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+            ltmHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
+            ltmMeanHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
+        }
+    }
+
+    void createMask(gls::OpenCLContext* glsContext,
+                    const gls::cl_image_2d<gls::rgba_pixel_float>& image,
+                    const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage,
+                    const NoiseModel& noiseModel,
+                    const DemosaicParameters& demosaicParameters) {
+        const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abImage = {
+            ltmLFAbGfImage.get(), ltmMFAbGfImage.get(), ltmHFAbGfImage.get()
+        };
+        const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage = {
+            ltmMeanLFAbGfImage.get(), ltmMeanMFAbGfImage.get(), ltmMeanHFAbGfImage.get()
+        };
+
+        gls::Vector<2> nlf = { noiseModel.pyramidNlf[0][0], noiseModel.pyramidNlf[0][3] };
+        localToneMappingMask(glsContext, image, guideImage, abImage, abMeanImage, demosaicParameters.ltmParameters, ycbcr_srgb, nlf, ltmMaskImage.get());
+    }
+
+    const gls::cl_image_2d<gls::luma_pixel_float>& getMask() {
+        return *ltmMaskImage;
+    }
+};
+
 class RawConverter {
     gls::OpenCLContext* _glsContext;
 
@@ -32,13 +84,7 @@ class RawConverter {
 
     std::unique_ptr<PyramidalDenoise<5>> pyramidalDenoise;
 
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmLFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanLFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanMFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmHFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanHFAbGfImage;
-    gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr ltmMaskImage;
+    std::unique_ptr<LocalToneMapping> localToneMapping;
 
     // RawConverter HighNoise textures
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr rgbaRawImage;
@@ -49,12 +95,13 @@ class RawConverter {
     gls::cl_image_2d<gls::rgba_pixel>::unique_ptr clsFastRGBImage;
 
     void allocateTextures(gls::OpenCLContext* glsContext, int width, int height);
-    void allocateLtmMaskImage(gls::OpenCLContext* glsContext, int width, int height);
     void allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int width, int height);
     void allocateFastDemosaicTextures(gls::OpenCLContext* glsContext, int width, int height);
 
 public:
-    RawConverter(gls::OpenCLContext* glsContext) : _glsContext(glsContext) { }
+    RawConverter(gls::OpenCLContext* glsContext) : _glsContext(glsContext) {
+        localToneMapping = std::make_unique<LocalToneMapping>(_glsContext);
+    }
 
     gls::cl_image_2d<gls::rgba_pixel>* demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                      DemosaicParameters* demosaicParameters,
