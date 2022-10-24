@@ -22,8 +22,8 @@
 //#define read_imageh read_imagef
 //#define write_imageh write_imagef
 
-#define LENS_SHADING false
-#define LENS_SHADING_GAIN 2
+#define LENS_SHADING true
+#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,
@@ -234,7 +234,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float whiteness = clamp(min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave)), 0.0, 1.0);
 
         // Minimum gradient threshold wrt the noise model
-        float gradient_threshold = smoothstep(0.25 * rawStdDev, rawStdDev, length(gradient));
+        float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(gradient));
 
         // Edges that are in strong highlights tend to grossly overestimate the gradient
         float highlights_edge = 1 - smoothstep(0.25, 1.0, max(c_xy, max(max(c_left, c_right), max(c_up, c_down))));
@@ -242,15 +242,15 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
-        // Bias result towards vertical and horizontal lines
-        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * gradient_threshold, 0.45 * gradient_threshold, direction))
-                                    : mix(direction, 1, smoothstep((1 - 0.45) * gradient_threshold, (1 - 0.3) * gradient_threshold, direction));
+//        // Bias result towards vertical and horizontal lines
+//        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * gradient_threshold, 0.45 * gradient_threshold, direction))
+//                                    : mix(direction, 1, smoothstep((1 - 0.45) * gradient_threshold, (1 - 0.3) * gradient_threshold, direction));
 
-        // If the gradient is below threshold just go flat
-        direction = mix(0.5, direction, gradient_threshold);
+        // If the gradient is below threshold interpolate against the grain
+        direction = mix(1 - direction, direction, gradient_threshold);
 
         // Reduce hf_gain when direction is diagonal
-        float diagonality = 1; // - 0.5 * sin(M_PI_F * direction);
+        float diagonality = 1 - 0.5 * sin(M_PI_F * direction);
 
         // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
         float hf_gain = diagonality * highlights_edge * gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
@@ -261,7 +261,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         write_imagef(greenImage, imageCoordinates, sample);
     } else {
-        write_imagef(greenImage, imageCoordinates, read_imagef(rawImage, (int2)(x, y)).x);
+        write_imagef(greenImage, imageCoordinates, read_imagef(rawImage, imageCoordinates).x);
     }
 }
 
@@ -313,7 +313,8 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
             float2 dv = (float2) (fabs(c2_top_left - c2_bottom_right), fabs(c2_top_right - c2_bottom_left));
             float direction = 2 * atan2pi(dv.y, dv.x);
             float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(dv));
-            float alpha = mix(0.5, direction, gradient_threshold);
+            // If the gradient is below threshold interpolate against the grain
+            float alpha = mix(1 - direction, direction, gradient_threshold);
             float c2 = green - mix((gc_top_right + gc_bottom_left) / 2,
                                    (gc_top_left + gc_bottom_right) / 2, alpha);
 
@@ -520,7 +521,9 @@ kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float
 
     sample = clamp(sample, minVal, maxVal);
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (sample, median, 0));
+    half ratio = 0.2h * smoothstep(0.0h, 0.25h, sample) + 0.8h;
+
+    write_imageh(denoisedImage, imageCoordinates, (half4) (sample, ratio * median, 0));
 }
 
 #undef readImage
@@ -816,6 +819,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
+    half flat = 1 - smoothstep(1, 4, magnitude / sigma.x);
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -826,7 +830,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
             half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
 
             half w = (half) mix(1, tunnel(x, y, angle, 0.25h), edge);
-            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * edge, abs(inputDiff.x)));
+            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * edge + flat, abs(inputDiff.x)));
             half chromaWeight = 1 - step((half) chromaBoost, length(inputDiff));
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
 
@@ -925,6 +929,48 @@ kernel void denoiseImageGuided(read_only image2d_t inputImage, float3 var_a, flo
     write_imagef(denoisedImage, imageCoordinates, (float4) (denoisedPixel, 0.0));
 }
 
+float lanczos2(float2 p) {
+    float x = length(p);
+    return x == 0 ? 0 : x < 2 ? sin(M_PI_F * x) * sin(M_PI_F * x / 2) / ((M_PI_F * x) * (M_PI_F * x / 2)) : 0;
+}
+
+float lanczos3(float2 p) {
+    float x = length(p);
+    return x == 0 ? 0 : x < 3 ? sin(M_PI_F * x) * sin(M_PI_F * x / 3) / ((M_PI_F * x) * (M_PI_F * x / 3)) : 0;
+}
+
+kernel void downsampleImageLanczos(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
+    const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
+    const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
+    const float2 input_pos = (convert_float2(output_pos) + 0.5) * input_norm;
+
+    float3 sum = 0;
+    float norm = 0;
+    for (float y = -2; y <= 2; y += 0.5) {
+        for (float x = -2; x <= 2; x += 0.5) {
+            float k = lanczos2((float2)(x, y));
+            norm += k;
+            sum += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
+        }
+    }
+    sum /= norm;
+    write_imagef(outputImage, output_pos, (float4) (clamp(0.0, 1.0, sum.x), clamp(-0.5, 0.5, sum.yz), 0));
+}
+
+float3 interpolateImage(read_only image2d_t inputImage, const float2 input_pos, const float2 input_norm, sampler_t linear_sampler) {
+    float3 sum = 0;
+    float norm = 0;
+    for (float y = -2; y <= 2; y += 1) {
+        for (float x = -2; x <= 2; x += 1) {
+            float k = lanczos2((float2)(x, y));
+            norm += k;
+            sum += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
+        }
+    }
+    sum /= norm;
+    return (float3) (clamp(0.0, 1.0, sum.x), clamp(-0.5, 0.5, sum.yz));
+}
+
 kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
     const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
     const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
@@ -951,6 +997,10 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
     const float2 input_pos = (convert_float2(output_pos) + 0.5) * inputNorm;
 
     float3 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos).xyz;
+
+//    float3 inputPixel1 = interpolateImage(inputImage1, input_pos, inputNorm, linear_sampler);
+//    float3 inputPixelDenoised1 = interpolateImage(inputImageDenoised1, input_pos, inputNorm, linear_sampler);
+
     float3 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos).xyz;
     float3 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos).xyz;
 

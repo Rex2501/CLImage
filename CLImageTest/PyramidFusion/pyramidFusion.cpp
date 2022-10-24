@@ -58,12 +58,12 @@ gls::image<float> asGrayscaleFloat(const gls::image<T>& image) {
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(RawConverter* rawConverter, const std::filesystem::path& input_path) {
-    // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-    // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
-    // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
-    // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
-    // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
-    return demosaicLeicaQ2DNG(rawConverter, input_path);
+    // return demosaicIMX571DNG(rawConverter, input_path);
+    // return demosaicSonya6400DNG(rawConverter, input_path);
+    // return demosaicCanonEOSRPDNG(rawConverter, input_path);
+    return demosaiciPhone11(rawConverter, input_path);
+    // return demosaicRicohGRIII2DNG(rawConverter, input_path);
+    // return demosaicLeicaQ2DNG(rawConverter, input_path);
 }
 
 int main(int argc, const char * argv[]) {
@@ -100,7 +100,7 @@ int main(int argc, const char * argv[]) {
     std::copy(reference_image_rgb->pixels().begin(), reference_image_rgb->pixels().end(), result_image.pixels().begin());
 
     int fused_images = 1;
-    for (const auto& image_path : std::span(&input_files[1], &input_files[input_files.size()])) {
+    for (const auto& image_path : std::span(&input_files[1], &input_files[4 /*input_files.size()*/])) {
         LOG_INFO(TAG) << "Processing: " << image_path.filename() << std::endl;
 
         const auto image_rgb = demosaicImage(&rawConverter, image_path.string());

@@ -63,6 +63,7 @@
 		E556BD6029030B4B009FA1E9 /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E556BD6129030B4B009FA1E9 /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
 		E556BD6229030BC6009FA1E9 /* demosaic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB798027EAD0D7008B3D30 /* demosaic.cpp */; };
+		E556BD632904ECB7009FA1E9 /* iPhone11Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253F2837FDBA003305E9 /* iPhone11Calibration.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -616,6 +617,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E556BD632904ECB7009FA1E9 /* iPhone11Calibration.cpp in Sources */,
 				E556BD6229030BC6009FA1E9 /* demosaic.cpp in Sources */,
 				E556BD5B29030B4B009FA1E9 /* demosaic_cl.cpp in Sources */,
 				E556BD5C29030B4B009FA1E9 /* demosaic_utils.cpp in Sources */,

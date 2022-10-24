@@ -56,7 +56,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/ImageRegistration/RAW/GLS18C_Burst/2/2022-10-20-17-31-57-869.dng"
+            argument = "/Users/fabio/work/ImageRegistration/iPhone/IMG_2027.DNG"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

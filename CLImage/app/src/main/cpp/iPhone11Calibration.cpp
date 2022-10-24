@@ -141,49 +141,47 @@ std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIsoiPhone(const std::ar
 }
 
 std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int iso) {
+    // const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
     const float nlf_alpha = std::clamp((log2(iso) - log2(25)) / (log2(6400) - log2(25)), 0.0, 1.0);
 
     std::cout << "iPhone11DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = 0.5 * std::lerp(0.2f, 2.0f, nlf_alpha);
-    float lerp_c = std::lerp(1.0f, 2.0f, nlf_alpha);
+    float lerp = 0.25 * std::lerp(0.25f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.25f, 2.0f, nlf_alpha);
 
-    // Default Good
-    float lmult[5] = { 4, 2, 1, 0.25, 0.125 / 2 };
-    float cmult[5] = { 1, 1, 1, 1, 1 };
+    float lmult[5] = { 0.5, 2, 0.5, 0.25, 0.125 };
+    float cmult[5] = { 2, 1, 0.5, 0.25, 0.125 };
 
-    float chromaBoost = 4;
+    float chromaBoost = 8;
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1.5, // std::lerp(1.5f, 1.0f, nlf_alpha)
+            .gradientBoost = 16,
+            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1
+            .sharpening = 1.1
         },
         {
             .luma = lmult[2] * lerp,
-            .chroma = cmult[2] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1
+            .chroma = cmult[2] * lerp_c,
         },
         {
             .luma = lmult[3] * lerp,
-            .chroma = cmult[3] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1
+            .chroma = cmult[3] * lerp_c,
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
             .chromaBoost = chromaBoost,
-            .sharpening = 1
         }
     }};
 
@@ -199,9 +197,9 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaiciPhone11(RawConverter* rawConvert
         },
         .ltmParameters = {
             .eps = 0.01,
-            .shadows = 0.6,
+            .shadows = 0.8,
             .highlights = 1.5,
-            .detail = { 1, 1.1, 1 }
+            .detail = { 1, 1.1, 1.5 }
         }
     };
 

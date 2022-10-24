@@ -69,6 +69,8 @@ gls::Vector<6> nflMultiplier(const DenoiseParameters &denoiseParameters) {
     return { luma_mul, chroma_mul, chroma_mul, luma_mul, chroma_mul, chroma_mul };
 }
 
+extern const gls::Matrix<3, 3> ycbcr_srgb;
+
 template <size_t levels>
 typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
@@ -82,6 +84,22 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
     for (int i = 0; i < levels; i++) {
         if (i < levels - 1) {
             resampleImage(glsContext, "downsampleImage", i == 0 ? *image : *imagePyramid[i - 1], imagePyramid[i].get());
+#if DUMP_PYRAMID_IMAGES
+            gls::image<gls::rgb_pixel> out(imagePyramid[i]->width, imagePyramid[i]->height);
+            const auto downsampledCPU = imagePyramid[i]->mapImage();
+            out.apply([&downsampledCPU](gls::rgb_pixel* p, int x, int y){
+                const auto& ip = downsampledCPU[y][x];
+                const auto& v = ycbcr_srgb * gls::Vector<3>{ip.x, ip.y, ip.z};
+                *p = gls::rgb_pixel {
+                    (uint8_t) (255 * std::sqrt(std::clamp(v[0], 0.0f, 1.0f))),
+                    (uint8_t) (255 * std::sqrt(std::clamp(v[1], 0.0f, 1.0f))),
+                    (uint8_t) (255 * std::sqrt(std::clamp(v[2], 0.0f, 1.0f)))
+                };
+            });
+            imagePyramid[i]->unmapImage(downsampledCPU);
+            static int count = 1;
+            out.write_png_file("/Users/fabio/pyramid" + std::to_string(count++) + ".png");
+#endif
         }
 
         if (calibrate_nlf) {
