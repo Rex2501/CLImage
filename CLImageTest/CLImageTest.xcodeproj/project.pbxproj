@@ -41,7 +41,6 @@
 		E556BD402900C133009FA1E9 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E556BD412900C133009FA1E9 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
 		E556BD422900C133009FA1E9 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
-		E556BD4D2900C2C5009FA1E9 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E556BD4C2900C2C5009FA1E9 /* OpenCL */; };
 		E556BD4E29020608009FA1E9 /* gls_logging.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627E276174FC0055F712 /* gls_logging.cpp */; };
 		E556BD4F29020608009FA1E9 /* gls_image_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6275276174FC0055F712 /* gls_image_jpeg.cpp */; };
 		E556BD5029020608009FA1E9 /* gls_image_png.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6277276174FC0055F712 /* gls_image_png.cpp */; };
@@ -64,6 +63,7 @@
 		E556BD6129030B4B009FA1E9 /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
 		E556BD6229030BC6009FA1E9 /* demosaic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB798027EAD0D7008B3D30 /* demosaic.cpp */; };
 		E556BD632904ECB7009FA1E9 /* iPhone11Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253F2837FDBA003305E9 /* iPhone11Calibration.cpp */; };
+		E556BD8829071B21009FA1E9 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -126,7 +126,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
-				E556BD4D2900C2C5009FA1E9 /* OpenCL in CopyFiles */,
+				E556BD8829071B21009FA1E9 /* OpenCL in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,7 +201,6 @@
 		E554E3EC28E4B1E60095F20D /* gls_geometry.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = gls_geometry.hpp; path = ../../src/gls_geometry.hpp; sourceTree = "<group>"; };
 		E554E3ED28E4B5D00095F20D /* PRNG.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PRNG.h; path = ../../CLImage/app/src/main/cpp/PRNG.h; sourceTree = "<group>"; };
 		E556BD4B2900C1E5009FA1E9 /* PyramidFusion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PyramidFusion.entitlements; sourceTree = "<group>"; };
-		E556BD4C2900C2C5009FA1E9 /* OpenCL */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OpenCL; path = ../CLImage/app/src/main/cpp/OpenCL; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -347,7 +346,6 @@
 		E5AD623327616ABA0055F712 = {
 			isa = PBXGroup;
 			children = (
-				E556BD4C2900C2C5009FA1E9 /* OpenCL */,
 				E5AD623E27616ABB0055F712 /* CLImageTest */,
 				E5E9EA8F28B8D86E0079A5C0 /* ImageRegistration */,
 				E5470DAE2900C017003C0B18 /* PyramidFusion */,

@@ -929,50 +929,48 @@ kernel void denoiseImageGuided(read_only image2d_t inputImage, float3 var_a, flo
     write_imagef(denoisedImage, imageCoordinates, (float4) (denoisedPixel, 0.0));
 }
 
+//#define USE_LANCZOS_INTERPOLATION 1
+
+/*
+ Lanczos interpolation retains more high frequency content in the upper pyramid layers
+ */
+
+#if USE_LANCZOS_INTERPOLATION
 float lanczos2(float2 p) {
     float x = length(p);
     return x == 0 ? 0 : x < 2 ? sin(M_PI_F * x) * sin(M_PI_F * x / 2) / ((M_PI_F * x) * (M_PI_F * x / 2)) : 0;
 }
 
-float lanczos3(float2 p) {
-    float x = length(p);
-    return x == 0 ? 0 : x < 3 ? sin(M_PI_F * x) * sin(M_PI_F * x / 3) / ((M_PI_F * x) * (M_PI_F * x / 3)) : 0;
-}
-
-kernel void downsampleImageLanczos(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
-    const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
-    const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
-    const float2 input_pos = (convert_float2(output_pos) + 0.5) * input_norm;
-
-    float3 sum = 0;
-    float norm = 0;
-    for (float y = -2; y <= 2; y += 0.5) {
-        for (float x = -2; x <= 2; x += 0.5) {
-            float k = lanczos2((float2)(x, y));
-            norm += k;
-            sum += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
-        }
-    }
-    sum /= norm;
-    write_imagef(outputImage, output_pos, (float4) (clamp(0.0, 1.0, sum.x), clamp(-0.5, 0.5, sum.yz), 0));
-}
-
-float3 interpolateImage(read_only image2d_t inputImage, const float2 input_pos, const float2 input_norm, sampler_t linear_sampler) {
-    float3 sum = 0;
+float3 lanczosInterpolation(read_only image2d_t inputImage, const float2 input_pos, const float2 input_norm, sampler_t linear_sampler) {
+    float3 outputPixel = 0;
     float norm = 0;
     for (float y = -2; y <= 2; y += 1) {
         for (float x = -2; x <= 2; x += 1) {
             float k = lanczos2((float2)(x, y));
             norm += k;
-            sum += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
+            outputPixel += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
         }
     }
-    sum /= norm;
-    return (float3) (clamp(0.0, 1.0, sum.x), clamp(-0.5, 0.5, sum.yz));
+    outputPixel /= norm;
+    return outputPixel;
 }
+#endif
 
 kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
     const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
+#if USE_LANCZOS_INTERPOLATION
+    float3 outputPixel = 0;
+    float norm = 0;
+    for (int y = -2; y < 2; y++) {
+        for (int x = -2; x < 2; x++) {
+            float k = lanczos2((float2)(x, y) - 0.5);
+            norm += k;
+            outputPixel += k * read_imagef(inputImage, output_pos * 2 + (int2)(x, y)).xyz;
+        }
+    }
+    outputPixel /= norm;
+    write_imagef(outputImage, output_pos, (float4) (outputPixel, 0));
+#else
     const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
     const float2 input_pos = (convert_float2(output_pos) + 0.5) * input_norm;
 
@@ -983,6 +981,7 @@ kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t
     outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x,  s.y)).xyz;
     outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x,  s.y)).xyz;
     write_imagef(outputImage, output_pos, (float4) (0.25 * outputPixel, 0));
+#endif
 }
 
 float3 applyTransform(float3 value, Matrix3x3 *transform) {
@@ -998,11 +997,13 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
 
     float3 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos).xyz;
 
-//    float3 inputPixel1 = interpolateImage(inputImage1, input_pos, inputNorm, linear_sampler);
-//    float3 inputPixelDenoised1 = interpolateImage(inputImageDenoised1, input_pos, inputNorm, linear_sampler);
-
+#if USE_LANCZOS_INTERPOLATION
+    float3 inputPixel1 = lanczosInterpolation(inputImage1, input_pos, inputNorm, linear_sampler);
+    float3 inputPixelDenoised1 = lanczosInterpolation(inputImageDenoised1, input_pos, inputNorm, linear_sampler);
+#else
     float3 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos).xyz;
     float3 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos).xyz;
+#endif
 
     float3 denoisedPixel = inputPixelDenoised0 - (inputPixel1 - inputPixelDenoised1);
 

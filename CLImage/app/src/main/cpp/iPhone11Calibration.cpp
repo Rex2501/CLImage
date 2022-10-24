@@ -141,7 +141,6 @@ std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIsoiPhone(const std::ar
 }
 
 std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int iso) {
-    // const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
     const float nlf_alpha = std::clamp((log2(iso) - log2(25)) / (log2(6400) - log2(25)), 0.0, 1.0);
 
     std::cout << "iPhone11DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
