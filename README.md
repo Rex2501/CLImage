@@ -230,7 +230,6 @@ CLImage can be compiled as a library and test executable on Linux using the foll
 ````
 # From the project root
 mkdir build && cd build && mkdir OpenCL
-cmake -D CMAKE_C_COMPILER=gcc-10 -D CMAKE_CXX_COMPILER=g++-10 -std=c++20 ../linux/ # g++
 cmake -D CMAKE_C_COMPILER=clang -D CMAKE_CXX_COMPILER=clang++ -std=c++20 ../linux/ # Clang
 make
 
