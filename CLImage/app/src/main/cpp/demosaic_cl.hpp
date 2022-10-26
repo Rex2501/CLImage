@@ -75,6 +75,7 @@ void convertTosRGB(gls::OpenCLContext* glsContext,
 void despeckleImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                     const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
+                    bool desaturateShadows,
                     gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void denoiseImage(gls::OpenCLContext* glsContext,
@@ -128,6 +129,12 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
                        const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                        float radius,
                        gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+
+void hfNoiseTransferImage(gls::OpenCLContext* glsContext,
+                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                          const gls::cl_image_2d<gls::luma_pixel_float>& noiseImage, float blurRadius,
+                          const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage, float blueNoiseScale,
+                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void blendHighlightsImage(gls::OpenCLContext* glsContext,
                           const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

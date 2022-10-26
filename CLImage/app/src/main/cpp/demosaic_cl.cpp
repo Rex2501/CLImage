@@ -271,6 +271,7 @@ void convertTosRGB(gls::OpenCLContext* glsContext,
 void despeckleImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                     const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
+                    bool desaturateShadows,
                     gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
@@ -279,6 +280,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
                                     cl_float3,    // var_a
                                     cl_float3,    // var_b
+                                    int,          // desaturateShadows
                                     cl::Image2D   // outputImage
                                     >(program, "despeckleLumaMedianChromaImage");
 
@@ -287,7 +289,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), cl_var_a, cl_var_b, outputImage->getImage2D());
+           inputImage.getImage2D(), cl_var_a, cl_var_b, desaturateShadows, outputImage->getImage2D());
 }
 
 // --- Multiscale Noise Reduction ---
@@ -548,6 +550,30 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
                inputImage.getImage2D(), weightsCount, weightsBuffer, outputImage->getImage2D(), linear_sampler);
     }
 }
+
+void hfNoiseTransferImage(gls::OpenCLContext* glsContext,
+                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                          const gls::cl_image_2d<gls::luma_pixel_float>& noiseImage, float blurRadius,
+                          const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage, float blueNoiseScale,
+                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                    cl::Image2D,  // noiseImage
+                                    float,        // blurRadius
+                                    cl::Image2D,  // blueNoiseImage
+                                    float,        // blueNoiseScale
+                                    cl::Image2D   // outputImage
+                                    >(program, "hfNoiseTransferImage");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
+           inputImage.getImage2D(), noiseImage.getImage2D(), blurRadius,
+           blueNoiseImage.getImage2D(), blueNoiseScale, outputImage->getImage2D());
+}
+
 
 void blendHighlightsImage(gls::OpenCLContext* glsContext,
                           const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

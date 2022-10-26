@@ -89,6 +89,7 @@ class RawConverter {
     // RawConverter HighNoise textures
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr rgbaRawImage;
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr denoisedRgbaRawImage;
+    gls::cl_image_2d<gls::luma_pixel_16>::unique_ptr clBlueNoise;
 
     // Fast (half resolution) RawConverter textures
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clFastLinearRGBImage;

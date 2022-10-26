@@ -506,13 +506,15 @@ kernel void medianFilterImage3x3x4(read_only image2d_t inputImage, write_only im
         p.yz;                                              \
     })
 
-kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float3 var_a, float3 var_b, write_only image2d_t denoisedImage) {
+kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float3 var_a, float3 var_b,
+                                           int desaturateShadows, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    typedef half2 medianPixelType;
     half sample = 0, firstMax = 0, secMax = 0;
     half firstMin = (float) 0xffff, secMin = (float) 0xffff;
 
+    // Median filtering of the chroma
+    typedef half2 medianPixelType;
     half2 median = fast_median3x3(inputImage, imageCoordinates);
 
     half sigma = sqrt(var_a.x + var_b.x * sample);
@@ -521,9 +523,12 @@ kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float
 
     sample = clamp(sample, minVal, maxVal);
 
-    half ratio = 0.2h * smoothstep(0.0h, 0.25h, sample) + 0.8h;
+    // TODO: iPhone only, desaturate shadows to prevent wonky colors
+    if (desaturateShadows) {
+        median *= 0.2h * smoothstep(0.0h, 0.25h, sample) + 0.8h;
+    }
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (sample, ratio * median, 0));
+    write_imageh(denoisedImage, imageCoordinates, (half4) (sample, median, 0));
 }
 
 #undef readImage
@@ -576,19 +581,19 @@ kernel void despeckleImage(read_only image2d_t inputImage, float3 var_a, float3 
 }
 
 half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordinates) {
-    half4 sample = 0, firstMax = 0, secMax = 0;
-    half4 firstMin = (half) 100, secMin = (half) 100;
+    half4 sample = 0, firstMax = 0, secondMax = 0, thirdMax = 0;
+    half4 firstMin = (half) HALF_MAX, secondMin = (half) HALF_MAX, thirdMin = (half) HALF_MAX;
 
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             half4 v = read_imageh(inputImage, imageCoordinates + (int2)(x, y));
 
-            secMax = v <= firstMax && v > secMax ? v : secMax;
-            secMax = v > firstMax ? firstMax : secMax;
+            thirdMax = v >= secondMax ? secondMax : v > thirdMax ? v : thirdMax;
+            secondMax = v >= firstMax ? firstMax : v > secondMax ? v : secondMax;
             firstMax = v > firstMax ? v : firstMax;
 
-            secMin = v >= firstMin && v < secMin ? v : secMin;
-            secMin = v < firstMin ? firstMin : secMin;
+            thirdMin = v <= secondMin ? secondMin : v < thirdMin ? v : thirdMin;
+            secondMin = v <= firstMin ? firstMin : v < secondMin ? v : secondMin;
             firstMin = v < firstMin ? v : firstMin;
 
             if (x == 0 && y == 0) {
@@ -598,9 +603,8 @@ half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordi
     }
 
     half4 sigma = sqrt(myconvert_half4(rawVariance) * sample);
-    half4 minVal = mix(secMin, firstMin, smoothstep(sigma, 4 * sigma, secMin - firstMin));
-    half4 maxVal = mix(secMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - secMax));
-
+    half4 minVal = mix(thirdMin, firstMin, smoothstep(2 * sigma, 8 * sigma, thirdMin - firstMin));
+    half4 maxVal = mix(thirdMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - thirdMax));
     return clamp(sample, minVal, maxVal);
 }
 
@@ -821,17 +825,19 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half edge = smoothstep(4, 16, magnitude / sigma.x);
     half flat = 1 - smoothstep(1, 4, magnitude / sigma.x);
 
+    const int size = 4; // gradientBoost > 1 ? 4 : 2;
+
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
-    for (int y = -2; y <= 2; y++) {
-        for (int x = -2; x <= 2; x++) {
+    for (int y = -size; y <= size; y++) {
+        for (int x = -size; x <= size; x++) {
             half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
             half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
 
             half w = (half) mix(1, tunnel(x, y, angle, 0.25h), edge);
             half lumaWeight = w * (1 - step(1 + (half) gradientBoost * edge + flat, abs(inputDiff.x)));
-            half chromaWeight = 1 - step((half) chromaBoost, length(inputDiff));
+            half chromaWeight = abs(x) <= 2 && abs(y) <= 2 ? 1 - step((half) chromaBoost, length(inputDiff)) : 0;
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
 
             filtered_pixel += sampleWeight * inputSampleYCC;
@@ -840,7 +846,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     }
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel.x, denoisedPixel.yz, 0.0));
+    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, 0.0));
 }
 
 float3 denoiseLumaChromaGuided(float3 var_a, float3 var_b, image2d_t inputImage, int2 imageCoordinates) {
@@ -1466,6 +1472,63 @@ kernel void gaussianBlurImage(read_only image2d_t inputImage, float radius, writ
     float3 value = gaussianBlur(radius, inputImage, imageCoordinates);
 
     write_imagef(outputImage, imageCoordinates, (float4) (value, 0));
+}
+
+float gaussianBlurLuma(float radius, image2d_t inputImage, int2 imageCoordinates) {
+    const int kernelSize = (int) (2 * ceil(2.5 * radius) + 1);
+
+    float blurred_pixel = 0;
+    float kernel_norm = 0;
+    for (int y = -kernelSize / 2; y <= kernelSize / 2; y++) {
+        for (int x = -kernelSize / 2; x <= kernelSize / 2; x++) {
+            float kernelWeight = native_exp(-((float)(x * x + y * y) / (2 * radius * radius)));
+            blurred_pixel += kernelWeight * read_imagef(inputImage, imageCoordinates + (int2)(x, y)).x;
+            kernel_norm += kernelWeight;
+        }
+    }
+    return blurred_pixel / kernel_norm;
+}
+
+kernel void highPassLumaImage(read_only image2d_t inputImage, write_only image2d_t outputImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    float3 result = read_imagef(inputImage, imageCoordinates).x - gaussianBlurLuma(2, inputImage, imageCoordinates);
+    write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
+}
+
+kernel void hfNoiseTransferImage(read_only image2d_t inputImage,
+                                 read_only image2d_t noiseImage, float blurRadius,
+                                 read_only image2d_t blueNoiseImage, float blueNoiseScale,
+                                 write_only image2d_t outputImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    // Generate a "random" set of coordinates for the blueNoiseImage
+    int2 blueNoiseCoordinates = imageCoordinates;
+    blueNoiseCoordinates ^= (blueNoiseCoordinates << 21);
+    blueNoiseCoordinates ^= (blueNoiseCoordinates >> 35);
+    blueNoiseCoordinates ^= (blueNoiseCoordinates << 4);
+    blueNoiseCoordinates = blueNoiseCoordinates & (get_image_dim(blueNoiseImage) - 1);
+
+    float blueNoise = read_imagef(blueNoiseImage, blueNoiseCoordinates).x;
+
+    // Go from a uniform distribution on [0,1] to a
+    // symmetric triangular distribution on [-1,1]
+    // with maximal density at 0
+    blueNoise = mad(blueNoise, 2.0f, -1.0f);
+    blueNoise = sign(blueNoise) * (1.0f - sqrt(1.0f - abs(blueNoise)));
+
+    float2 gradient = signedGaussFilteredSobel3x3(noiseImage, imageCoordinates.x, imageCoordinates.y);
+    float gradientMagnitude = length(gradient);
+    float blurAmount = smoothstep(0, 0.1, gradientMagnitude);
+
+    float3 blurredPixel = gaussianBlur(0.01 + blurAmount, inputImage, imageCoordinates);
+
+    // Extract high frequency noise from noiseImage
+    float hfNoise = gaussianBlurLuma(0.01 + blurAmount, noiseImage, imageCoordinates) -
+                    gaussianBlurLuma(0.01 + 2 * blurAmount, noiseImage, imageCoordinates);
+    float3 result = blurredPixel + mix(blueNoiseScale * blueNoise, hfNoise, blurAmount);
+
+    write_imagef(outputImage, imageCoordinates, (float4) (/* (float3) (blurAmount) + 0 * */ result, 0));
 }
 
 kernel void sampledConvolution(read_only image2d_t inputImage, int samples, constant float weights[][3], write_only image2d_t outputImage, sampler_t linear_sampler) {

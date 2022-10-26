@@ -42,6 +42,10 @@ void RawConverter::allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int
     if (!rgbaRawImage) {
         rgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
         denoisedRgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
+
+        // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
+        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/LDR_LLL1_0.png");
+        clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
 }
 
@@ -54,6 +58,35 @@ void RawConverter::allocateFastDemosaicTextures(gls::OpenCLContext* glsContext, 
         clFastLinearRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
         clsFastRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, width/2, height/2);
     }
+}
+
+template <typename T>
+void SaveRawChannels(const gls::image<T>& rawImage, float maxVal, const std::string& basePath) {
+    gls::image<gls::luma_pixel> chan0(rawImage.width/2, rawImage.height/2);
+    gls::image<gls::luma_pixel> chan1(rawImage.width/2, rawImage.height/2);
+    gls::image<gls::luma_pixel> chan2(rawImage.width/2, rawImage.height/2);
+    gls::image<gls::luma_pixel> chan3(rawImage.width/2, rawImage.height/2);
+
+    rawImage.apply([&chan0, &chan1, &chan2, &chan3, maxVal](const T& p, int x, int y){
+        uint8_t val = 255 * std::sqrt(std::clamp((float) p, 0.0f, maxVal) / maxVal);
+
+        if ((x & 0) == 0 && (y & 0) == 0) {
+            chan0[y/2][x/2] = val;
+        }
+        if ((x & 1) == 0 && (y & 0) == 0) {
+            chan1[y/2][x/2] = val;
+        }
+        if ((x & 0) == 0 && (y & 1) == 0) {
+            chan2[y/2][x/2] = val;
+        }
+        if ((x & 1) == 0 && (y & 1) == 0) {
+            chan3[y/2][x/2] = val;
+        }
+    });
+    chan0.write_png_file(basePath + "0.png");
+    chan1.write_png_file(basePath + "1.png");
+    chan2.write_png_file(basePath + "2.png");
+    chan3.write_png_file(basePath + "3.png");
 }
 
 gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
@@ -112,6 +145,20 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // TODO: why divide by 4?
     interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, greenVariance);
 
+#if DUMP_GREEN_IMAGE
+    gls::image<gls::luma_pixel> out(clGreenImage->width, clGreenImage->height);
+    const auto greenImageCPU = clGreenImage->mapImage();
+    out.apply([&greenImageCPU](gls::luma_pixel* p, int x, int y){
+        const auto& ip = greenImageCPU[y][x];
+        *p = gls::luma_pixel {
+            (uint8_t) (255 * std::sqrt(std::clamp((float) ip.luma, 0.0f, 1.0f)))
+        };
+    });
+    clGreenImage->unmapImage(greenImageCPU);
+    static int count = 1;
+    out.write_png_file("/Users/fabio/green" + std::to_string(count++) + ".png");
+#endif
+
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
                        redVariance, blueVariance, rotate_180);
 
@@ -130,17 +177,17 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // Luma and Chroma Despeckling
     std::cout << "despeckleImage" << std::endl;
     const auto& np = noiseModel->pyramidNlf[0];
-    despeckleImage(_glsContext, *clLinearRGBImageA, { np[0], np[1], np[2] }, { np[3], np[4], np[5] }, clLinearRGBImageB.get());
+    despeckleImage(_glsContext, *clLinearRGBImageA,
+                   /*var_a=*/ { np[0], np[1], np[2] },
+                   /*var_b=*/ { np[3], np[4], np[5] },
+                   /*desaturateShadows=*/ high_noise_image,  // TODO: this should be a denoise configuration parameter
+                   clLinearRGBImageB.get());
 
-    // False Color Removal
-    // TODO: this is expensive, make it an optional stage
-//    std::cout << "falseColorsRemovalImage" << std::endl;
-//    applyKernel(_glsContext, "falseColorsRemovalImage", *clLinearRGBImageB, clLinearRGBImageA.get());
-
-    auto clDenoisedImage = pyramidalDenoise->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
-                                                     clLinearRGBImageB.get(),
-                                                     demosaicParameters->rgb_cam, gmb_position, rotate_180,
-                                                     &(noiseModel->pyramidNlf));
+    gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
+        pyramidalDenoise->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
+                                  clLinearRGBImageB.get(),
+                                  demosaicParameters->rgb_cam, gmb_position, rotate_180,
+                                  &(noiseModel->pyramidNlf));
 
     std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
 
@@ -156,6 +203,12 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // Convert result back to camera RGB
     const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
     transformImage(_glsContext, *clDenoisedImage, clDenoisedImage, normalized_ycbcr_to_cam);
+
+    // High ISO noise texture replacement
+    if (high_noise_image) {
+        hfNoiseTransferImage(_glsContext, *clDenoisedImage, *clGreenImage, 0.5, *clBlueNoise, 0.006, clLinearRGBImageA.get());
+        clDenoisedImage = clLinearRGBImageA.get();
+    }
 
     // --- Image Post Processing ---
 
