@@ -551,27 +551,26 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
     }
 }
 
-void hfNoiseTransferImage(gls::OpenCLContext* glsContext,
-                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                          const gls::cl_image_2d<gls::luma_pixel_float>& noiseImage, float blurRadius,
-                          const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage, float blueNoiseScale,
-                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
+void blueNoiseImage(gls::OpenCLContext* glsContext,
+                    const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                    const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage,
+                    gls::Vector<2> lumaVariance,
+                    gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
-                                    cl::Image2D,  // noiseImage
-                                    float,        // blurRadius
                                     cl::Image2D,  // blueNoiseImage
-                                    float,        // blueNoiseScale
+                                    cl_float2,    // lumaVariance
                                     cl::Image2D   // outputImage
-                                    >(program, "hfNoiseTransferImage");
+                                    >(program, "blueNoiseImage");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), noiseImage.getImage2D(), blurRadius,
-           blueNoiseImage.getImage2D(), blueNoiseScale, outputImage->getImage2D());
+           inputImage.getImage2D(), blueNoiseImage.getImage2D(),
+           { lumaVariance[0], lumaVariance[1] },
+           outputImage->getImage2D());
 }
 
 

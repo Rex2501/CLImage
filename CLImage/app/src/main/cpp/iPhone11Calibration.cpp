@@ -151,6 +151,12 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
     float lmult[5] = { 0.5, 2, 0.5, 0.25, 0.125 };
     float cmult[5] = { 2, 1, 0.5, 0.25, 0.125 };
 
+//    float lerp = std::lerp(0.0625f, 0.5f, nlf_alpha);
+//    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+//
+//    float lmult[5] = { 0.125, 1, 0.5, 0.25, 0.125 };
+//    float cmult[5] = { 2, 1, 0.5, 0.25, 0.125 };
+
     float chromaBoost = 8;
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
@@ -191,12 +197,12 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaiciPhone11(RawConverter* rawConvert
     DemosaicParameters demosaicParameters = {
         .rgbConversionParameters = {
             // .exposureBias = 0.3,
-            .blacks = 0.1,
+//            .blacks = 0.1,
             .localToneMapping = true
         },
         .ltmParameters = {
             .eps = 0.01,
-            .shadows = 0.8,
+            .shadows = 1.0,
             .highlights = 1.5,
             .detail = { 1, 1.1, 1.5 }
         }

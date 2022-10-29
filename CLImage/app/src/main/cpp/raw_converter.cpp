@@ -122,7 +122,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
 
     // TODO: Tune me!
-    const bool high_noise_image = true; // (demosaicParameters->noiseModel.rawNlf[1] + demosaicParameters->noiseModel.rawNlf[3]) / 2 > 1e-03;
+    const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf[1] + demosaicParameters->noiseModel.rawNlf[3]) / 2 > 1e-03;
 
     if (high_noise_image) {
         allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
@@ -206,8 +206,10 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     // High ISO noise texture replacement
     if (high_noise_image) {
-        hfNoiseTransferImage(_glsContext, *clDenoisedImage, *clGreenImage, 0.5, *clBlueNoise, 0.006, clLinearRGBImageA.get());
-        clDenoisedImage = clLinearRGBImageA.get();
+        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise,
+                       /*lumaVariance=*/ { np[0], np[3] },
+                       clLinearRGBImageB.get());
+        clDenoisedImage = clLinearRGBImageB.get();
     }
 
     // --- Image Post Processing ---

@@ -130,11 +130,11 @@ void gaussianBlurImage(gls::OpenCLContext* glsContext,
                        float radius,
                        gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
-void hfNoiseTransferImage(gls::OpenCLContext* glsContext,
-                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                          const gls::cl_image_2d<gls::luma_pixel_float>& noiseImage, float blurRadius,
-                          const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage, float blueNoiseScale,
-                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+void blueNoiseImage(gls::OpenCLContext* glsContext,
+                    const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                    const gls::cl_image_2d<gls::luma_pixel_16>& blueNoiseImage,
+                    gls::Vector<2> lumaVariance,
+                    gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void blendHighlightsImage(gls::OpenCLContext* glsContext,
                           const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

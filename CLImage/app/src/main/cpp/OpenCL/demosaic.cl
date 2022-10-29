@@ -22,8 +22,8 @@
 //#define read_imageh read_imagef
 //#define write_imageh write_imagef
 
-#define LENS_SHADING true
-#define LENS_SHADING_GAIN 1
+//#define LENS_SHADING true
+//#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,
@@ -242,6 +242,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
+        // TODO: the following two cases should be enabled according to the image noise level
 //        // Bias result towards vertical and horizontal lines
 //        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * gradient_threshold, 0.45 * gradient_threshold, direction))
 //                                    : mix(direction, 1, smoothstep((1 - 0.45) * gradient_threshold, (1 - 0.3) * gradient_threshold, direction));
@@ -523,11 +524,6 @@ kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float
 
     sample = clamp(sample, minVal, maxVal);
 
-    // TODO: iPhone only, desaturate shadows to prevent wonky colors
-    if (desaturateShadows) {
-        median *= 0.2h * smoothstep(0.0h, 0.25h, sample) + 0.8h;
-    }
-
     write_imageh(denoisedImage, imageCoordinates, (half4) (sample, median, 0));
 }
 
@@ -581,6 +577,32 @@ kernel void despeckleImage(read_only image2d_t inputImage, float3 var_a, float3 
 }
 
 half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordinates) {
+    half4 sample = 0, firstMax = 0, secondMax = 0;
+    half4 firstMin = (half) HALF_MAX, secondMin = (half) HALF_MAX;
+
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            half4 v = read_imageh(inputImage, imageCoordinates + (int2)(x, y));
+
+            secondMax = v >= firstMax ? firstMax : max(v, secondMax);
+            firstMax = max(v, firstMax);
+
+            secondMin = v <= firstMin ? firstMin : min(v, secondMin);
+            firstMin = min(v, firstMin);
+
+            if (x == 0 && y == 0) {
+                sample = v;
+            }
+        }
+    }
+
+    half4 sigma = sqrt(myconvert_half4(rawVariance) * sample);
+    half4 minVal = mix(secondMin, firstMin, smoothstep(2 * sigma, 8 * sigma, secondMin - firstMin));
+    half4 maxVal = mix(secondMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - secondMax));
+    return clamp(sample, minVal, maxVal);
+}
+
+half4 despeckle_3x3x4_strong(image2d_t inputImage, float4 rawVariance, int2 imageCoordinates) {
     half4 sample = 0, firstMax = 0, secondMax = 0, thirdMax = 0;
     half4 firstMin = (half) HALF_MAX, secondMin = (half) HALF_MAX, thirdMin = (half) HALF_MAX;
 
@@ -588,13 +610,13 @@ half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordi
         for (int y = -1; y <= 1; y++) {
             half4 v = read_imageh(inputImage, imageCoordinates + (int2)(x, y));
 
-            thirdMax = v >= secondMax ? secondMax : v > thirdMax ? v : thirdMax;
-            secondMax = v >= firstMax ? firstMax : v > secondMax ? v : secondMax;
-            firstMax = v > firstMax ? v : firstMax;
+            thirdMax = v >= secondMax ? secondMax : max(v, thirdMax);
+            secondMax = v >= firstMax ? firstMax : max(v, secondMax);
+            firstMax = max(v, firstMax);
 
-            thirdMin = v <= secondMin ? secondMin : v < thirdMin ? v : thirdMin;
-            secondMin = v <= firstMin ? firstMin : v < secondMin ? v : secondMin;
-            firstMin = v < firstMin ? v : firstMin;
+            thirdMin = v <= secondMin ? secondMin : min(v, thirdMin);
+            secondMin = v <= firstMin ? firstMin : min(v, secondMin);
+            firstMin = min(v, firstMin);
 
             if (x == 0 && y == 0) {
                 sample = v;
@@ -823,9 +845,10 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
-    half flat = 1 - smoothstep(1, 4, magnitude / sigma.x);
+    // TODO: make this a tunable parameter
+    half flat = 0; // 1 - smoothstep(1, 4, magnitude / sigma.x);
 
-    const int size = 4; // gradientBoost > 1 ? 4 : 2;
+    const int size = gradientBoost > 1 ? 4 : 2;
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -1496,39 +1519,40 @@ kernel void highPassLumaImage(read_only image2d_t inputImage, write_only image2d
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
 
-kernel void hfNoiseTransferImage(read_only image2d_t inputImage,
-                                 read_only image2d_t noiseImage, float blurRadius,
-                                 read_only image2d_t blueNoiseImage, float blueNoiseScale,
-                                 write_only image2d_t outputImage) {
-    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-
+float blueNoiseGenerator(read_only image2d_t blueNoiseImage, int2 blueNoiseCoordinates) {
     // Generate a "random" set of coordinates for the blueNoiseImage
-    int2 blueNoiseCoordinates = imageCoordinates;
     blueNoiseCoordinates ^= (blueNoiseCoordinates << 21);
     blueNoiseCoordinates ^= (blueNoiseCoordinates >> 35);
     blueNoiseCoordinates ^= (blueNoiseCoordinates << 4);
-    blueNoiseCoordinates = blueNoiseCoordinates & (get_image_dim(blueNoiseImage) - 1);
+    blueNoiseCoordinates = blueNoiseCoordinates & (get_image_dim(blueNoiseImage) - 1);  // Assumed to be a power of 2
 
+    // Read the noise from the texture
     float blueNoise = read_imagef(blueNoiseImage, blueNoiseCoordinates).x;
 
-    // Go from a uniform distribution on [0,1] to a
-    // symmetric triangular distribution on [-1,1]
-    // with maximal density at 0
+    // Go from a uniform distribution on [0,1] to a symmetric triangular distribution on [-1,1] with maximal density at 0
     blueNoise = mad(blueNoise, 2.0f, -1.0f);
-    blueNoise = sign(blueNoise) * (1.0f - sqrt(1.0f - abs(blueNoise)));
+    return sign(blueNoise) * (1.0f - sqrt(1.0f - abs(blueNoise)));
+}
 
-    float2 gradient = signedGaussFilteredSobel3x3(noiseImage, imageCoordinates.x, imageCoordinates.y);
-    float gradientMagnitude = length(gradient);
-    float blurAmount = smoothstep(0, 0.1, gradientMagnitude);
+static constant const float3 rgbToY = { 0.2126, 0.7152, 0.0722 };
 
-    float3 blurredPixel = gaussianBlur(0.01 + blurAmount, inputImage, imageCoordinates);
+kernel void blueNoiseImage(read_only image2d_t inputImage,
+                           read_only image2d_t blueNoiseImage,
+                           float2 lumaVariance,
+                           write_only image2d_t outputImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    // Extract high frequency noise from noiseImage
-    float hfNoise = gaussianBlurLuma(0.01 + blurAmount, noiseImage, imageCoordinates) -
-                    gaussianBlurLuma(0.01 + 2 * blurAmount, noiseImage, imageCoordinates);
-    float3 result = blurredPixel + mix(blueNoiseScale * blueNoise, hfNoise, blurAmount);
+    float blueNoise = blueNoiseGenerator(blueNoiseImage, imageCoordinates);
 
-    write_imagef(outputImage, imageCoordinates, (float4) (/* (float3) (blurAmount) + 0 * */ result, 0));
+    float3 pixel = read_imagef(inputImage, imageCoordinates).xyz;
+
+    // Compute the sigma of the noise from Noise Level Function
+    float luma = dot(pixel, rgbToY);
+    float luma_sigma = sqrt(lumaVariance.x + lumaVariance.y * luma);
+
+    float3 result = pixel + 0.5 * luma_sigma * blueNoise;
+
+    write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
 
 kernel void sampledConvolution(read_only image2d_t inputImage, int samples, constant float weights[][3], write_only image2d_t outputImage, sampler_t linear_sampler) {
