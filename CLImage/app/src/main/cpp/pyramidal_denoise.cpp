@@ -153,44 +153,15 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
     // Only consider pixels with variance lower than the expected noise value
     double varianceMax = 0.001;
 
-#if EXPERIMENTAL_MAX_NOISE_VARIANCE
-    const double maxVarianceHistVal = 0.01;
-    int minBinSize = 0.0015 * image.width  * image.height;
-    const int variance_bins = 128;
-    uint32_t log_variance[variance_bins] = { 0 };
-    noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns) {
-        int hist_index = rint((variance_bins - 1) * fmin(log(1 + ns[1]) / log(1 + maxVarianceHistVal), 1));
-        log_variance[hist_index]++;
-    });
-
-    std::cout << "log_variance: ";
-    int max_bin = 0;
-    int max_val = 0;
-    bool descending = false;
-    for (int i = 0; i < variance_bins; i++) {
-        if (log_variance[i] > max_val) {
-            max_bin = i;
-            max_val = log_variance[i];
-            descending = false;
-        } else if (log_variance[i] > minBinSize && log_variance[i] <= max_val) {
-            varianceMax = 40 * (exp((i / ((float) variance_bins - 1)) * log(1 + maxVarianceHistVal)) - 1);
-            std::cout << i << " - ";
-            std::cout << log_variance[i] << " @ " << std::scientific << varianceMax << ", ";
-            break;
-        }
-    }
-    std::cout << std::endl;
-#endif
-
     // Limit to pixels the more linear intensity zone of the sensor
     const double maxValue = 0.5;
     const double minValue = 0.001;
 
     // Collect pixel statistics
-    gls::DVector<3> s_x = {{ 0, 0, 0 }};
-    gls::DVector<3> s_y = {{ 0, 0, 0 }};
-    gls::DVector<3> s_xx = {{ 0, 0, 0 }};
-    gls::DVector<3> s_xy = {{ 0, 0, 0 }};
+    double s_x = 0;
+    double s_xx = 0;
+    gls::DVector<3> s_y = gls::DVector<3>::zeros();
+    gls::DVector<3> s_xy = gls::DVector<3>::zeros();
 
     double N = 0;
     noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
@@ -211,7 +182,7 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
     auto nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
 
     // Estimate regression mean square error
-    gls::DVector<3> err2 = {{ 0, 0, 0 }};
+    gls::DVector<3> err2 = gls::DVector<3>::zeros();
     noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
         double m = ns[0];
         gls::DVector<3> v = {{ ns[1], ns[2], ns[3] }};
@@ -222,47 +193,50 @@ gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls:
             err2 += diff * diff;
         }
     });
-    err2 = sqrt(err2 / N);
+    err2 /= N;
 
-//    std::cout << "Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", err2: " << err2
+//    std::cout << "1) Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(err2)
 //              << " on " << std::setprecision(1) << std::fixed << 100 * N / (image.width * image.height) << "% pixels"<< std::endl;
 
     // Redo the statistics collection limiting the sample to pixels that fit well the linear model
-    s_x = {{ 0, 0, 0 }};
-    s_y = {{ 0, 0, 0 }};
-    s_xx = {{ 0, 0, 0 }};
-    s_xy = {{ 0, 0, 0 }};
+    s_x = 0;
+    s_xx = 0;
+    s_y = gls::DVector<3>::zeros();
+    s_xy = gls::DVector<3>::zeros();
     N = 0;
-    gls::DVector<3> newErr2 = {{ 0, 0, 0 }};
+    gls::DVector<3> newErr2 = gls::DVector<3>::zeros();
+    int discarded = 0;
     noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
         double m = ns[0];
         gls::DVector<3> v = {{ ns[1], ns[2], ns[3] }};
 
         if (m >= minValue && m <= maxValue && inRange<3>(v, 0, varianceMax)) {
             auto nlfP = nlfA + nlfB * m;
-            auto diff = nlfP - v;
-            diff *= diff;
+            auto diff = abs(nlfP - v);
+            auto diffSquare = diff * diff;
 
-            if (diff[0] <= err2[0] && diff[1] <= err2[1] && diff[2] <= err2[2]) {
+            if (all(diffSquare <= 0.5 * err2)) {
                 s_x += m;
                 s_y += v;
                 s_xx += m * m;
                 s_xy += m * v;
                 N++;
-                newErr2 += diff;
+                newErr2 += diffSquare;
+            } else {
+                discarded++;
             }
         }
     });
-    newErr2 = sqrt(newErr2 / N);
+    newErr2 /= N;
 
     // Estimate the new regression parameters
     nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
     nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
 
-    assert(err2[0] >= newErr2[0] && err2[1] >= newErr2[1] && err2[2] >= newErr2[2]);
+    assert(all(newErr2 < err2));
 
-    std::cout << "Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", err2: " << newErr2
-              << " on " << std::setprecision(1) << std::fixed << 100 * N / (image.width * image.height) << "% pixels"<< std::endl;
+    std::cout << "Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(newErr2)
+              << " on " << std::setprecision(1) << std::fixed << 100 * N / (image.width * image.height) << "% pixels" << std::endl;
 
     noiseStats.unmapImage(noiseStatsCpu);
 
@@ -281,59 +255,24 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     const auto meanImageCpu = meanImage.mapImage();
     const auto varImageCpu = varImage.mapImage();
 
+    // Only consider pixels with variance lower than the expected noise value
+    double varianceMax = 0.001;
+
     // Limit to pixels the more linear intensity zone of the sensor
     const double maxValue = 0.5;
     const double minValue = 0.001;
 
     // Collect pixel statistics
-    gls::DVector<4> s_x = {{ 0, 0, 0, 0 }};
-    gls::DVector<4> s_y = {{ 0, 0, 0, 0 }};
-    gls::DVector<4> s_xx = {{ 0, 0, 0, 0 }};
-    gls::DVector<4> s_xy = {{ 0, 0, 0, 0 }};
-
-    // Only consider pixels with variance lower than the expected noise value
-    double varianceMax = 0.001;
-
-#if EXPERIMENTAL_MAX_NOISE_VARIANCE
-    const int variance_bins = 128;
-    uint32_t log_variance[variance_bins] = { 0 };
-    const double maxVarianceHistVal = 0.01;
-
-    // auto greenVarImageCpu = gls::image<gls::luma_pixel_16>(varImageCpu.width, varImageCpu.height);
-
-    varImageCpu.apply([&](const gls::rgba_pixel_float& vv, int x, int y) {
-        int hist_index = rint((variance_bins - 1) * fmin(log(1 + vv[1]) / log(1 + maxVarianceHistVal), 1));
-        log_variance[hist_index]++;
-        // greenVarImageCpu[y][x] = 0xffff * vv[1] / meanImageCpu[y][x][1];
-    });
-
-    // greenVarImageCpu.write_png_file("/Users/fabio/greenVar.png");
-
-    std::cout << "log_variance: ";
-    int max_bin = 0;
-    int max_val = 0;
-    int minBinSize = 0.0004 * rawImage.width * rawImage.height;
-    bool descending = false;
-    for (int i = 0; i < variance_bins; i++) {
-        if (log_variance[i] > max_val) {
-            max_bin = i;
-            max_val = log_variance[i];
-            descending = false;
-        } else if (log_variance[i] > minBinSize && log_variance[i] <= max_val) {
-            varianceMax = 40 * (exp((i / ((float) variance_bins - 1)) * log(1 + maxVarianceHistVal)) - 1);
-            std::cout << i << " - ";
-            std::cout << log_variance[i] << " @ " << std::scientific << varianceMax << ", ";
-            break;
-        }
-    }
-    std::cout << std::endl;
-#endif
+    gls::DVector<4> s_x = gls::DVector<4>::zeros();
+    gls::DVector<4> s_y = gls::DVector<4>::zeros();
+    gls::DVector<4> s_xx = gls::DVector<4>::zeros();
+    gls::DVector<4> s_xy = gls::DVector<4>::zeros();
 
     double N = 0;
     meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
         const gls::rgba_pixel_float& vv = varImageCpu[y][x];
-        gls::DVector<4> m = {{ mm[0], mm[1], mm[2], mm[3] }};
-        gls::DVector<4> v = {{ vv[0], vv[1], vv[2], vv[3] }};
+        gls::DVector<4> m = { mm[0], mm[1], mm[2], mm[3] };
+        gls::DVector<4> v = { vv[0], vv[1], vv[2], vv[3] };
 
         if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
             s_x += m;
@@ -349,11 +288,11 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
     auto nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
 
     // Estimate regression mean square error
-    gls::DVector<4> err2 = {{ 0, 0, 0, 0 }};
+    gls::DVector<4> err2 = gls::DVector<4>::zeros();
     meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
         const gls::rgba_pixel_float& vv = varImageCpu[y][x];
-        gls::DVector<4> m = {{ mm[0], mm[1], mm[2], mm[3] }};
-        gls::DVector<4> v = {{ vv[0], vv[1], vv[2], vv[3] }};
+        gls::DVector<4> m = { mm[0], mm[1], mm[2], mm[3] };
+        gls::DVector<4> v = { vv[0], vv[1], vv[2], vv[3] };
 
         if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
             auto nlfP = nlfA + nlfB * m;
@@ -361,47 +300,47 @@ gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const g
             err2 += diff * diff;
         }
     });
-    err2 = sqrt(err2 / N);
+    err2 /= N;
 
-//    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", err2: " << err2
+//    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(err2)
 //              << " on " << std::setprecision(1) << std::fixed << 100 * N / (rawImage.width * rawImage.height) << "% pixels"<< std::endl;
 
     // Redo the statistics collection limiting the sample to pixels that fit well the linear model
-    s_x = {{ 0, 0, 0, 0 }};
-    s_y = {{ 0, 0, 0, 0 }};
-    s_xx = {{ 0, 0, 0, 0 }};
-    s_xy = {{ 0, 0, 0, 0 }};
+    s_x = gls::DVector<4>::zeros();
+    s_y = gls::DVector<4>::zeros();
+    s_xx = gls::DVector<4>::zeros();
+    s_xy = gls::DVector<4>::zeros();
     N = 0;
-    gls::DVector<4> newErr2 = {{ 0, 0, 0, 0 }};
+    gls::DVector<4> newErr2 = gls::DVector<4>::zeros();
     meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
         const gls::rgba_pixel_float& vv = varImageCpu[y][x];
         gls::DVector<4> m = {{ mm[0], mm[1], mm[2], mm[3] }};
         gls::DVector<4> v = {{ vv[0], vv[1], vv[2], vv[3] }};
 
         if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
-            auto nlfP = nlfA + nlfB * m;
-            auto diff = nlfP - v;
-            diff *= diff;
+            const auto nlfP = nlfA + nlfB * m;
+            const auto diff = abs(nlfP - v);
+            const auto diffSquare = diff * diff;
 
-            if (diff[0] <= err2[0] && diff[1] <= err2[1] && diff[2] <= err2[2] && diff[3] <= err2[3]) {
+            if (all(diffSquare <= 0.5 * err2)) {
                 s_x += m;
                 s_y += v;
                 s_xx += m * m;
                 s_xy += m * v;
                 N++;
-                newErr2 += diff;
+                newErr2 += diffSquare;
             }
         }
     });
-    newErr2 = sqrt(newErr2 / N);
+    newErr2 /= N;
 
     // Estimate the new regression parameters
     nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
     nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
 
-    // assert(err2[0] >= newErr2[0] && err2[1] >= newErr2[1] && err2[2] >= newErr2[2] && err2[3] >= newErr2[3]);
+    assert(all(newErr2 < err2));
 
-    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", err2: " << newErr2
+    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(newErr2)
               << " on " << std::setprecision(1) << std::fixed << 100 * N / (rawImage.width * rawImage.height) << "% pixels"<< std::endl;
 
     meanImage.unmapImage(meanImageCpu);

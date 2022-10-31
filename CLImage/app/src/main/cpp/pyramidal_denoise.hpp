@@ -19,8 +19,6 @@
 #include "demosaic.hpp"
 #include "demosaic_cl.hpp"
 
-// #include "guided_filter.hpp"
-
 struct ImageDenoiser {
     ImageDenoiser(gls::OpenCLContext* glsContext, int width, int height) {}
 
