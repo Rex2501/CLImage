@@ -190,6 +190,8 @@ float2 channelCorrelation(read_only image2d_t rawImage, int x, int y) {
     return var_g > 0 && var_c > 0 ? abs(cov_cg / sqrt(var_g * var_c)) : 1;
 }
 
+static constant const float kHighNoiseVariance = 1e-03;
+
 kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern, float2 greenVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
@@ -242,10 +244,11 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Gradient direction in [0..1]
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
-        // TODO: the following two cases should be enabled according to the image noise level
-        // Bias result towards vertical and horizontal lines
-//        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3, 0.45, direction))
-//                                    : mix(direction, 1, smoothstep((1 - 0.45), (1 - 0.3), direction));
+        if (greenVariance.y < kHighNoiseVariance) {
+            // Bias result towards vertical and horizontal lines
+            direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3, 0.45, direction))
+                                        : mix(direction, 1, smoothstep((1 - 0.45), (1 - 0.3), direction));
+        }
 
         // If the gradient is below threshold interpolate against the grain
         direction = mix(1 - direction, direction, gradient_threshold);
@@ -841,7 +844,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
     // TODO: make this a tunable parameter
-    half flat = 1 - smoothstep(1, 4, magnitude / sigma.x);
+    half flat = 0; // 1 - smoothstep(1, 4, magnitude / sigma.x);
 
     const int size = gradientBoost > 1 ? 4 : 2;
 

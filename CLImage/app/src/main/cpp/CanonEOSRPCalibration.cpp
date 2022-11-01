@@ -282,7 +282,7 @@ void calibrateCanonEOSRP(RawConverter* rawConverter, const std::filesystem::path
     }
 
     std::cout << "CanonEOSRP Calibration table:" << std::endl;
-    dumpNoiseModel<10, 10>(calibration_files, noiseModel);
+    dumpNoiseModel(calibration_files, noiseModel);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicCanonEOSRPDNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {

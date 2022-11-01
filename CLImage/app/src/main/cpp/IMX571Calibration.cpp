@@ -303,34 +303,34 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateIMX571DNG(RawConverter* rawConve
     return result;
 }
 
-void calibrateIMX571(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    std::array<CalibrationEntry, 1> calibration_files = {{
-        { 100,   "2022-06-15-11-03-22-196.dng",   {2246, 803, 2734, 1762}, false },
-    }};
-
-    std::array<NoiseModel, 8> noiseModel;
-
-    for (int i = 0; i < calibration_files.size(); i++) {
-        auto& entry = calibration_files[i];
-        const auto input_path = input_dir / entry.fileName;
-
-        DemosaicParameters demosaicParameters = {
-            .rgbConversionParameters = {
-                .contrast = 1.05,
-                .saturation = 1.0,
-                .toneCurveSlope = 3.5,
-            }
-        };
-
-        const auto rgb_image = calibrateIMX571DNG(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position, entry.rotated);
-        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal_rgb.png", /*skip_alpha=*/ true);
-
-        noiseModel[i] = demosaicParameters.noiseModel;
-    }
-
-    std::cout << "Calibration table for IMX571:" << std::endl;
-    dumpNoiseModel<1, 8>(calibration_files, noiseModel);
-}
+//void calibrateIMX571(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
+//    std::array<CalibrationEntry, 1> calibration_files = {{
+//        { 100,   "2022-06-15-11-03-22-196.dng",   {2246, 803, 2734, 1762}, false },
+//    }};
+//
+//    std::array<NoiseModel, 8> noiseModel;
+//
+//    for (int i = 0; i < calibration_files.size(); i++) {
+//        auto& entry = calibration_files[i];
+//        const auto input_path = input_dir / entry.fileName;
+//
+//        DemosaicParameters demosaicParameters = {
+//            .rgbConversionParameters = {
+//                .contrast = 1.05,
+//                .saturation = 1.0,
+//                .toneCurveSlope = 3.5,
+//            }
+//        };
+//
+//        const auto rgb_image = calibrateIMX571DNG(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position, entry.rotated);
+//        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal_rgb.png", /*skip_alpha=*/ true);
+//
+//        noiseModel[i] = demosaicParameters.noiseModel;
+//    }
+//
+//    std::cout << "Calibration table for IMX571:" << std::endl;
+//    dumpNoiseModel<1, 8>(calibration_files, noiseModel);
+//}
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     DemosaicParameters demosaicParameters = {

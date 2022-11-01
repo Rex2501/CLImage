@@ -53,8 +53,8 @@ typedef std::pair<gls::Vector<4>, gls::Vector<4>> RawNLF;
 typedef std::pair<gls::Vector<3>, gls::Vector<3>> YCbCrNLF;
 
 typedef struct NoiseModel {
-    RawNLF rawNlf;          // NLF for raw data
-    std::array<YCbCrNLF, 5> pyramidNlf;   // NLF for interpolated data on a 5-level pyramid
+    RawNLF rawNlf;                          // Raw Data NLF
+    std::array<YCbCrNLF, 5> pyramidNlf;     // NLF for interpolated data on a 5-level pyramid
 } NoiseModel;
 
 struct CalibrationEntry {
@@ -64,8 +64,8 @@ struct CalibrationEntry {
     bool rotated;
 };
 
-template <int N1, int N2>
-void dumpNoiseModel(const std::array<CalibrationEntry, N1>& calibration_files, const std::array<NoiseModel, N2>& noiseModel) {
+template <size_t N>
+void dumpNoiseModel(const std::array<CalibrationEntry, N>& calibration_files, const std::array<NoiseModel, N>& noiseModel) {
     std::cout << "{{" << std::scientific << std::setprecision(3) << std::endl;
     for (int i = 0; i < calibration_files.size(); i++) {
         std::cout << "\t// ISO " << calibration_files[i].iso << std::endl;
@@ -266,8 +266,8 @@ RawNLF estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls
 
 #include "gls_cl_image.hpp"
 
-YCbCrNLF BuildYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
+YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
 
-RawNLF BuildRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern);
+RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern);
 
 #endif /* demosaic_hpp */

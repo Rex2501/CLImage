@@ -149,7 +149,7 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
     float lerp = 0.25 * std::lerp(0.25f, 2.0f, nlf_alpha);
     float lerp_c = std::lerp(0.25f, 2.0f, nlf_alpha);
 
-    float lmult[5] = { 0.5, 2, 0.5, 0.25, 0.125 };
+    float lmult[5] = { 0.5, 4, 0.5, 0.25, 0.125 };
     float cmult[5] = { 2, 1, 0.5, 0.25, 0.125 };
 
 //    float lerp = std::lerp(0.0625f, 0.5f, nlf_alpha);
@@ -164,14 +164,14 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 32,
+            .chromaBoost = 4 * chromaBoost,
+            .gradientBoost = 8,
             .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
-            .chromaBoost = chromaBoost,
+            .chromaBoost = 4 * chromaBoost,
             .gradientBoost = 1.01,
             .sharpening = 1.1
         },
@@ -268,7 +268,7 @@ void calibrateiPhone11(RawConverter* rawConverter, const std::filesystem::path& 
         { 2500, "IPHONE11hSLI2500NRD.dng", { 1794, 2200, 382, 269 }, false }
     }};
 
-    std::array<NoiseModel, 10> noiseModel;
+    std::array<NoiseModel, 8> noiseModel;
 
     for (int i = 0; i < calibration_files.size(); i++) {
         auto& entry = calibration_files[i];
@@ -289,5 +289,5 @@ void calibrateiPhone11(RawConverter* rawConverter, const std::filesystem::path& 
     }
 
     std::cout << "// iPhone 11 Calibration table:" << std::endl;
-    dumpNoiseModel<8, 10>(calibration_files, noiseModel);
+    dumpNoiseModel(calibration_files, noiseModel);
 }

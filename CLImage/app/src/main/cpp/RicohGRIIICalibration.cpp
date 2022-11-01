@@ -228,7 +228,7 @@ void calibrateRicohGRIII(RawConverter* rawConverter, const std::filesystem::path
     }
 
     std::cout << "RicohGRIII Calibration table:" << std::endl;
-    dumpNoiseModel<7, 7>(calibration_files, noiseModel);
+    dumpNoiseModel(calibration_files, noiseModel);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {

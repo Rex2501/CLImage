@@ -273,7 +273,7 @@ void calibrateLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& i
     }
 
     std::cout << "// LeicaQ2 Calibration table:" << std::endl;
-    dumpNoiseModel<10, 10>(calibration_files, noiseModel);
+    dumpNoiseModel(calibration_files, noiseModel);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {

@@ -92,6 +92,14 @@ void SaveRawChannels(const gls::image<T>& rawImage, float maxVal, const std::str
     chan3.write_png_file(basePath + "3.png");
 }
 
+std::array<gls::Vector<2>, 3> getRawVariance(const RawNLF& rawNLF) {
+    const gls::Vector<2> greenVariance = { (rawNLF.first[1] + rawNLF.first[3]) / 2, (rawNLF.second[1] + rawNLF.second[3]) / 2 };
+    const gls::Vector<2> redVariance = { rawNLF.first[0], rawNLF.second[0] };
+    const gls::Vector<2> blueVariance = { rawNLF.first[2], rawNLF.second[2] };
+
+    return { redVariance, greenVariance, blueVariance };
+}
+
 gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                                DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     auto clContext = _glsContext->clContext();
@@ -116,16 +124,21 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     // --- Image Demosaicing ---
 
-    scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern, demosaicParameters->scale_mul,
+    scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(),
+                 demosaicParameters->bayerPattern,
+                 demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
     if (calibrateFromImage) {
-        demosaicParameters->noiseModel.rawNlf = BuildRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+        demosaicParameters->noiseModel.rawNlf = MeasureRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
     }
-    const auto& rawNLF = demosaicParameters->noiseModel.rawNlf;
+
+    const auto rawVariance = getRawVariance(demosaicParameters->noiseModel.rawNlf);
 
     // TODO: Tune me!
-    const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf.second[1] + demosaicParameters->noiseModel.rawNlf.second[3]) / 2 > 1e-03;
+    const bool high_noise_image = rawVariance[1][1] > kHighNoiseVariance && !calibrateFromImage;
+
+    std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << std::endl;
 
     if (high_noise_image) {
         allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
@@ -141,12 +154,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
-    const gls::Vector<2> greenVariance = { (rawNLF.first[1] + rawNLF.first[3]) / 2, (rawNLF.second[1] + rawNLF.second[3]) / 2 };
-    const gls::Vector<2> redVariance = { rawNLF.first[0], rawNLF.second[0] };
-    const gls::Vector<2> blueVariance = { rawNLF.first[2], rawNLF.second[2] };
-
-    // TODO: why divide by 4?
-    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, greenVariance);
+    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
 
 #if DUMP_GREEN_IMAGE
     gls::image<gls::luma_pixel> out(clGreenImage->width, clGreenImage->height);
@@ -163,7 +171,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 #endif
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
-                       redVariance, blueVariance);
+                       rawVariance[0], rawVariance[2]);
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());

@@ -98,7 +98,7 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
         }
 
         if (calibrateFromImage) {
-            const auto nlf = BuildYCbCrNLF(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]));
+            const auto nlf = MeasureYCbCrNLF(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]));
             (*nlfParameters)[i] = nlf;
         }
 

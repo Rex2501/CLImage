@@ -84,7 +84,7 @@ bool inRange(const gls::DVector<N>& v, double minValue, double maxValue) {
     return true;
 }
 
-YCbCrNLF BuildYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
+YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
     gls::cl_image_2d<gls::rgba_pixel_float> noiseStats(glsContext->clContext(), image.width, image.height);
     applyKernel(glsContext, "noiseStatistics", image, &noiseStats);
     const auto noiseStatsCpu = noiseStats.mapImage();
@@ -185,7 +185,7 @@ YCbCrNLF BuildYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gl
     );
 }
 
-RawNLF BuildRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern) {
+RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern) {
     gls::cl_image_2d<gls::rgba_pixel_float> meanImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
     gls::cl_image_2d<gls::rgba_pixel_float> varImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
 

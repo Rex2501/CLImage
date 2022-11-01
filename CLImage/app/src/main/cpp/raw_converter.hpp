@@ -74,6 +74,8 @@ public:
 class RawConverter {
     gls::OpenCLContext* _glsContext;
 
+    static const constexpr float kHighNoiseVariance = 1e-03;
+
     // RawConverter base work textures
     gls::cl_image_2d<gls::luma_pixel_16>::unique_ptr clRawImage;
     gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr clScaledRawImage;
