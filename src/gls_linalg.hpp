@@ -282,6 +282,60 @@ inline Vector<N, value_type> sqrt(const Vector<N, value_type>& v) {
     return result;
 }
 
+template <size_t N>
+inline Vector<N, bool> operator ! (const Vector<N, bool>& a) {
+    auto ita = a.begin();
+    Vector<N, bool> result;
+    std::for_each(result.begin(), result.end(), [&](bool &r){ r = !*ita++; });
+    return result;
+}
+
+// Vector - Vector comparison (component-wise)
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator < (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    auto ita = a.begin();
+    auto itb = b.begin();
+    Vector<N, bool> result;
+    std::for_each(result.begin(), result.end(), [&](bool &r){ r = *ita++ < *itb++; });
+    return result;
+}
+
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator > (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    return b < a;
+}
+
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator <= (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    return !(a > b);
+}
+
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator >= (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    return !(a < b);
+}
+
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator == (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    auto ita = a.begin();
+    auto itb = b.begin();
+    Vector<N, bool> result;
+    std::for_each(result.begin(), result.end(), [&](bool &r){ r = *ita++ == *itb++; });
+    return result;
+}
+
+template <size_t N, typename value_type>
+inline Vector<N, bool> operator != (const Vector<N, value_type>& a, const Vector<N, value_type>& b) {
+    return !(a == b);
+}
+
+template <size_t N>
+inline bool all(const Vector<N, bool>& a) {
+    bool result = true;
+    std::for_each(a.begin(), a.end(), [&result](const bool &v){ result = result && v; });
+    return result;
+}
+
 // ---- Matrix Type ----
 
 template <size_t N, size_t M, typename value_type>
