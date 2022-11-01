@@ -363,7 +363,7 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
                 auto_ptr<uint16_t> tiffbuf((uint16_t*)_TIFFmalloc(tileSize),
                                            [](uint16_t* buf) { _TIFFfree(buf); });
 
-                auto_ptr<uint16_t> imagebuf((uint16_t*)_TIFFmalloc(width * height * sizeof(uint16_t)),
+                auto_ptr<uint16_t> imagebuf((uint16_t*)_TIFFmalloc(tiff_samplesperpixel * width * height * sizeof(uint16_t)),
                                             [](uint16_t* buf) { _TIFFfree(buf); });
 
                 if (compression == COMPRESSION_JPEG) {
@@ -382,12 +382,18 @@ void read_dng_file(const std::string& filename, int pixel_channels, int pixel_bi
                             dng_stream stream((uint8_t *) tiffbuf.get(), tileSize);
                             dng_spooler spooler;
                             uint32_t decodedSize = maxTileWidth * maxTileHeight * sizeof(uint16_t);
-                            DecodeLosslessJPEG(stream, spooler, decodedSize, decodedSize, false, tileSize);
+                            DecodeLosslessJPEG(stream, spooler,
+                                               tiff_samplesperpixel * decodedSize,
+                                               tiff_samplesperpixel * decodedSize,
+                                               false, tileSize);
 
                             uint16_t *tilePixels = (uint16_t *) spooler.data();
                             for (int y = 0; y < tileHeight; y++) {
                                 for (int x = 0; x < tileWidth; x++) {
-                                    imagebuf[(tileY + y) * width + tileX + x] = tilePixels[y * maxTileWidth + x];
+                                    for (int c = 0; c < tiff_samplesperpixel; c++) {
+                                        imagebuf[tiff_samplesperpixel * ((tileY + y) * width + tileX + x) + c] =
+                                            tilePixels[tiff_samplesperpixel * (y * maxTileWidth + x) + c];
+                                    }
                                 }
                             }
                         }
