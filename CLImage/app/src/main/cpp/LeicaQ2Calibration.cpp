@@ -22,146 +22,146 @@
 static const std::array<NoiseModel, 10> LeicaQ2 = {{
     // ISO 100
     {
-        { 4.2e-05, 5.1e-05, 4.9e-05, 5.1e-05 },
-        {
-            7.6e-06, 4.4e-07, 7.1e-07, 7.9e-05, 7.7e-06, 1.3e-05,
-            6.5e-06, 4.4e-07, 5.5e-07, 1.6e-04, 6.9e-06, 1.3e-05,
-            7.2e-06, 6.1e-07, 6.2e-07, 3.2e-04, 5.4e-06, 9.1e-06,
-            5.2e-06, 1.1e-06, 1.0e-06, 7.8e-04, 4.0e-06, 6.2e-06,
-            3.8e-05, 3.1e-06, 3.0e-06, 1.7e-03, 1.0e-06, 4.2e-06,
-        },
+        {{6.998e-07, 1.030e-06, 1.000e-08, 1.034e-06}, {2.054e-04, 1.487e-04, 1.564e-04, 1.496e-04}},
+        {{
+            {{1.799e-06, 8.381e-08, 1.363e-07}, {1.126e-04, 5.149e-06, 9.256e-06}},
+            {{1.216e-06, 1.331e-07, 1.399e-07}, {1.449e-04, 5.173e-06, 9.835e-06}},
+            {{1.000e-08, 1.963e-07, 1.392e-07}, {3.046e-04, 5.064e-06, 9.020e-06}},
+            {{1.000e-08, 3.895e-07, 3.640e-07}, {4.822e-04, 3.695e-06, 4.990e-06}},
+            {{3.280e-06, 8.278e-07, 7.503e-07}, {8.459e-04, 3.336e-06, 4.069e-06}},
+        }}
     },
     // ISO 200
     {
-        { 7.5e-05, 8.9e-05, 8.3e-05, 8.7e-05 },
-        {
-            7.2e-06, 4.5e-07, 7.4e-07, 1.2e-04, 1.4e-05, 2.4e-05,
-            6.2e-06, 4.5e-07, 5.6e-07, 1.8e-04, 9.2e-06, 1.7e-05,
-            5.2e-06, 5.7e-07, 5.8e-07, 3.8e-04, 7.1e-06, 1.2e-05,
-            4.8e-06, 1.1e-06, 1.0e-06, 7.9e-04, 4.4e-06, 6.6e-06,
-            3.7e-05, 3.1e-06, 3.0e-06, 1.7e-03, 9.6e-07, 4.4e-06,
-        },
+        {{1.191e-06, 1.083e-06, 1.759e-07, 1.085e-06}, {2.934e-04, 1.866e-04, 1.979e-04, 1.877e-04}},
+        {{
+            {{1.467e-06, 9.428e-08, 1.595e-07}, {1.451e-04, 7.415e-06, 1.352e-05}},
+            {{5.287e-07, 1.272e-07, 1.289e-07}, {1.674e-04, 6.833e-06, 1.315e-05}},
+            {{1.000e-08, 1.845e-07, 1.301e-07}, {3.147e-04, 5.711e-06, 1.013e-05}},
+            {{1.000e-08, 3.817e-07, 3.526e-07}, {4.921e-04, 3.975e-06, 5.410e-06}},
+            {{3.041e-06, 8.249e-07, 7.452e-07}, {8.473e-04, 3.471e-06, 4.177e-06}},
+        }}
     },
     // ISO 400
     {
-        { 1.4e-04, 1.6e-04, 1.6e-04, 1.5e-04 },
-        {
-            8.2e-06, 5.9e-07, 1.1e-06, 1.5e-04, 2.3e-05, 4.1e-05,
-            8.5e-06, 5.6e-07, 7.9e-07, 1.2e-04, 1.1e-05, 2.1e-05,
-            7.8e-06, 6.3e-07, 6.7e-07, 3.1e-04, 7.0e-06, 1.2e-05,
-            5.2e-06, 1.1e-06, 1.0e-06, 7.8e-04, 4.8e-06, 7.1e-06,
-            3.8e-05, 3.0e-06, 3.0e-06, 1.8e-03, 1.3e-06, 4.8e-06,
-        },
+        {{3.958e-06, 1.725e-06, 1.034e-06, 1.796e-06}, {4.618e-04, 2.518e-04, 2.760e-04, 2.514e-04}},
+        {{
+            {{2.204e-06, 1.560e-07, 3.370e-07}, {1.748e-04, 1.123e-05, 2.002e-05}},
+            {{1.854e-06, 1.854e-07, 2.580e-07}, {1.356e-04, 8.494e-06, 1.635e-05}},
+            {{1.000e-08, 1.991e-07, 1.736e-07}, {2.961e-04, 6.421e-06, 1.128e-05}},
+            {{1.000e-08, 3.837e-07, 3.489e-07}, {4.757e-04, 4.078e-06, 5.632e-06}},
+            {{3.239e-06, 8.168e-07, 7.303e-07}, {8.478e-04, 3.457e-06, 4.195e-06}},
+        }}
     },
     // ISO 800
     {
-        { 2.8e-04, 3.0e-04, 2.9e-04, 3.1e-04 },
-        {
-            7.5e-06, 4.9e-07, 9.8e-07, 2.6e-04, 4.6e-05, 7.8e-05,
-            1.0e-05, 5.8e-07, 8.4e-07, 7.6e-05, 1.8e-05, 3.2e-05,
-            8.3e-06, 6.2e-07, 6.5e-07, 3.0e-04, 9.1e-06, 1.6e-05,
-            6.3e-06, 1.1e-06, 1.0e-06, 7.8e-04, 5.1e-06, 7.6e-06,
-            3.9e-05, 2.9e-06, 2.8e-06, 1.8e-03, 1.9e-06, 5.1e-06,
-        },
+        {{2.363e-06, 1.214e-06, 4.945e-07, 1.225e-06}, {7.903e-04, 3.970e-04, 4.453e-04, 3.973e-04}},
+        {{
+            {{1.558e-06, 1.511e-07, 3.277e-07}, {2.689e-04, 1.924e-05, 3.380e-05}},
+            {{2.717e-06, 1.867e-07, 2.462e-07}, {1.225e-04, 1.315e-05, 2.493e-05}},
+            {{1.368e-06, 2.265e-07, 2.077e-07}, {2.392e-04, 7.270e-06, 1.317e-05}},
+            {{1.000e-08, 3.802e-07, 3.550e-07}, {4.512e-04, 4.344e-06, 6.233e-06}},
+            {{4.148e-06, 7.913e-07, 7.030e-07}, {8.511e-04, 3.671e-06, 4.395e-06}},
+        }}
     },
     // ISO 1600
     {
-        { 5.6e-04, 5.7e-04, 5.6e-04, 5.7e-04 },
-        {
-            7.9e-06, 8.4e-07, 2.0e-06, 4.7e-04, 8.6e-05, 1.5e-04,
-            1.0e-05, 7.0e-07, 1.2e-06, 1.0e-04, 3.3e-05, 5.9e-05,
-            8.2e-06, 6.6e-07, 7.3e-07, 3.1e-04, 1.3e-05, 2.4e-05,
-            6.0e-06, 1.1e-06, 1.0e-06, 8.1e-04, 6.3e-06, 9.7e-06,
-            4.1e-05, 2.8e-06, 2.7e-06, 1.9e-03, 2.8e-06, 6.2e-06,
-        },
+        {{9.809e-06, 2.366e-06, 2.335e-06, 2.392e-06}, {1.393e-03, 6.724e-04, 7.647e-04, 6.734e-04}},
+        {{
+            {{1.233e-06, 2.787e-07, 5.380e-07}, {4.597e-04, 3.461e-05, 6.461e-05}},
+            {{2.931e-06, 2.541e-07, 4.522e-07}, {1.410e-04, 2.271e-05, 4.236e-05}},
+            {{1.524e-06, 2.574e-07, 2.653e-07}, {2.417e-04, 1.049e-05, 1.967e-05}},
+            {{1.000e-08, 3.805e-07, 3.722e-07}, {4.583e-04, 5.347e-06, 7.898e-06}},
+            {{3.902e-06, 7.645e-07, 6.842e-07}, {8.740e-04, 4.197e-06, 4.936e-06}},
+        }}
     },
     // ISO 3200
     {
-        { 1.1e-03, 1.1e-03, 1.1e-03, 1.1e-03 },
-        {
-            9.6e-06, 2.2e-06, 5.3e-06, 9.4e-04, 1.7e-04, 3.0e-04,
-            9.5e-06, 1.1e-06, 2.2e-06, 2.0e-04, 6.6e-05, 1.2e-04,
-            8.0e-06, 8.2e-07, 1.1e-06, 3.2e-04, 2.2e-05, 4.1e-05,
-            5.7e-06, 1.1e-06, 1.1e-06, 8.0e-04, 8.9e-06, 1.4e-05,
-            3.9e-05, 2.9e-06, 2.8e-06, 1.8e-03, 2.9e-06, 6.4e-06,
-        },
+        {{3.768e-05, 5.565e-06, 8.192e-06, 5.303e-06}, {2.369e-03, 1.296e-03, 1.449e-03, 1.300e-03}},
+        {{
+            {{2.221e-06, 5.268e-07, 1.259e-06}, {5.725e-04, 4.954e-05, 9.645e-05}},
+            {{2.481e-06, 4.588e-07, 1.015e-06}, {1.830e-04, 3.584e-05, 6.827e-05}},
+            {{5.040e-07, 3.114e-07, 4.412e-07}, {2.801e-04, 1.765e-05, 3.258e-05}},
+            {{1.000e-08, 3.950e-07, 4.219e-07}, {4.762e-04, 7.721e-06, 1.174e-05}},
+            {{3.730e-06, 7.698e-07, 7.015e-07}, {8.663e-04, 4.620e-06, 5.787e-06}},
+        }}
     },
     // ISO 6400
     {
-        { 2.2e-03, 2.2e-03, 2.2e-03, 2.1e-03 },
-        {
-            1.3e-05, 5.1e-06, 1.2e-05, 1.0e-03, 2.5e-04, 4.4e-04,
-            8.5e-06, 2.4e-06, 5.5e-06, 3.3e-04, 1.2e-04, 2.1e-04,
-            4.8e-06, 1.2e-06, 2.1e-06, 4.5e-04, 4.4e-05, 7.9e-05,
-            4.0e-06, 1.2e-06, 1.5e-06, 8.4e-04, 1.6e-05, 2.5e-05,
-            3.3e-05, 2.9e-06, 3.1e-06, 1.9e-03, 5.2e-06, 9.6e-06,
-        },
+        {{1.039e-04, 2.017e-05, 2.782e-05, 1.939e-05}, {4.812e-03, 2.575e-03, 2.917e-03, 2.570e-03}},
+        {{
+            {{1.006e-05, 1.720e-06, 4.254e-06}, {1.023e-03, 9.434e-05, 1.818e-04}},
+            {{1.724e-06, 1.188e-06, 2.901e-06}, {3.120e-04, 6.891e-05, 1.319e-04}},
+            {{1.000e-08, 5.880e-07, 1.150e-06}, {3.495e-04, 3.142e-05, 5.841e-05}},
+            {{1.000e-08, 4.616e-07, 6.068e-07}, {5.282e-04, 1.238e-05, 1.995e-05}},
+            {{2.550e-06, 7.758e-07, 7.540e-07}, {8.911e-04, 6.384e-06, 8.372e-06}},
+        }}
     },
     // ISO 12500
     {
-        { 4.2e-03, 4.7e-03, 4.5e-03, 4.5e-03 },
-        {
-            4.1e-05, 1.9e-05, 3.9e-05, 1.8e-03, 4.6e-04, 8.4e-04,
-            1.6e-05, 7.6e-06, 1.6e-05, 4.7e-04, 2.2e-04, 4.1e-04,
-            1.1e-05, 2.9e-06, 5.1e-06, 3.5e-04, 7.6e-05, 1.5e-04,
-            5.0e-06, 1.7e-06, 2.3e-06, 8.7e-04, 2.4e-05, 4.4e-05,
-            4.2e-05, 2.8e-06, 3.1e-06, 2.1e-03, 9.2e-06, 1.5e-05,
-        },
+        {{2.195e-04, 5.161e-05, 7.401e-05, 5.177e-05}, {1.078e-02, 5.789e-03, 6.282e-03, 5.753e-03}},
+        {{
+            {{4.046e-05, 4.901e-06, 1.062e-05}, {1.699e-03, 1.817e-04, 3.807e-04}},
+            {{6.159e-06, 3.386e-06, 7.547e-06}, {4.451e-04, 1.341e-04, 2.709e-04}},
+            {{2.922e-06, 1.481e-06, 3.111e-06}, {2.998e-04, 5.573e-05, 1.086e-04}},
+            {{1.000e-08, 7.120e-07, 1.114e-06}, {4.866e-04, 1.934e-05, 3.600e-05}},
+            {{3.204e-06, 8.192e-07, 8.907e-07}, {9.186e-04, 8.184e-06, 1.244e-05}},
+        }}
     },
     // ISO 25000
     {
-        { 7.9e-03, 8.6e-03, 8.1e-03, 8.7e-03 },
-        {
-            1.1e-04, 5.1e-05, 1.0e-04, 3.6e-03, 9.1e-04, 2.1e-03,
-            2.7e-05, 1.8e-05, 4.1e-05, 9.2e-04, 4.5e-04, 8.7e-04,
-            1.4e-05, 5.9e-06, 1.3e-05, 4.9e-04, 1.6e-04, 3.1e-04,
-            3.6e-06, 2.3e-06, 4.4e-06, 9.7e-04, 4.9e-05, 9.1e-05,
-            4.7e-05, 2.5e-06, 3.5e-06, 2.4e-03, 1.9e-05, 2.4e-05,
-        },
+        {{3.535e-04, 1.000e-08, 1.848e-05, 1.000e-08}, {1.635e-02, 1.747e-02, 1.901e-02, 1.724e-02}},
+        {{
+            {{1.245e-04, 1.038e-05, 2.442e-05}, {2.697e-03, 3.841e-04, 9.292e-04}},
+            {{1.365e-05, 7.146e-06, 1.869e-05}, {8.140e-04, 2.908e-04, 6.195e-04}},
+            {{3.276e-06, 3.055e-06, 7.791e-06}, {4.234e-04, 1.187e-04, 2.411e-04}},
+            {{1.000e-08, 1.155e-06, 2.576e-06}, {5.546e-04, 3.762e-05, 7.448e-05}},
+            {{1.000e-08, 8.494e-07, 1.311e-06}, {1.089e-03, 1.374e-05, 2.215e-05}},
+        }}
     },
     // ISO 50000
     {
-        { 1.9e-02, 1.7e-02, 1.6e-02, 1.7e-02 },
-        {
-            1.7e-04, 1.1e-04, 1.4e-04, 9.5e-03, 2.6e-03, 9.4e-03,
-            5.4e-05, 3.8e-05, 1.0e-04, 1.9e-03, 1.1e-03, 2.3e-03,
-            1.8e-05, 1.1e-05, 3.0e-05, 8.4e-04, 4.0e-04, 7.8e-04,
-            2.6e-06, 3.5e-06, 9.7e-06, 1.1e-03, 1.2e-04, 2.2e-04,
-            4.0e-05, 2.3e-06, 6.5e-06, 2.6e-03, 3.9e-05, 4.0e-05,
-        },
-    }
+        {{3.935e-04, 8.987e-05, 1.992e-04, 9.729e-05}, {2.093e-02, 2.559e-02, 2.317e-02, 2.536e-02}},
+        {{
+            {{2.639e-04, 2.425e-05, 5.775e-05}, {5.571e-03, 9.186e-04, 2.664e-03}},
+            {{2.772e-05, 1.394e-05, 4.626e-05}, {1.708e-03, 6.921e-04, 1.482e-03}},
+            {{3.829e-06, 5.552e-06, 1.622e-05}, {7.120e-04, 2.864e-04, 6.102e-04}},
+            {{1.000e-08, 1.865e-06, 5.662e-06}, {6.533e-04, 8.928e-05, 1.719e-04}},
+            {{1.000e-08, 9.447e-07, 2.523e-06}, {1.270e-03, 2.686e-05, 4.426e-05}},
+        }}
+    },
 }};
 
 template <int levels>
-static std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIso(const std::array<NoiseModel, 10>& NLFData, int iso) {
+static NoiseModel nlfFromIso(const std::array<NoiseModel, 10>& NLFData, int iso) {
     iso = std::clamp(iso, 100, 50000);
     if (iso >= 100 && iso < 200) {
         float a = (iso - 100) / 100;
-        return std::pair(lerpRawNLF(NLFData[0].rawNlf, NLFData[1].rawNlf, a), lerpNLF<levels>(NLFData[0].pyramidNlf, NLFData[1].pyramidNlf, a));
+        return lerp<levels>(NLFData[0], NLFData[1], a);
     } else if (iso >= 200 && iso < 400) {
         float a = (iso - 200) / 200;
-        return std::pair(lerpRawNLF(NLFData[1].rawNlf, NLFData[2].rawNlf, a), lerpNLF<levels>(NLFData[1].pyramidNlf, NLFData[2].pyramidNlf, a));
+        return lerp<levels>(NLFData[1], NLFData[2], a);
     } else if (iso >= 400 && iso < 800) {
         float a = (iso - 400) / 400;
-        return std::pair(lerpRawNLF(NLFData[2].rawNlf, NLFData[3].rawNlf, a), lerpNLF<levels>(NLFData[2].pyramidNlf, NLFData[3].pyramidNlf, a));
+        return lerp<levels>(NLFData[2], NLFData[3], a);
     } else if (iso >= 800 && iso < 1600) {
         float a = (iso - 800) / 800;
-        return std::pair(lerpRawNLF(NLFData[3].rawNlf, NLFData[4].rawNlf, a), lerpNLF<levels>(NLFData[3].pyramidNlf, NLFData[4].pyramidNlf, a));
+        return lerp<levels>(NLFData[3], NLFData[4], a);
     } else if (iso >= 1600 && iso < 3200) {
         float a = (iso - 1600) / 1600;
-        return std::pair(lerpRawNLF(NLFData[4].rawNlf, NLFData[5].rawNlf, a), lerpNLF<levels>(NLFData[4].pyramidNlf, NLFData[5].pyramidNlf, a));
+        return lerp<levels>(NLFData[4], NLFData[5], a);
     } else if (iso >= 3200 && iso < 6400) {
         float a = (iso - 3200) / 3200;
-        return std::pair(lerpRawNLF(NLFData[5].rawNlf, NLFData[6].rawNlf, a), lerpNLF<levels>(NLFData[5].pyramidNlf, NLFData[6].pyramidNlf, a));
+        return lerp<levels>(NLFData[5], NLFData[6], a);
     } else if (iso >= 6400 && iso < 12500) {
         float a = (iso - 6100) / 6100;
-        return std::pair(lerpRawNLF(NLFData[6].rawNlf, NLFData[7].rawNlf, a), lerpNLF<levels>(NLFData[6].pyramidNlf, NLFData[7].pyramidNlf, a));
+        return lerp<levels>(NLFData[6], NLFData[7], a);
     } else if (iso >= 12500 && iso < 25000) {
         float a = (iso - 12500) / 12500;
-        return std::pair(lerpRawNLF(NLFData[7].rawNlf, NLFData[8].rawNlf, a), lerpNLF<levels>(NLFData[7].pyramidNlf, NLFData[8].pyramidNlf, a));
+        return lerp<levels>(NLFData[7], NLFData[8], a);
     } else /* if (iso >= 25000 && iso <= 50000) */ {
         float a = (iso - 25000) / 25000;
-        return std::pair(lerpRawNLF(NLFData[8].rawNlf, NLFData[9].rawNlf, a), lerpNLF<levels>(NLFData[8].pyramidNlf, NLFData[9].pyramidNlf, a));
+        return lerp<levels>(NLFData[8], NLFData[9], a);
     }
 }
 
@@ -223,7 +223,7 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateLeicaQ2(RawConverter* rawConvert
     gls::tiff_metadata dng_metadata, exif_metadata;
     const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
 
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, &gmb_position, /*rotate_180=*/ false);
+    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, /*&gmb_position*/ nullptr, /*rotate_180=*/ false);
 
     // See if the ISO value is present and override
     const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
@@ -235,17 +235,10 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateLeicaQ2(RawConverter* rawConvert
     demosaicParameters->noiseLevel = denoiseParameters.first;
     demosaicParameters->denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, &gmb_position, /*rotate_180=*/ false));
+    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
 }
 
 void calibrateLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    struct CalibrationEntry {
-        int iso;
-        const char* fileName;
-        gls::rectangle gmb_position;
-        bool rotated;
-    };
-
     std::array<CalibrationEntry, 10> calibration_files = {{
         { 100,   "L1010611.DNG", { 3440, 777, 1549, 1006 }, false },
         { 200,   "L1010614.DNG", { 3440, 777, 1549, 1006 }, false },
@@ -279,14 +272,8 @@ void calibrateLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& i
         noiseModel[i] = demosaicParameters.noiseModel;
     }
 
-    std::cout << "Calibration table for LeicaQ2:" << std::endl;
-    for (int i = 0; i < calibration_files.size(); i++) {
-        std::cout << "// ISO " << calibration_files[i].iso << std::endl;
-        std::cout << "{" << std::endl;
-        std::cout << "{ " << noiseModel[i].rawNlf << " }," << std::endl;
-        std::cout << "{\n" << noiseModel[i].pyramidNlf << "\n}," << std::endl;
-        std::cout << "}," << std::endl;
-    }
+    std::cout << "// LeicaQ2 Calibration table:" << std::endl;
+    dumpNoiseModel<10, 10>(calibration_files, noiseModel);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
@@ -316,10 +303,9 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConve
 
     const auto nlfParams = nlfFromIso<5>(LeicaQ2, iso);
     const auto denoiseParameters = LeicaQ2DenoiseParameters(iso);
-    demosaicParameters.noiseModel.rawNlf = nlfParams.first;
-    demosaicParameters.noiseModel.pyramidNlf = nlfParams.second;
+    demosaicParameters.noiseModel = nlfParams;
     demosaicParameters.noiseLevel = denoiseParameters.first;
     demosaicParameters.denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, nullptr /* &gmb_position */, /*rotate_180=*/ false));
+    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
 }

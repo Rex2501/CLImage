@@ -15,7 +15,10 @@
 
 #include "raw_converter.hpp"
 
+#include <iomanip>
+
 #include "gls_logging.h"
+#include "demosaic.hpp"
 
 static const char* TAG = "RAW Converter";
 
@@ -90,8 +93,7 @@ void SaveRawChannels(const gls::image<T>& rawImage, float maxVal, const std::str
 }
 
 gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                               DemosaicParameters* demosaicParameters,
-                                                               const gls::rectangle* gmb_position, bool rotate_180) {
+                                                               DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     auto clContext = _glsContext->clContext();
 
     LOG_INFO(TAG) << "Begin Demosaicing..." << std::endl;
@@ -117,12 +119,13 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern, demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
-    const auto rawNLF = computeRawNoiseStatistics(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
-
-    demosaicParameters->noiseModel.rawNlf = gls::Vector<4> { rawNLF[4], rawNLF[5], rawNLF[6], rawNLF[7] };
+    if (calibrateFromImage) {
+        demosaicParameters->noiseModel.rawNlf = BuildRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+    }
+    const auto& rawNLF = demosaicParameters->noiseModel.rawNlf;
 
     // TODO: Tune me!
-    const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf[1] + demosaicParameters->noiseModel.rawNlf[3]) / 2 > 1e-03;
+    const bool high_noise_image = (demosaicParameters->noiseModel.rawNlf.second[1] + demosaicParameters->noiseModel.rawNlf.second[3]) / 2 > 1e-03;
 
     if (high_noise_image) {
         allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
@@ -133,14 +136,14 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
         bayerToRawRGBA(_glsContext, *clScaledRawImage, rgbaRawImage.get(), demosaicParameters->bayerPattern);
 
-        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, demosaicParameters->noiseModel.rawNlf, denoisedRgbaRawImage.get());
+        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, demosaicParameters->noiseModel.rawNlf.second, denoisedRgbaRawImage.get());
 
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
-    gls::Vector<2> greenVariance = { (rawNLF[1] + rawNLF[3]) / 2, (rawNLF[5] + rawNLF[7]) / 2 };
-    gls::Vector<2> redVariance = { rawNLF[0], rawNLF[4] };
-    gls::Vector<2> blueVariance = { rawNLF[3], rawNLF[6] };
+    const gls::Vector<2> greenVariance = { (rawNLF.first[1] + rawNLF.first[3]) / 2, (rawNLF.second[1] + rawNLF.second[3]) / 2 };
+    const gls::Vector<2> redVariance = { rawNLF.first[0], rawNLF.second[0] };
+    const gls::Vector<2> blueVariance = { rawNLF.first[2], rawNLF.second[2] };
 
     // TODO: why divide by 4?
     interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, greenVariance);
@@ -160,7 +163,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 #endif
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
-                       redVariance, blueVariance, rotate_180);
+                       redVariance, blueVariance);
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());
@@ -170,7 +173,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // Convert linear image to YCbCr for denoising
     auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
 
-    std::cout << "cam_to_ycbcr: " << cam_to_ycbcr.span() << std::endl;
+    std::cout << "cam_to_ycbcr: " << std::setprecision(4) << std::scientific << cam_to_ycbcr.span() << std::endl;
 
     transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), cam_to_ycbcr);
 
@@ -178,18 +181,17 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     std::cout << "despeckleImage" << std::endl;
     const auto& np = noiseModel->pyramidNlf[0];
     despeckleImage(_glsContext, *clLinearRGBImageA,
-                   /*var_a=*/ { np[0], np[1], np[2] },
-                   /*var_b=*/ { np[3], np[4], np[5] },
+                   /*var_a=*/ np.first,
+                   /*var_b=*/ np.second,
                    /*desaturateShadows=*/ high_noise_image,  // TODO: this should be a denoise configuration parameter
                    clLinearRGBImageB.get());
 
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
         pyramidalDenoise->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
-                                  clLinearRGBImageB.get(),
-                                  demosaicParameters->rgb_cam, gmb_position, rotate_180,
-                                  &(noiseModel->pyramidNlf));
+                                  clLinearRGBImageB.get(), demosaicParameters->rgb_cam,
+                                  &(noiseModel->pyramidNlf), calibrateFromImage);
 
-    std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
+    // std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
         const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage = {
@@ -207,7 +209,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // High ISO noise texture replacement
     if (high_noise_image) {
         blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise,
-                       /*lumaVariance=*/ { np[0], np[3] },
+                       /*lumaVariance=*/ { np.first[0], np.second[0] },
                        clLinearRGBImageB.get());
         clDenoisedImage = clLinearRGBImageB.get();
     }

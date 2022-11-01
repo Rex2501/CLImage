@@ -23,8 +23,7 @@ PyramidalDenoise<5>::PyramidalDenoise(gls::OpenCLContext* glsContext, int width,
 template
 typename PyramidalDenoise<5>::imageType* PyramidalDenoise<5>::denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, 5>* denoiseParameters,
                                                                       imageType* image, const gls::Matrix<3, 3>& rgb_cam,
-                                                                      const gls::rectangle* gmb_position, bool rotate_180,
-                                                                      gls::Matrix<5, 6>* nlfParameters);
+                                                                      std::array<YCbCrNLF, 5>* nlfParameters, bool calibrateFromImage);
 
 struct BilateralDenoiser : ImageDenoiser {
     BilateralDenoiser(gls::OpenCLContext* glsContext, int width, int height) : ImageDenoiser(glsContext, width, height) { }
@@ -61,12 +60,10 @@ PyramidalDenoise<levels>::PyramidalDenoise(gls::OpenCLContext* glsContext, int w
     }
 }
 
-gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
-
-gls::Vector<6> nflMultiplier(const DenoiseParameters &denoiseParameters) {
+gls::Vector<3> nflMultiplier(const DenoiseParameters &denoiseParameters) {
     float luma_mul = denoiseParameters.luma * denoiseParameters.luma;
     float chroma_mul = denoiseParameters.chroma * denoiseParameters.chroma;
-    return { luma_mul, chroma_mul, chroma_mul, luma_mul, chroma_mul, chroma_mul };
+    return { luma_mul, chroma_mul, chroma_mul };
 }
 
 extern const gls::Matrix<3, 3> ycbcr_srgb;
@@ -75,11 +72,9 @@ template <size_t levels>
 typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
                                                                                 imageType* image, const gls::Matrix<3, 3>& rgb_cam,
-                                                                                const gls::rectangle* gmb_position, bool rotate_180,
-                                                                                gls::Matrix<levels, 6>* nlfParameters) {
-    const bool calibrate_nlf = true; // gmb_position != nullptr;
-
-    std::array<std::array<float, 6>, levels> calibrated_nlf;
+                                                                                std::array<YCbCrNLF, levels>* nlfParameters,
+                                                                                bool calibrateFromImage) {
+    std::array<YCbCrNLF, levels> calibrated_nlf;
 
     for (int i = 0; i < levels; i++) {
         if (i < levels - 1) {
@@ -102,17 +97,20 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
 #endif
         }
 
-        if (calibrate_nlf) {
-            (*nlfParameters)[i] = computeNoiseStatistics(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]));
+        if (calibrateFromImage) {
+            const auto nlf = BuildYCbCrNLF(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]));
+            (*nlfParameters)[i] = nlf;
         }
 
-        calibrated_nlf[i] = (*nlfParameters)[i] * nflMultiplier((*denoiseParameters)[i]);
+        const auto mult = nflMultiplier((*denoiseParameters)[i]);
+
+        calibrated_nlf[i] = { gls::Vector<3> { (*nlfParameters)[i].first } * mult, gls::Vector<3> { (*nlfParameters)[i].second } * mult };
     }
 
     // Denoise the bottom of the image pyramid
     const auto& np = calibrated_nlf[levels-1];
     denoiser[levels-1]->denoise(glsContext, *(imagePyramid[levels-2]),
-                                { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
+                                np.first, np.second,
                                 (*denoiseParameters)[levels-1].chromaBoost, (*denoiseParameters)[levels-1].gradientBoost, /*pyramidLevel=*/ levels-1,
                                 denoisedImagePyramid[levels-1].get());
 
@@ -122,232 +120,15 @@ typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(
         // Denoise current layer
         const auto& np = calibrated_nlf[i];
         denoiser[i]->denoise(glsContext, *denoiseInput,
-                             { np[0], np[1], np[2] }, { np[3], np[4], np[5] },
+                             np.first, np.second,
                              (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, /*pyramidLevel=*/ i,
                              denoisedImagePyramid[i].get());
 
         std::cout << "Reassembling layer " << i << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
         // Subtract noise from previous layer
         reassembleImage(glsContext, *(denoisedImagePyramid[i]), *(imagePyramid[i]), *(denoisedImagePyramid[i+1]),
-                        (*denoiseParameters)[i].sharpening, { np[0], np[3] }, denoisedImagePyramid[i].get());
+                        (*denoiseParameters)[i].sharpening, { np.first[0], np.second[0] }, denoisedImagePyramid[i].get());
     }
 
     return denoisedImagePyramid[0].get();
-}
-
-template <int N>
-bool inRange(const gls::DVector<N>& v, double minValue, double maxValue) {
-    for (auto& e : v) {
-        if (e < minValue || e > maxValue) {
-            return false;
-        }
-    }
-    return true;
-}
-
-gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
-    gls::cl_image_2d<gls::rgba_pixel_float> noiseStats(glsContext->clContext(), image.width, image.height);
-    applyKernel(glsContext, "noiseStatistics", image, &noiseStats);
-    const auto noiseStatsCpu = noiseStats.mapImage();
-
-    // Only consider pixels with variance lower than the expected noise value
-    double varianceMax = 0.001;
-
-    // Limit to pixels the more linear intensity zone of the sensor
-    const double maxValue = 0.5;
-    const double minValue = 0.001;
-
-    // Collect pixel statistics
-    double s_x = 0;
-    double s_xx = 0;
-    gls::DVector<3> s_y = gls::DVector<3>::zeros();
-    gls::DVector<3> s_xy = gls::DVector<3>::zeros();
-
-    double N = 0;
-    noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
-        double m = ns[0];
-        gls::DVector<3> v = {{ ns[1], ns[2], ns[3] }};
-
-        if (m >= minValue && m <= maxValue && inRange<3>(v, 0, varianceMax)) {
-            s_x += m;
-            s_y += v;
-            s_xx += m * m;
-            s_xy += m * v;
-            N++;
-        }
-    });
-
-    // Linear regression on pixel statistics to extract a linear noise model: nlf = A + B * Y
-    auto nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
-    auto nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
-
-    // Estimate regression mean square error
-    gls::DVector<3> err2 = gls::DVector<3>::zeros();
-    noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
-        double m = ns[0];
-        gls::DVector<3> v = {{ ns[1], ns[2], ns[3] }};
-
-        if (m >= minValue && m <= maxValue && inRange<3>(v, 0, varianceMax)) {
-            auto nlfP = nlfA + nlfB * m;
-            auto diff = nlfP - v;
-            err2 += diff * diff;
-        }
-    });
-    err2 /= N;
-
-//    std::cout << "1) Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(err2)
-//              << " on " << std::setprecision(1) << std::fixed << 100 * N / (image.width * image.height) << "% pixels"<< std::endl;
-
-    // Redo the statistics collection limiting the sample to pixels that fit well the linear model
-    s_x = 0;
-    s_xx = 0;
-    s_y = gls::DVector<3>::zeros();
-    s_xy = gls::DVector<3>::zeros();
-    N = 0;
-    gls::DVector<3> newErr2 = gls::DVector<3>::zeros();
-    int discarded = 0;
-    noiseStatsCpu.apply([&](const gls::rgba_pixel_float& ns, int x, int y) {
-        double m = ns[0];
-        gls::DVector<3> v = {{ ns[1], ns[2], ns[3] }};
-
-        if (m >= minValue && m <= maxValue && inRange<3>(v, 0, varianceMax)) {
-            auto nlfP = nlfA + nlfB * m;
-            auto diff = abs(nlfP - v);
-            auto diffSquare = diff * diff;
-
-            if (all(diffSquare <= 0.5 * err2)) {
-                s_x += m;
-                s_y += v;
-                s_xx += m * m;
-                s_xy += m * v;
-                N++;
-                newErr2 += diffSquare;
-            } else {
-                discarded++;
-            }
-        }
-    });
-    newErr2 /= N;
-
-    // Estimate the new regression parameters
-    nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
-    nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
-
-    assert(all(newErr2 < err2));
-
-    std::cout << "Pyramid NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(newErr2)
-              << " on " << std::setprecision(1) << std::fixed << 100 * N / (image.width * image.height) << "% pixels" << std::endl;
-
-    noiseStats.unmapImage(noiseStatsCpu);
-
-    return {
-        (float) nlfA[0], (float) nlfA[1], (float) nlfA[2], // A values
-        (float) nlfB[0], (float) nlfB[1], (float) nlfB[2]  // B values
-    };
-}
-
-gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern) {
-    gls::cl_image_2d<gls::rgba_pixel_float> meanImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
-    gls::cl_image_2d<gls::rgba_pixel_float> varImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
-
-    rawNoiseStatistics(glsContext, rawImage, bayerPattern, &meanImage, &varImage);
-
-    const auto meanImageCpu = meanImage.mapImage();
-    const auto varImageCpu = varImage.mapImage();
-
-    // Only consider pixels with variance lower than the expected noise value
-    double varianceMax = 0.001;
-
-    // Limit to pixels the more linear intensity zone of the sensor
-    const double maxValue = 0.5;
-    const double minValue = 0.001;
-
-    // Collect pixel statistics
-    gls::DVector<4> s_x = gls::DVector<4>::zeros();
-    gls::DVector<4> s_y = gls::DVector<4>::zeros();
-    gls::DVector<4> s_xx = gls::DVector<4>::zeros();
-    gls::DVector<4> s_xy = gls::DVector<4>::zeros();
-
-    double N = 0;
-    meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
-        const gls::rgba_pixel_float& vv = varImageCpu[y][x];
-        gls::DVector<4> m = { mm[0], mm[1], mm[2], mm[3] };
-        gls::DVector<4> v = { vv[0], vv[1], vv[2], vv[3] };
-
-        if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
-            s_x += m;
-            s_y += v;
-            s_xx += m * m;
-            s_xy += m * v;
-            N++;
-        }
-    });
-
-    // Linear regression on pixel statistics to extract a linear noise model: nlf = A + B * Y
-    auto nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
-    auto nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
-
-    // Estimate regression mean square error
-    gls::DVector<4> err2 = gls::DVector<4>::zeros();
-    meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
-        const gls::rgba_pixel_float& vv = varImageCpu[y][x];
-        gls::DVector<4> m = { mm[0], mm[1], mm[2], mm[3] };
-        gls::DVector<4> v = { vv[0], vv[1], vv[2], vv[3] };
-
-        if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
-            auto nlfP = nlfA + nlfB * m;
-            auto diff = nlfP - v;
-            err2 += diff * diff;
-        }
-    });
-    err2 /= N;
-
-//    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(err2)
-//              << " on " << std::setprecision(1) << std::fixed << 100 * N / (rawImage.width * rawImage.height) << "% pixels"<< std::endl;
-
-    // Redo the statistics collection limiting the sample to pixels that fit well the linear model
-    s_x = gls::DVector<4>::zeros();
-    s_y = gls::DVector<4>::zeros();
-    s_xx = gls::DVector<4>::zeros();
-    s_xy = gls::DVector<4>::zeros();
-    N = 0;
-    gls::DVector<4> newErr2 = gls::DVector<4>::zeros();
-    meanImageCpu.apply([&](const gls::rgba_pixel_float& mm, int x, int y) {
-        const gls::rgba_pixel_float& vv = varImageCpu[y][x];
-        gls::DVector<4> m = {{ mm[0], mm[1], mm[2], mm[3] }};
-        gls::DVector<4> v = {{ vv[0], vv[1], vv[2], vv[3] }};
-
-        if (inRange<4>(m, minValue, maxValue) && inRange<4>(v, 0, varianceMax)) {
-            const auto nlfP = nlfA + nlfB * m;
-            const auto diff = abs(nlfP - v);
-            const auto diffSquare = diff * diff;
-
-            if (all(diffSquare <= 0.5 * err2)) {
-                s_x += m;
-                s_y += v;
-                s_xx += m * m;
-                s_xy += m * v;
-                N++;
-                newErr2 += diffSquare;
-            }
-        }
-    });
-    newErr2 /= N;
-
-    // Estimate the new regression parameters
-    nlfB = max((N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x), 1e-8);
-    nlfA = max((s_y - nlfB * s_x) / N, 1e-8);
-
-    assert(all(newErr2 < err2));
-
-    std::cout << "RAW NLF A: " << std::setprecision(4) << std::scientific << nlfA << ", B: " << nlfB << ", MSE: " << sqrt(newErr2)
-              << " on " << std::setprecision(1) << std::fixed << 100 * N / (rawImage.width * rawImage.height) << "% pixels"<< std::endl;
-
-    meanImage.unmapImage(meanImageCpu);
-    varImage.unmapImage(varImageCpu);
-
-    return {
-        (float) nlfA[0], (float) nlfA[1], (float) nlfA[2], (float) nlfA[3], // A values
-        (float) nlfB[0], (float) nlfB[1], (float) nlfB[2], (float) nlfB[3]  // B values
-    };
 }

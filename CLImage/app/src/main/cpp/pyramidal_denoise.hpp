@@ -42,15 +42,8 @@ struct PyramidalDenoise {
 
     imageType* denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
                        imageType* image, const gls::Matrix<3, 3>& rgb_cam,
-                       const gls::rectangle* gmb_position, bool rotate_180,
-                       gls::Matrix<levels, 6>* nlfParameters);
+                       std::array<YCbCrNLF, levels>* nlfParameters,
+                       bool calibrateFromImage = false);
 };
-
-gls::Vector<6> computeNoiseStatistics(gls::OpenCLContext* glsContext,
-                                      const gls::cl_image_2d<gls::rgba_pixel_float>& image);
-
-gls::Vector<8> computeRawNoiseStatistics(gls::OpenCLContext* glsContext,
-                                         const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
-                                         BayerPattern bayerPattern);
 
 #endif /* pyramidal_denoise_h */

@@ -22,146 +22,146 @@
 static const std::array<NoiseModel, 10> CanonEOSRP = {{
     // ISO 100
     {
-        { 2.3e-05, 3.2e-05, 2.9e-05, 3.1e-05 },
-        {
-            1.1e-05, 3.4e-07, 5.1e-07, 6.7e-05, 5.7e-06, 8.6e-06,
-            8.7e-06, 3.3e-07, 3.7e-07, 2.1e-04, 4.3e-06, 5.9e-06,
-            7.1e-06, 4.6e-07, 4.5e-07, 4.7e-04, 3.1e-06, 3.4e-06,
-            1.5e-05, 9.7e-07, 1.0e-06, 8.7e-04, 1.7e-06, 9.4e-07,
-            4.5e-05, 2.2e-06, 2.7e-06, 2.6e-03, 8.5e-06, 1.2e-05,
-        },
+        {{3.283e-06, 2.362e-06, 1.682e-06, 2.393e-06}, {1.801e-04, 1.322e-04, 1.387e-04, 1.320e-04}},
+        {{
+            {{2.797e-06, 8.173e-08, 1.421e-07}, {1.181e-04, 3.569e-06, 4.932e-06}},
+            {{1.157e-06, 1.034e-07, 1.215e-07}, {1.907e-04, 3.476e-06, 4.630e-06}},
+            {{1.000e-08, 1.873e-07, 1.606e-07}, {3.599e-04, 2.678e-06, 3.155e-06}},
+            {{1.000e-08, 3.464e-07, 3.457e-07}, {5.476e-04, 1.548e-06, 1.536e-06}},
+            {{8.617e-06, 7.370e-07, 6.917e-07}, {1.045e-03, 2.143e-06, 1.893e-06}},
+        }}
     },
     // ISO 200
     {
-        { 3.7e-05, 4.8e-05, 4.5e-05, 4.6e-05 },
-        {
-            1.1e-05, 3.5e-07, 5.5e-07, 8.3e-05, 8.7e-06, 1.4e-05,
-            8.6e-06, 3.3e-07, 3.9e-07, 2.1e-04, 5.3e-06, 7.9e-06,
-            7.0e-06, 4.5e-07, 4.6e-07, 4.7e-04, 3.5e-06, 4.1e-06,
-            1.5e-05, 9.7e-07, 1.0e-06, 8.7e-04, 1.9e-06, 1.3e-06,
-            4.6e-05, 2.2e-06, 2.8e-06, 2.6e-03, 8.4e-06, 1.2e-05,
-        },
+        {{3.408e-06, 2.233e-06, 1.704e-06, 2.264e-06}, {2.221e-04, 1.514e-04, 1.639e-04, 1.515e-04}},
+        {{
+            {{2.614e-06, 8.666e-08, 1.578e-07}, {1.339e-04, 4.790e-06, 6.940e-06}},
+            {{9.126e-07, 1.081e-07, 1.281e-07}, {1.980e-04, 4.165e-06, 5.933e-06}},
+            {{1.000e-08, 1.836e-07, 1.611e-07}, {3.648e-04, 2.921e-06, 3.573e-06}},
+            {{1.000e-08, 3.435e-07, 3.404e-07}, {5.495e-04, 1.690e-06, 1.700e-06}},
+            {{9.005e-06, 7.405e-07, 6.990e-07}, {1.037e-03, 2.136e-06, 1.811e-06}},
+        }}
     },
     // ISO 400
     {
-        { 6.0e-05, 7.2e-05, 7.1e-05, 7.1e-05 },
-        {
-            0.0e+00, 2.1e-07, 3.7e-07, 4.8e-04, 2.1e-05, 3.3e-05,
-            0.0e+00, 1.5e-07, 2.2e-07, 7.0e-04, 1.4e-05, 1.9e-05,
-            0.0e+00, 3.4e-07, 3.8e-07, 9.8e-04, 8.0e-06, 8.5e-06,
-            0.0e+00, 1.0e-06, 1.0e-06, 1.3e-03, 2.7e-06, 2.6e-06,
-            5.4e-05, 2.6e-06, 3.4e-06, 2.2e-03, 5.7e-06, 9.3e-06,
-        },
+        {{1.000e-08, 1.000e-08, 1.000e-08, 1.000e-08}, {4.549e-04, 3.330e-04, 3.213e-04, 3.352e-04}},
+        {{
+            {{1.000e-08, 4.149e-08, 1.216e-07}, {3.622e-04, 9.477e-06, 1.389e-05}},
+            {{1.000e-08, 1.866e-08, 5.607e-08}, {4.826e-04, 8.705e-06, 1.160e-05}},
+            {{1.000e-08, 9.914e-08, 9.166e-08}, {7.298e-04, 6.135e-06, 7.029e-06}},
+            {{1.000e-08, 2.868e-07, 2.795e-07}, {9.604e-04, 4.103e-06, 4.177e-06}},
+            {{1.000e-08, 7.009e-07, 6.993e-07}, {1.379e-03, 5.942e-06, 4.644e-06}},
+        }}
     },
     // ISO 800
     {
-        { 1.1e-04, 1.2e-04, 1.2e-04, 1.2e-04 },
-        {
-            0.0e+00, 3.1e-07, 4.9e-07, 5.3e-04, 3.2e-05, 5.5e-05,
-            0.0e+00, 1.8e-07, 2.7e-07, 7.1e-04, 1.8e-05, 2.7e-05,
-            0.0e+00, 3.5e-07, 4.0e-07, 9.9e-04, 9.4e-06, 1.1e-05,
-            0.0e+00, 9.9e-07, 1.0e-06, 1.3e-03, 3.1e-06, 3.2e-06,
-            5.4e-05, 2.6e-06, 3.4e-06, 2.2e-03, 5.8e-06, 9.3e-06,
-        },
+        {{7.480e-08, 1.000e-08, 1.000e-08, 1.000e-08}, {6.153e-04, 3.901e-04, 4.159e-04, 3.915e-04}},
+        {{
+            {{1.000e-08, 8.893e-08, 1.971e-07}, {3.998e-04, 1.385e-05, 2.167e-05}},
+            {{1.000e-08, 4.207e-08, 8.742e-08}, {4.867e-04, 1.141e-05, 1.667e-05}},
+            {{1.000e-08, 1.064e-07, 1.041e-07}, {7.281e-04, 7.139e-06, 8.782e-06}},
+            {{1.000e-08, 2.803e-07, 2.783e-07}, {9.659e-04, 4.423e-06, 4.676e-06}},
+            {{1.000e-08, 7.179e-07, 7.086e-07}, {1.368e-03, 5.582e-06, 4.605e-06}},
+        }}
     },
     // ISO 1600
     {
-        { 2.2e-04, 2.3e-04, 2.3e-04, 2.3e-04 },
-        {
-            0.0e+00, 5.7e-07, 9.0e-07, 6.3e-04, 5.5e-05, 9.8e-05,
-            0.0e+00, 2.7e-07, 4.1e-07, 7.2e-04, 2.7e-05, 4.5e-05,
-            0.0e+00, 3.7e-07, 4.3e-07, 1.0e-03, 1.2e-05, 1.6e-05,
-            0.0e+00, 1.0e-06, 1.1e-06, 1.3e-03, 4.0e-06, 4.8e-06,
-            5.5e-05, 2.6e-06, 3.3e-06, 2.2e-03, 6.0e-06, 1.0e-05,
-        },
+        {{3.133e-06, 1.000e-08, 2.072e-07, 1.000e-08}, {9.422e-04, 5.147e-04, 6.210e-04, 5.156e-04}},
+        {{
+            {{1.000e-08, 2.104e-07, 4.288e-07}, {4.759e-04, 2.232e-05, 3.622e-05}},
+            {{1.000e-08, 1.039e-07, 1.911e-07}, {5.004e-04, 1.676e-05, 2.671e-05}},
+            {{1.000e-08, 1.277e-07, 1.326e-07}, {7.314e-04, 9.046e-06, 1.255e-05}},
+            {{1.000e-08, 2.745e-07, 2.882e-07}, {9.690e-04, 5.119e-06, 5.683e-06}},
+            {{1.000e-08, 7.131e-07, 7.046e-07}, {1.377e-03, 5.757e-06, 4.886e-06}},
+        }}
     },
     // ISO 3200
     {
-        { 4.0e-04, 4.2e-04, 4.4e-04, 4.3e-04 },
-        {
-            2.2e-06, 1.3e-06, 2.1e-06, 8.1e-04, 1.0e-04, 1.8e-04,
-            0.0e+00, 5.1e-07, 8.3e-07, 7.6e-04, 4.5e-05, 7.9e-05,
-            0.0e+00, 4.3e-07, 5.5e-07, 1.0e-03, 1.8e-05, 2.7e-05,
-            0.0e+00, 1.0e-06, 1.1e-06, 1.3e-03, 5.5e-06, 7.5e-06,
-            5.4e-05, 2.6e-06, 3.4e-06, 2.2e-03, 6.5e-06, 1.1e-05,
-        },
+        {{1.209e-05, 3.372e-07, 3.669e-06, 1.815e-07}, {1.565e-03, 7.549e-04, 1.024e-03, 7.612e-04}},
+        {{
+            {{1.000e-08, 4.739e-07, 8.660e-07}, {6.341e-04, 3.939e-05, 6.706e-05}},
+            {{1.000e-08, 2.668e-07, 4.759e-07}, {5.198e-04, 2.718e-05, 4.591e-05}},
+            {{1.000e-08, 1.683e-07, 2.208e-07}, {7.371e-04, 1.319e-05, 1.959e-05}},
+            {{1.000e-08, 2.868e-07, 3.072e-07}, {9.702e-04, 6.231e-06, 7.865e-06}},
+            {{1.000e-08, 7.077e-07, 6.985e-07}, {1.387e-03, 6.145e-06, 5.754e-06}},
+        }}
     },
     // ISO 6400
     {
-        { 7.4e-04, 7.1e-04, 7.1e-04, 7.5e-04 },
-        {
-            1.7e-05, 3.7e-06, 7.2e-06, 9.4e-04, 1.7e-04, 3.1e-04,
-            1.3e-05, 1.4e-06, 2.7e-06, 2.7e-04, 7.0e-05, 1.3e-04,
-            8.6e-06, 7.7e-07, 1.0e-06, 4.8e-04, 2.3e-05, 4.2e-05,
-            1.5e-05, 1.0e-06, 1.2e-06, 8.9e-04, 8.1e-06, 1.2e-05,
-            4.2e-05, 2.2e-06, 2.8e-06, 2.7e-03, 1.1e-05, 1.6e-05,
-        },
+        {{5.152e-05, 8.319e-06, 2.006e-05, 8.037e-06}, {2.196e-03, 1.078e-03, 1.533e-03, 1.086e-03}},
+        {{
+            {{4.366e-06, 8.977e-07, 1.839e-06}, {5.676e-04, 5.114e-05, 9.078e-05}},
+            {{2.133e-06, 6.415e-07, 1.318e-06}, {2.602e-04, 3.794e-05, 6.629e-05}},
+            {{1.000e-08, 3.474e-07, 5.311e-07}, {3.740e-04, 1.807e-05, 3.008e-05}},
+            {{1.000e-08, 3.609e-07, 4.407e-07}, {5.571e-04, 6.630e-06, 9.487e-06}},
+            {{8.765e-06, 7.391e-07, 7.180e-07}, {1.056e-03, 3.471e-06, 4.043e-06}},
+        }}
     },
     // ISO 12800
     {
-        { 1.3e-03, 1.4e-03, 1.2e-03, 1.4e-03 },
-        {
-            3.4e-05, 1.1e-05, 1.9e-05, 1.7e-03, 3.0e-04, 5.9e-04,
-            1.5e-05, 3.7e-06, 6.4e-06, 4.5e-04, 1.4e-04, 2.6e-04,
-            9.6e-06, 1.4e-06, 1.9e-06, 5.1e-04, 4.7e-05, 8.7e-05,
-            1.6e-05, 1.2e-06, 1.4e-06, 8.9e-04, 1.6e-05, 2.4e-05,
-            4.2e-05, 2.2e-06, 2.9e-06, 2.7e-03, 1.4e-05, 1.9e-05,
-        },
+        {{1.106e-04, 1.855e-05, 4.755e-05, 1.766e-05}, {4.417e-03, 2.119e-03, 3.084e-03, 2.144e-03}},
+        {{
+            {{1.267e-05, 2.398e-06, 4.421e-06}, {9.705e-04, 9.682e-05, 1.814e-04}},
+            {{2.871e-06, 1.555e-06, 2.965e-06}, {3.677e-04, 7.571e-05, 1.375e-04}},
+            {{1.000e-08, 6.957e-07, 1.214e-06}, {3.980e-04, 3.438e-05, 5.864e-05}},
+            {{1.000e-08, 4.379e-07, 6.060e-07}, {5.616e-04, 1.239e-05, 1.873e-05}},
+            {{9.579e-06, 7.653e-07, 7.667e-07}, {1.051e-03, 4.840e-06, 6.471e-06}},
+        }}
     },
     // ISO 25600
     {
-        { 2.0e-03, 2.5e-03, 1.8e-03, 2.6e-03 },
-        {
-            9.1e-05, 3.6e-05, 5.4e-05, 3.2e-03, 5.1e-04, 1.3e-03,
-            2.4e-05, 1.2e-05, 1.9e-05, 8.4e-04, 2.7e-04, 5.4e-04,
-            1.2e-05, 3.6e-06, 5.2e-06, 5.9e-04, 9.7e-05, 1.9e-04,
-            1.6e-05, 1.7e-06, 2.2e-06, 9.2e-04, 3.0e-05, 5.4e-05,
-            4.1e-05, 2.3e-06, 3.2e-06, 2.7e-03, 1.8e-05, 2.5e-05,
-        },
+        {{2.155e-04, 5.368e-05, 1.108e-04, 5.176e-05}, {9.895e-03, 4.630e-03, 6.654e-03, 4.675e-03}},
+        {{
+            {{4.887e-05, 7.306e-06, 1.215e-05}, {1.586e-03, 1.779e-04, 3.727e-04}},
+            {{7.466e-06, 4.920e-06, 8.293e-06}, {5.855e-04, 1.533e-04, 2.964e-04}},
+            {{9.727e-07, 1.985e-06, 3.239e-06}, {4.523e-04, 7.176e-05, 1.293e-04}},
+            {{1.000e-08, 8.197e-07, 1.179e-06}, {5.850e-04, 2.396e-05, 4.089e-05}},
+            {{9.214e-06, 8.467e-07, 9.109e-07}, {1.050e-03, 8.134e-06, 1.333e-05}},
+        }}
     },
     // ISO 40000
     {
-        { 2.8e-03, 3.7e-03, 2.6e-03, 3.9e-03 },
-        {
-            1.5e-04, 6.5e-05, 8.8e-05, 5.4e-03, 8.3e-04, 2.5e-03,
-            4.0e-05, 2.3e-05, 3.8e-05, 1.2e-03, 4.2e-04, 8.7e-04,
-            1.8e-05, 6.5e-06, 1.0e-05, 6.3e-04, 1.7e-04, 3.2e-04,
-            1.6e-05, 2.3e-06, 3.7e-06, 9.7e-04, 5.4e-05, 9.2e-05,
-            3.7e-05, 2.3e-06, 3.3e-06, 2.9e-03, 2.7e-05, 3.4e-05,
-        },
+        {{2.173e-04, 4.227e-05, 8.064e-05, 4.117e-05}, {1.715e-02, 9.502e-03, 1.386e-02, 9.458e-03}},
+        {{
+            {{1.121e-04, 1.376e-05, 2.255e-05}, {1.934e-03, 2.518e-04, 5.797e-04}},
+            {{1.580e-05, 9.002e-06, 1.615e-05}, {8.018e-04, 2.455e-04, 4.796e-04}},
+            {{4.098e-06, 3.609e-06, 6.212e-06}, {4.919e-04, 1.206e-04, 2.247e-04}},
+            {{8.729e-07, 1.275e-06, 2.197e-06}, {5.740e-04, 4.054e-05, 6.821e-05}},
+            {{8.896e-06, 9.605e-07, 1.126e-06}, {1.084e-03, 1.283e-05, 2.189e-05}},
+        }}
     },
 }};
 
 template <int levels>
-static std::pair<gls::Vector<4>, gls::Matrix<levels, 6>> nlfFromIso(const std::array<NoiseModel, 10>& NLFData, int iso) {
+static NoiseModel nlfFromIso(const std::array<NoiseModel, 10>& NLFData, int iso) {
     iso = std::clamp(iso, 100, 50000);
     if (iso >= 100 && iso < 200) {
         float a = (iso - 100) / 100;
-        return std::pair(lerpRawNLF(NLFData[0].rawNlf, NLFData[1].rawNlf, a), lerpNLF<levels>(NLFData[0].pyramidNlf, NLFData[1].pyramidNlf, a));
+        return lerp<levels>(NLFData[0], NLFData[1], a);
     } else if (iso >= 200 && iso < 400) {
         float a = (iso - 200) / 200;
-        return std::pair(lerpRawNLF(NLFData[1].rawNlf, NLFData[2].rawNlf, a), lerpNLF<levels>(NLFData[1].pyramidNlf, NLFData[2].pyramidNlf, a));
+        return lerp<levels>(NLFData[1], NLFData[2], a);
     } else if (iso >= 400 && iso < 800) {
         float a = (iso - 400) / 400;
-        return std::pair(lerpRawNLF(NLFData[2].rawNlf, NLFData[3].rawNlf, a), lerpNLF<levels>(NLFData[2].pyramidNlf, NLFData[3].pyramidNlf, a));
+        return lerp<levels>(NLFData[2], NLFData[3], a);
     } else if (iso >= 800 && iso < 1600) {
         float a = (iso - 800) / 800;
-        return std::pair(lerpRawNLF(NLFData[3].rawNlf, NLFData[4].rawNlf, a), lerpNLF<levels>(NLFData[3].pyramidNlf, NLFData[4].pyramidNlf, a));
+        return lerp<levels>(NLFData[3], NLFData[4], a);
     } else if (iso >= 1600 && iso < 3200) {
         float a = (iso - 1600) / 1600;
-        return std::pair(lerpRawNLF(NLFData[4].rawNlf, NLFData[5].rawNlf, a), lerpNLF<levels>(NLFData[4].pyramidNlf, NLFData[5].pyramidNlf, a));
+        return lerp<levels>(NLFData[4], NLFData[5], a);
     } else if (iso >= 3200 && iso < 6400) {
         float a = (iso - 3200) / 3200;
-        return std::pair(lerpRawNLF(NLFData[5].rawNlf, NLFData[6].rawNlf, a), lerpNLF<levels>(NLFData[5].pyramidNlf, NLFData[6].pyramidNlf, a));
+        return lerp<levels>(NLFData[5], NLFData[6], a);
     } else if (iso >= 6400 && iso < 12800) {
         float a = (iso - 6400) / 6400;
-        return std::pair(lerpRawNLF(NLFData[6].rawNlf, NLFData[7].rawNlf, a), lerpNLF<levels>(NLFData[6].pyramidNlf, NLFData[7].pyramidNlf, a));
+        return lerp<levels>(NLFData[6], NLFData[7], a);
     } else if (iso >= 12800 && iso < 25600) {
         float a = (iso - 12800) / 12800;
-        return std::pair(lerpRawNLF(NLFData[7].rawNlf, NLFData[8].rawNlf, a), lerpNLF<levels>(NLFData[7].pyramidNlf, NLFData[8].pyramidNlf, a));
+        return lerp<levels>(NLFData[7], NLFData[8], a);
     } else /* if (iso >= 25600 && iso <= 40000) */ {
         float a = (iso - 25600) / 15400;
-        return std::pair(lerpRawNLF(NLFData[8].rawNlf, NLFData[9].rawNlf, a), lerpNLF<levels>(NLFData[8].pyramidNlf, NLFData[9].pyramidNlf, a));
+        return lerp<levels>(NLFData[8], NLFData[9], a);
     }
 }
 
@@ -227,7 +227,6 @@ std::pair<float, std::array<DenoiseParameters, 5>> CanonEOSRPDenoiseParameters(i
     return { nlf_alpha, denoiseParameters };
 }
 
-
 gls::image<gls::rgb_pixel>::unique_ptr calibrateCanonEOSRP(RawConverter* rawConverter,
                                                            const std::filesystem::path& input_path,
                                                            DemosaicParameters* demosaicParameters,
@@ -235,7 +234,7 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateCanonEOSRP(RawConverter* rawConv
     gls::tiff_metadata dng_metadata, exif_metadata;
     const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
 
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, &gmb_position, /*rotate_180=*/ false);
+    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, /*&gmb_position*/ nullptr, /*rotate_180=*/ false);
 
     // See if the ISO value is present and override
     const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
@@ -247,17 +246,10 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateCanonEOSRP(RawConverter* rawConv
     demosaicParameters->noiseLevel = denoiseParameters.first;
     demosaicParameters->denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, &gmb_position, /*rotate_180=*/ false));
+    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
 }
 
 void calibrateCanonEOSRP(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    struct CalibrationEntry {
-        int iso;
-        const char* fileName;
-        gls::rectangle gmb_position;
-        bool rotated;
-    };
-
     std::array<CalibrationEntry, 10> calibration_files = {{
         { 100,   "IMG_1104_ISO_100.dng",   { 2541, 534, 1163, 758 }, false },
         { 200,   "IMG_1107_ISO_200.dng",   { 2541, 534, 1163, 758 }, false },
@@ -289,14 +281,8 @@ void calibrateCanonEOSRP(RawConverter* rawConverter, const std::filesystem::path
         noiseModel[i] = demosaicParameters.noiseModel;
     }
 
-    std::cout << "Calibration table for CanonEOSRP:" << std::endl;
-    for (int i = 0; i < calibration_files.size(); i++) {
-        std::cout << "// ISO " << calibration_files[i].iso << std::endl;
-        std::cout << "{" << std::endl;
-        std::cout << "{ " << noiseModel[i].rawNlf << " }," << std::endl;
-        std::cout << "{\n" << noiseModel[i].pyramidNlf << "\n}," << std::endl;
-        std::cout << "}," << std::endl;
-    }
+    std::cout << "CanonEOSRP Calibration table:" << std::endl;
+    dumpNoiseModel<10, 10>(calibration_files, noiseModel);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicCanonEOSRPDNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
@@ -317,10 +303,9 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicCanonEOSRPDNG(RawConverter* rawCo
 
     const auto nlfParams = nlfFromIso<5>(CanonEOSRP, iso);
     const auto denoiseParameters = CanonEOSRPDenoiseParameters(iso);
-    demosaicParameters.noiseModel.rawNlf = nlfParams.first;
-    demosaicParameters.noiseModel.pyramidNlf = nlfParams.second;
+    demosaicParameters.noiseModel = nlfParams;
     demosaicParameters.noiseLevel = denoiseParameters.first;
     demosaicParameters.denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, nullptr /* &gmb_position */, /*rotate_180=*/ false));
+    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
 }

@@ -16,6 +16,8 @@
 #ifndef demosaic_hpp
 #define demosaic_hpp
 
+#include <iomanip>
+
 #include "gls_image.hpp"
 #include "gls_tiff_metadata.hpp"
 #include "gls_linalg.hpp"
@@ -46,10 +48,40 @@ typedef struct RGBConversionParameters {
     int localToneMapping = 0;
 } RGBConversionParameters;
 
+typedef std::pair<gls::Vector<4>, gls::Vector<4>> RawNLF;
+
+typedef std::pair<gls::Vector<3>, gls::Vector<3>> YCbCrNLF;
+
 typedef struct NoiseModel {
-    gls::Vector<4> rawNlf;          // NLF for raw data
-    gls::Matrix<5, 6> pyramidNlf;   // NLF for interpolated data on a 5-level pyramid
+    RawNLF rawNlf;          // NLF for raw data
+    std::array<YCbCrNLF, 5> pyramidNlf;   // NLF for interpolated data on a 5-level pyramid
 } NoiseModel;
+
+struct CalibrationEntry {
+    int iso;
+    const char* fileName;
+    gls::rectangle gmb_position;
+    bool rotated;
+};
+
+template <int N1, int N2>
+void dumpNoiseModel(const std::array<CalibrationEntry, N1>& calibration_files, const std::array<NoiseModel, N2>& noiseModel) {
+    std::cout << "{{" << std::scientific << std::setprecision(3) << std::endl;
+    for (int i = 0; i < calibration_files.size(); i++) {
+        std::cout << "\t// ISO " << calibration_files[i].iso << std::endl;
+        std::cout << "\t{" << std::endl;
+        std::cout << "\t\t{{" << noiseModel[i].rawNlf.first << "}, {"
+                          << noiseModel[i].rawNlf.second << "}}," << std::endl;
+        std::cout << "\t\t{{" << std::endl;
+        for (int j = 0; j < noiseModel[i].pyramidNlf.size(); j++) {
+            std::cout << "\t\t\t{{" << noiseModel[i].pyramidNlf[j].first << "}, {"
+                      << noiseModel[i].pyramidNlf[j].second << "}}," << std::endl;
+        }
+        std::cout << "\t\t}}" << std::endl;
+        std::cout << "\t}," << std::endl;
+    }
+    std::cout << "}};" << std::endl;
+}
 
 typedef struct LTMParameters {
     float eps = 0.01;
@@ -114,23 +146,31 @@ gls::rectangle rotate180(const gls::rectangle& rect, const gls::image<T>& image)
     };
 }
 
-inline static gls::Vector<4> lerpRawNLF(const gls::Vector<4>& NLFData0, const gls::Vector<4>& NLFData1, float a) {
-    gls::Vector<4> result;
+inline static RawNLF lerp(const RawNLF& NLFData0, const RawNLF& NLFData1, float a) {
+    RawNLF result;
     for (int i = 0; i < 4; i++) {
-        result[i] = std::lerp(NLFData0[i], NLFData1[i], a);
+        result.first[i] = std::lerp(NLFData0.first[i], NLFData1.first[i], a);
+        result.second[i] = std::lerp(NLFData0.second[i], NLFData1.second[i], a);
     }
     return result;
 }
 
 template <int levels>
-gls::Matrix<levels, 6> lerpNLF(const gls::Matrix<levels, 6>& NLFData0, const gls::Matrix<levels, 6>& NLFData1, float a) {
-    gls::Matrix<levels, 6> result;
+std::array<YCbCrNLF, levels> lerp(const std::array<YCbCrNLF, levels>& NLFData0,
+                                  const std::array<YCbCrNLF, levels>& NLFData1, float a) {
+    std::array<YCbCrNLF, levels> result;
     for (int j = 0; j < levels; j++) {
-        for (int i = 0; i < 6; i++) {
-            result[j][i] = std::lerp(NLFData0[j][i], NLFData1[j][i], a);
+        for (int i = 0; i < 3; i++) {
+            result[j].first[i] = std::lerp(NLFData0[j].first[i], NLFData1[j].first[i], a);
+            result[j].second[i] = std::lerp(NLFData0[j].second[i], NLFData1[j].second[i], a);
         }
     }
     return result;
+}
+
+template <int levels>
+NoiseModel lerp(const NoiseModel& nm0, const NoiseModel& nm1, float a) {
+    return { lerp(nm0.rawNlf, nm1.rawNlf, a), lerp<levels>(nm0.pyramidNlf, nm1.pyramidNlf, a) };
 }
 
 inline static float smoothstep(float edge0, float edge1, float x) {
@@ -212,9 +252,6 @@ struct RawPatchStats {
 void colorCheckerRawStats(const gls::image<gls::luma_pixel_16>& rawImage, float black_level, float white_level, BayerPattern bayerPattern,
                           const gls::rectangle& gmb_position, bool rotate_180, std::array<RawPatchStats, 24>* stats);
 
-gls::Vector<4> estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls::Matrix<3, 3>* cam_xyz, gls::Vector<3>* pre_mul,
-                                     float black_level, float white_level, BayerPattern bayerPattern, const gls::rectangle& gmb_position, bool rotate_180);
-
 void colorcheck(const std::array<RawPatchStats, 24>& rawStats);
 
 gls::Vector<3> autoWhiteBalance(const gls::image<gls::luma_pixel_16>& rawImage, const gls::Matrix<3, 3>& rgb_ycbcr,
@@ -223,4 +260,14 @@ gls::Vector<3> autoWhiteBalance(const gls::image<gls::luma_pixel_16>& rawImage, 
 
 void KernelOptimizeBilinear2d(int width, const std::vector<float>& weightsIn,
                               std::vector<std::tuple</* w */ float, /* x */ float, /* y */ float>>* weightsOut);
+
+RawNLF estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls::Matrix<3, 3>* cam_xyz, gls::Vector<3>* pre_mul,
+                             float black_level, float white_level, BayerPattern bayerPattern, const gls::rectangle& gmb_position, bool rotate_180);
+
+#include "gls_cl_image.hpp"
+
+YCbCrNLF BuildYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
+
+RawNLF BuildRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern);
+
 #endif /* demosaic_hpp */

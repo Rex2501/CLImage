@@ -53,7 +53,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/ImageRegistration/iPhone/"
+            argument = "/Users/fabio/work/GlassDXOVisit/GLS30A/DNG/Burst12/"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

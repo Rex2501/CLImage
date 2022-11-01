@@ -243,9 +243,9 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float direction = 2 * atan2pi(gradient.y, gradient.x);
 
         // TODO: the following two cases should be enabled according to the image noise level
-//        // Bias result towards vertical and horizontal lines
-//        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3 * gradient_threshold, 0.45 * gradient_threshold, direction))
-//                                    : mix(direction, 1, smoothstep((1 - 0.45) * gradient_threshold, (1 - 0.3) * gradient_threshold, direction));
+        // Bias result towards vertical and horizontal lines
+//        direction = direction < 0.5 ? mix(direction, 0, 1 - smoothstep(0.3, 0.45, direction))
+//                                    : mix(direction, 1, smoothstep((1 - 0.45), (1 - 0.3), direction));
 
         // If the gradient is below threshold interpolate against the grain
         direction = mix(1 - direction, direction, gradient_threshold);
@@ -268,7 +268,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
 kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t greenImage,
                                write_only image2d_t rgbImage, int bayerPattern,
-                               float2 redVariance, float2 blueVariance, int rotate_180) {
+                               float2 redVariance, float2 blueVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const int x = imageCoordinates.x;
@@ -356,12 +356,7 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
         break;
     }
 
-    int2 outputCoordinates = imageCoordinates;
-    if (rotate_180) {
-        outputCoordinates = get_image_dim(rgbImage) - outputCoordinates;
-    }
-
-    write_imagef(rgbImage, outputCoordinates, (float4)(red, green, blue, 0));
+    write_imagef(rgbImage, imageCoordinates, (float4)(red, green, blue, 0));
 }
 
 kernel void fastDebayer(read_only image2d_t rawImage, write_only image2d_t rgbImage, int bayerPattern) {
@@ -846,7 +841,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
     // TODO: make this a tunable parameter
-    half flat = 0; // 1 - smoothstep(1, 4, magnitude / sigma.x);
+    half flat = 1 - smoothstep(1, 4, magnitude / sigma.x);
 
     const int size = gradientBoost > 1 ? 4 : 2;
 

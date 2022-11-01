@@ -16,7 +16,6 @@
 		E50D253B2832E414003305E9 /* pyramidal_denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253A2832E414003305E9 /* pyramidal_denoise.cpp */; };
 		E50D253E2837FB53003305E9 /* LeicaQ2Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253C2837FB53003305E9 /* LeicaQ2Calibration.cpp */; };
 		E50D25422837FDBA003305E9 /* iPhone11Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D253F2837FDBA003305E9 /* iPhone11Calibration.cpp */; };
-		E50D25432837FDBA003305E9 /* IMX492Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D25402837FDBA003305E9 /* IMX492Calibration.cpp */; };
 		E50D25442837FDBA003305E9 /* RicohGRIIICalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D25412837FDBA003305E9 /* RicohGRIIICalibration.cpp */; };
 		E5188C6C27EA63A700F2332C /* gls_image_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6275276174FC0055F712 /* gls_image_jpeg.cpp */; };
 		E5188C6D27EA63A700F2332C /* gls_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6276276174FC0055F712 /* gls_cl.cpp */; };
@@ -178,7 +177,6 @@
 		E50D253C2837FB53003305E9 /* LeicaQ2Calibration.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = LeicaQ2Calibration.cpp; path = ../../CLImage/app/src/main/cpp/LeicaQ2Calibration.cpp; sourceTree = "<group>"; };
 		E50D253D2837FB53003305E9 /* CameraCalibration.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = CameraCalibration.hpp; path = ../../CLImage/app/src/main/cpp/CameraCalibration.hpp; sourceTree = "<group>"; };
 		E50D253F2837FDBA003305E9 /* iPhone11Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = iPhone11Calibration.cpp; path = ../../CLImage/app/src/main/cpp/iPhone11Calibration.cpp; sourceTree = "<group>"; };
-		E50D25402837FDBA003305E9 /* IMX492Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX492Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX492Calibration.cpp; sourceTree = "<group>"; };
 		E50D25412837FDBA003305E9 /* RicohGRIIICalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RicohGRIIICalibration.cpp; path = ../../CLImage/app/src/main/cpp/RicohGRIIICalibration.cpp; sourceTree = "<group>"; };
 		E5188C7F27EA63A700F2332C /* RawPipeline */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = RawPipeline; sourceTree = BUILT_PRODUCTS_DIR; };
 		E51AACE427DFEDFD00E99B58 /* CLImageTest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CLImageTest.entitlements; sourceTree = "<group>"; };
@@ -324,7 +322,6 @@
 				E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */,
 				E50D253C2837FB53003305E9 /* LeicaQ2Calibration.cpp */,
 				E50D25412837FDBA003305E9 /* RicohGRIIICalibration.cpp */,
-				E50D25402837FDBA003305E9 /* IMX492Calibration.cpp */,
 				E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */,
 				E50D253F2837FDBA003305E9 /* iPhone11Calibration.cpp */,
 				E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */,
@@ -592,7 +589,6 @@
 				E50D2536282ED766003305E9 /* guided_filter.cpp in Sources */,
 				E50D252D282DB505003305E9 /* demosaic_cl.cpp in Sources */,
 				E50D25392832D41F003305E9 /* raw_converter.cpp in Sources */,
-				E50D25432837FDBA003305E9 /* IMX492Calibration.cpp in Sources */,
 				E5AB799C27ED59C0008B3D30 /* gls_tiff_metadata.cpp in Sources */,
 				E5AB798827EAD0D7008B3D30 /* demosaic.cpp in Sources */,
 				E50D25422837FDBA003305E9 /* iPhone11Calibration.cpp in Sources */,

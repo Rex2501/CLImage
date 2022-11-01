@@ -100,7 +100,7 @@ int main(int argc, const char * argv[]) {
     std::copy(reference_image_rgb->pixels().begin(), reference_image_rgb->pixels().end(), result_image.pixels().begin());
 
     int fused_images = 1;
-    for (const auto& image_path : std::span(&input_files[1], &input_files[4 /*input_files.size()*/])) {
+    for (const auto& image_path : std::span(&input_files[1], &input_files[input_files.size()])) {
         LOG_INFO(TAG) << "Processing: " << image_path.filename() << std::endl;
 
         const auto image_rgb = demosaicImage(&rawConverter, image_path.string());

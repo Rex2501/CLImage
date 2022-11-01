@@ -685,8 +685,8 @@ gls::Vector<3> estimateNlfParameters(gls::image<gls::rgba_pixel_float>* image, c
     return {nlf_y.second, nlf_cb, nlf_cr};
 }
 
-gls::Vector<4> estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls::Matrix<3, 3>* cam_xyz, gls::Vector<3>* pre_mul,
-                                     float black_level, float white_level, BayerPattern bayerPattern, const gls::rectangle& gmb_position, bool rotate_180) {
+RawNLF estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls::Matrix<3, 3>* cam_xyz, gls::Vector<3>* pre_mul,
+                             float black_level, float white_level, BayerPattern bayerPattern, const gls::rectangle& gmb_position, bool rotate_180) {
     std::array<RawPatchStats, 24> rawStats;
     colorCheckerRawStats(rawImage, black_level, white_level, bayerPattern, gmb_position, rotate_180, &rawStats);
 
@@ -783,7 +783,7 @@ gls::Vector<4> estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawIm
               << nlf_b.second << ", "
               << nlf_g2.second << std::endl;
 
-    return { nlf_r.second, nlf_g.second, nlf_b.second, nlf_g2.second };
+    return { { nlf_r.first, nlf_g.first, nlf_b.first, nlf_g2.first }, { nlf_r.second, nlf_g.second, nlf_b.second, nlf_g2.second } };
 }
 
 gls::Vector<3> extractNlfFromColorChecker(gls::image<gls::rgba_pixel_float>* yCbCrImage, const gls::rectangle gmb_position, bool rotate_180, int scale) {

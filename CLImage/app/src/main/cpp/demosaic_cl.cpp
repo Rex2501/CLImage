@@ -68,7 +68,7 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
                        const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                        const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
                        gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
-                       BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance, bool rotate_180) {
+                       BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
@@ -78,14 +78,13 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
                                     cl::Image2D,  // rgbImage
                                     int,          // bayerPattern
                                     cl_float2,    // redVariance
-                                    cl_float2,    // blueVariance
-                                    int           // rotate_180
+                                    cl_float2     // blueVariance
                                     >(program, "interpolateRedBlue");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
            rawImage.getImage2D(), greenImage.getImage2D(), rgbImage->getImage2D(), bayerPattern,
-           { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] }, rotate_180);
+           { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
 }
 
 void fasteDebayer(gls::OpenCLContext* glsContext,

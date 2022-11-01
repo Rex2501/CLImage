@@ -62,7 +62,7 @@ public:
             ltmMeanLFAbGfImage.get(), ltmMeanMFAbGfImage.get(), ltmMeanHFAbGfImage.get()
         };
 
-        gls::Vector<2> nlf = { noiseModel.pyramidNlf[0][0], noiseModel.pyramidNlf[0][3] };
+        gls::Vector<2> nlf = { noiseModel.pyramidNlf[0].first[0], noiseModel.pyramidNlf[0].second[0] };
         localToneMappingMask(glsContext, image, guideImage, abImage, abMeanImage, demosaicParameters.ltmParameters, ycbcr_srgb, nlf, ltmMaskImage.get());
     }
 
@@ -105,8 +105,7 @@ public:
     }
 
     gls::cl_image_2d<gls::rgba_pixel>* demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                     DemosaicParameters* demosaicParameters,
-                                                     const gls::rectangle* gmb_position, bool rotate_180);
+                                                     DemosaicParameters* demosaicParameters, bool calibrateFromImage = false);
 
     gls::cl_image_2d<gls::rgba_pixel>* fastDemosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
                                                          const DemosaicParameters& demosaicParameters);
