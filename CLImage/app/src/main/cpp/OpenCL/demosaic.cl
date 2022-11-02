@@ -74,6 +74,10 @@ constant const int2 bayerOffsets[4][4] = {
     _a > 0 ? _a : -_a;})
 
 #ifdef __APPLE__
+inline half2 __attribute__((overloadable)) myconvert_half2(float2 val) {
+    return (half2) (val.x, val.y);
+}
+
 inline half3 __attribute__((overloadable)) myconvert_half3(float3 val) {
     return (half3) (val.x, val.y, val.z);
 }
@@ -81,10 +85,10 @@ inline half3 __attribute__((overloadable)) myconvert_half3(float3 val) {
 inline half4 __attribute__((overloadable)) myconvert_half4(float4 val) {
     return (half4) (val.x, val.y, val.z, val.w);
 }
-#else
-#define myconvert_half3(val)    convert_half3(val)
 
-#define myconvert_half4(val)    convert_half4(val)
+#define convert_half2(val)    myconvert_half2(val)
+#define convert_half3(val)    myconvert_half3(val)
+#define convert_half4(val)    myconvert_half4(val)
 #endif
 
 // Fast 5x5 box filtering with linear subsampling
@@ -190,7 +194,7 @@ float2 channelCorrelation(read_only image2d_t rawImage, int x, int y) {
     return var_g > 0 && var_c > 0 ? abs(cov_cg / sqrt(var_g * var_c)) : 1;
 }
 
-static constant const float kHighNoiseVariance = 1e-03;
+constant const float kHighNoiseVariance = 1e-3;
 
 kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern, float2 greenVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
@@ -256,7 +260,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         // Reduce hf_gain when direction is diagonal
         float diagonality = 1 - 0.5 * sin(M_PI_F * direction);
 
-        // Modulate the HF component of the reconstructed green using the whteness and the gradient magnitude
+        // Modulate the HF component of the reconstructed green using the whiteness and the gradient magnitude
         float hf_gain = diagonality * highlights_edge * gradient_threshold * min(0.5 * whiteness + smoothstep(0.0, 0.3, length(gradient) / M_SQRT2_F), 1.0);
         float2 g_est = g_lf + hf_gain * g_hf;
 
@@ -594,7 +598,7 @@ half4 despeckle_3x3x4(image2d_t inputImage, float4 rawVariance, int2 imageCoordi
         }
     }
 
-    half4 sigma = sqrt(myconvert_half4(rawVariance) * sample);
+    half4 sigma = sqrt(convert_half4(rawVariance) * sample);
     half4 minVal = mix(secondMin, firstMin, smoothstep(2 * sigma, 8 * sigma, secondMin - firstMin));
     half4 maxVal = mix(secondMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - secondMax));
     return clamp(sample, minVal, maxVal);
@@ -622,7 +626,7 @@ half4 despeckle_3x3x4_strong(image2d_t inputImage, float4 rawVariance, int2 imag
         }
     }
 
-    half4 sigma = sqrt(myconvert_half4(rawVariance) * sample);
+    half4 sigma = sqrt(convert_half4(rawVariance) * sample);
     half4 minVal = mix(thirdMin, firstMin, smoothstep(2 * sigma, 8 * sigma, thirdMin - firstMin));
     half4 maxVal = mix(thirdMax, firstMax, smoothstep(sigma, 4 * sigma, firstMax - thirdMax));
     return clamp(sample, minVal, maxVal);
@@ -837,7 +841,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
 
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
 
-    half3 sigma = myconvert_half3(sqrt(var_a + var_b * inputYCC.x));
+    half3 sigma = convert_half3(sqrt(var_a + var_b * inputYCC.x));
 
     float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
     half angle = atan2(gradient.y, gradient.x);
