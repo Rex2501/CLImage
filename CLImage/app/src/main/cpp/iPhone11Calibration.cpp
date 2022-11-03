@@ -231,7 +231,7 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaiciPhone11(RawConverter* rawConvert
     demosaicParameters.noiseLevel = denoiseParameters.first;
     demosaicParameters.denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr calibrateiPhone11(RawConverter* rawConverter,
@@ -253,7 +253,7 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateiPhone11(RawConverter* rawConver
     demosaicParameters->noiseLevel = denoiseParameters.first;
     demosaicParameters->denoiseParameters = denoiseParameters.second;
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
 }
 
 void calibrateiPhone11(RawConverter* rawConverter, const std::filesystem::path& input_dir) {

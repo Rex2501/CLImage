@@ -186,11 +186,11 @@ void interpolateRedBlue(gls::image<gls::rgb_pixel_16>* image, BayerPattern bayer
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaicImageCPU(const gls::image<gls::luma_pixel_16>& rawImage,
                                                         gls::tiff_metadata* metadata, bool auto_white_balance);
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+gls::image<gls::rgb_pixel>::unique_ptr runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                      DemosaicParameters* demosaicParameters,
                                                      const gls::rectangle* gmb_position, bool rotate_180);
 
-gls::image<gls::rgb_pixel>::unique_ptr fastDemosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+gls::image<gls::rgb_pixel>::unique_ptr runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                          const DemosaicParameters& demosaicParameters);
 
 gls::Matrix<3, 3> cam_xyz_coeff(gls::Vector<3>* pre_mul, const gls::Matrix<3, 3>& cam_xyz);

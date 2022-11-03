@@ -142,7 +142,7 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicPlainFile(RawConverter* rawConver
         }
     }};
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
 }
 
 void processKodakSet(gls::OpenCLContext* glsContext, const std::filesystem::path& input_path) {

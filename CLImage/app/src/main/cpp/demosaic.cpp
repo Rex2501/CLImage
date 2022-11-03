@@ -34,7 +34,7 @@ const char* BayerPatternName[4] = {
 
 static const char* TAG = "CLImage Pipeline";
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+gls::image<gls::rgb_pixel>::unique_ptr runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                      DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     gls::OpenCLContext glsContext("");
 
@@ -42,7 +42,7 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(const gls::image<gls::luma_
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    auto clsRGBImage = rawConverter->demosaicImage(rawImage, demosaicParameters, calibrateFromImage);
+    auto clsRGBImage = rawConverter->runPipeline(rawImage, demosaicParameters, calibrateFromImage);
 
     auto rgbImage = RawConverter::convertToRGBImage(*clsRGBImage);
 
@@ -54,7 +54,7 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(const gls::image<gls::luma_
     return rgbImage;
 }
 
-gls::image<gls::rgb_pixel>::unique_ptr fastDemosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
+gls::image<gls::rgb_pixel>::unique_ptr runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                           const DemosaicParameters& demosaicParameters) {
     gls::OpenCLContext glsContext("");
 
@@ -62,7 +62,7 @@ gls::image<gls::rgb_pixel>::unique_ptr fastDemosaicImage(const gls::image<gls::l
 
     auto t_start = std::chrono::high_resolution_clock::now();
 
-    auto clsRGBImage = rawConverter->fastDemosaicImage(rawImage, demosaicParameters);
+    auto clsRGBImage = rawConverter->runFastPipeline(rawImage, demosaicParameters);
 
     auto rgbImage = RawConverter::convertToRGBImage(*clsRGBImage);
 

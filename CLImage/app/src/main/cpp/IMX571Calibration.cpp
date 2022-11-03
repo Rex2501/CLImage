@@ -294,7 +294,7 @@ gls::image<gls::rgb_pixel>::unique_ptr calibrateIMX571DNG(RawConverter* rawConve
     demosaicParameters->noiseLevel = denoiseParameters.first;
     demosaicParameters->denoiseParameters = denoiseParameters.second;
 
-    auto result = RawConverter::convertToRGBImage(*rawConverter->demosaicImage(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
+    auto result = RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
 
 //    dng_metadata[TIFFTAG_CFAPATTERN] = std::vector<uint8_t>{ 1, 0, 2, 1 };
 //    exif_metadata[EXIFTAG_ISOSPEEDRATINGS] = std::vector<uint16_t>{ (uint16_t) iso };
@@ -389,6 +389,6 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
 //        std::cout << "exposureBias: " << -exposureCompensation << std::endl;
 //    }
 
-    return RawConverter::convertToRGBImage(*rawConverter->demosaicImage(inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
-    // return RawConverter::convertToRGBImage(*rawConverter->fastDemosaicImage(inputImage, demosaicParameters));
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(inputImage, &demosaicParameters, /*calibrateFromImage=*/ true));
+    // return RawConverter::convertToRGBImage(*rawConverter->runFastPipeline(inputImage, demosaicParameters));
 }

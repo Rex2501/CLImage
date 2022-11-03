@@ -57,7 +57,7 @@ gls::image<float> asGrayscaleFloat(const gls::image<T>& image) {
     return grayscale;
 }
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaicImage(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+gls::image<gls::rgb_pixel>::unique_ptr runPipeline(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     // return demosaicIMX571DNG(rawConverter, input_path);
     // return demosaicSonya6400DNG(rawConverter, input_path);
     // return demosaicCanonEOSRPDNG(rawConverter, input_path);
@@ -83,7 +83,7 @@ int main(int argc, const char * argv[]) {
 
     RawConverter rawConverter(&glsContext);
 
-    const auto reference_image_rgb = demosaicImage(&rawConverter, reference_image_path.string());
+    const auto reference_image_rgb = runPipeline(&rawConverter, reference_image_path.string());
 
     // const auto reference_image_rgb = gls::image<gls::rgb_pixel>::read_png_file(reference_image_path.string());
 
@@ -103,7 +103,7 @@ int main(int argc, const char * argv[]) {
     for (const auto& image_path : std::span(&input_files[1], &input_files[input_files.size()])) {
         LOG_INFO(TAG) << "Processing: " << image_path.filename() << std::endl;
 
-        const auto image_rgb = demosaicImage(&rawConverter, image_path.string());
+        const auto image_rgb = runPipeline(&rawConverter, image_path.string());
         // const auto image_rgb = gls::image<gls::rgba_pixel>::read_png_file(image_path.string());
         const auto image = asGrayscaleFloat(*image_rgb);
 

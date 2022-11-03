@@ -114,15 +114,9 @@ std::array<gls::Vector<2>, 3> getRawVariance(const RawNLF& rawNLF) {
     return { redVariance, greenVariance, blueVariance };
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                               DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
-    auto clContext = _glsContext->clContext();
-
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                                DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     LOG_INFO(TAG) << "Begin Demosaicing..." << std::endl;
-
-    NoiseModel* noiseModel = &demosaicParameters->noiseModel;
-
-    LOG_INFO(TAG) << "NoiseLevel: " << demosaicParameters->noiseLevel << std::endl;
 
     allocateTextures(_glsContext, rawImage.width, rawImage.height);
 
@@ -130,26 +124,24 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
         localToneMapping->allocateTextures(_glsContext, rawImage.width, rawImage.height);
     }
 
-#ifdef PRINT_EXECUTION_TIME
-    auto t_start = std::chrono::high_resolution_clock::now();
-#endif
     // Copy input data to the OpenCL input buffer
     clRawImage->copyPixelsFrom(rawImage);
-
-    // --- Image Demosaicing ---
 
     scaleRawData(_glsContext, *clRawImage, clScaledRawImage.get(),
                  demosaicParameters->bayerPattern,
                  demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
+    NoiseModel* noiseModel = &demosaicParameters->noiseModel;
+
+    LOG_INFO(TAG) << "NoiseLevel: " << demosaicParameters->noiseLevel << std::endl;
+
     if (calibrateFromImage) {
-        demosaicParameters->noiseModel.rawNlf = MeasureRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+        noiseModel->rawNlf = MeasureRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
     }
 
-    const auto rawVariance = getRawVariance(demosaicParameters->noiseModel.rawNlf);
+    const auto rawVariance = getRawVariance(noiseModel->rawNlf);
 
-    // TODO: Tune me!
     const bool high_noise_image = rawVariance[1][1] > kHighNoiseVariance && !calibrateFromImage;
 
     std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << std::endl;
@@ -161,7 +153,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
         bayerToRawRGBA(_glsContext, *clScaledRawImage, rgbaRawImage.get(), demosaicParameters->bayerPattern);
 
-        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, demosaicParameters->noiseModel.rawNlf.second, denoisedRgbaRawImage.get());
+        despeckleRawRGBAImage(_glsContext, *rgbaRawImage, noiseModel->rawNlf.second, denoisedRgbaRawImage.get());
 
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
@@ -174,14 +166,18 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());
 
-    // --- Image Denoising ---
+    return clLinearRGBImageA.get();
+}
 
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     // Convert linear image to YCbCr for denoising
     auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
 
     std::cout << "cam_to_ycbcr: " << std::setprecision(4) << std::scientific << cam_to_ycbcr.span() << std::endl;
 
     transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), cam_to_ycbcr);
+
+    NoiseModel* noiseModel = &demosaicParameters->noiseModel;
 
     // Luma and Chroma Despeckling
     const auto& np = noiseModel->pyramidNlf[0];
@@ -195,8 +191,6 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
                                   clLinearRGBImageB.get(), demosaicParameters->rgb_cam,
                                   &(noiseModel->pyramidNlf), calibrateFromImage);
 
-    // std::cout << "pyramidNlf:\n" << std::scientific << noiseModel->pyramidNlf << std::endl;
-
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
         const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage = {
             pyramidProcessor->denoisedImagePyramid[4].get(),
@@ -208,43 +202,57 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     // Convert result back to camera RGB
     const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
-    transformImage(_glsContext, *clDenoisedImage, clDenoisedImage, normalized_ycbcr_to_cam);
+    transformImage(_glsContext, *clDenoisedImage, clLinearRGBImageA.get(), normalized_ycbcr_to_cam);
 
     // High ISO noise texture replacement
-    if (high_noise_image) {
+    if (clBlueNoise != nullptr) {
         std::cout << "Adding Blue Noise" << std::endl;
 
-        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise,
+        blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise,
                        /*lumaVariance=*/ { np.first[0], np.second[0] },
-                       clLinearRGBImageB.get());
-        clDenoisedImage = clLinearRGBImageB.get();
+                       clLinearRGBImageA.get());
     }
 
+    return clLinearRGBImageA.get();
+}
+
+gls::cl_image_2d<gls::rgba_pixel>* RawConverter::postProcess(const DemosaicParameters& demosaicParameters) {
+    convertTosRGB(_glsContext, *clLinearRGBImageA, localToneMapping->getMask(), clsRGBImage.get(), demosaicParameters);
+
+    return clsRGBImage.get();
+}
+
+gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                             DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    // --- Image Demosaicing ---
+    demosaic(rawImage, demosaicParameters, calibrateFromImage);
+
+    // --- Image Denoising ---
+    denoise(demosaicParameters, calibrateFromImage);
+
     // --- Image Post Processing ---
+    postProcess(*demosaicParameters);
 
-    convertTosRGB(_glsContext, *clDenoisedImage, localToneMapping->getMask(), clsRGBImage.get(), *demosaicParameters);
-
-#ifdef PRINT_EXECUTION_TIME
     cl::CommandQueue queue = cl::CommandQueue::getDefault();
     queue.finish();
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
 
     LOG_INFO(TAG) << "OpenCL Pipeline Execution Time: " << (int) elapsed_time_ms << "ms for image of size: " << rawImage.width << " x " << rawImage.height << std::endl;
-#endif
 
     return clsRGBImage.get();
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::fastDemosaicImage(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                                   const DemosaicParameters& demosaicParameters) {
+gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                                 const DemosaicParameters& demosaicParameters) {
     allocateFastDemosaicTextures(_glsContext, rawImage.width, rawImage.height);
 
     LOG_INFO(TAG) << "Begin Fast Demosaicing (GPU)..." << std::endl;
 
-#ifdef PRINT_EXECUTION_TIME
     auto t_start = std::chrono::high_resolution_clock::now();
-#endif
+
     // Copy input data to the OpenCL input buffer
     clRawImage->copyPixelsFrom(rawImage);
 
@@ -262,14 +270,12 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::fastDemosaicImage(const gls::im
 
     convertTosRGB(_glsContext, *clFastLinearRGBImage,localToneMapping->getMask(), clsFastRGBImage.get(), demosaicParameters);
 
-#ifdef PRINT_EXECUTION_TIME
     cl::CommandQueue queue = cl::CommandQueue::getDefault();
     queue.finish();
     auto t_end = std::chrono::high_resolution_clock::now();
     double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end-t_start).count();
 
     LOG_INFO(TAG) << "OpenCL Pipeline Execution Time: " << (int) elapsed_time_ms << "ms for image of size: " << rawImage.width << " x " << rawImage.height << std::endl;
-#endif
 
     return clsFastRGBImage.get();
 }
