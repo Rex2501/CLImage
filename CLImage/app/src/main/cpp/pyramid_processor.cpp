@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "pyramidal_denoise.hpp"
+#include "pyramid_processor.hpp"
 
 #include <iomanip>
 
 template
-PyramidalDenoise<5>::PyramidalDenoise(gls::OpenCLContext* glsContext, int width, int height);
+PyramidProcessor<5>::PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height);
 
 template
-typename PyramidalDenoise<5>::imageType* PyramidalDenoise<5>::denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, 5>* denoiseParameters,
+typename PyramidProcessor<5>::imageType* PyramidProcessor<5>::denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, 5>* denoiseParameters,
                                                                       imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                                                                       std::array<YCbCrNLF, 5>* nlfParameters, bool calibrateFromImage);
 
@@ -50,7 +50,7 @@ struct GuidedFastDenoiser : ImageDenoiser {
 };
 
 template <size_t levels>
-PyramidalDenoise<levels>::PyramidalDenoise(gls::OpenCLContext* glsContext, int width, int height) {
+PyramidProcessor<levels>::PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height) {
     for (int i = 0, scale = 2; i < levels-1; i++, scale *= 2) {
         imagePyramid[i] = std::make_unique<imageType>(glsContext->clContext(), width/scale, height/scale);
     }
@@ -69,7 +69,7 @@ gls::Vector<3> nflMultiplier(const DenoiseParameters &denoiseParameters) {
 extern const gls::Matrix<3, 3> ycbcr_srgb;
 
 template <size_t levels>
-typename PyramidalDenoise<levels>::imageType* PyramidalDenoise<levels>::denoise(gls::OpenCLContext* glsContext,
+typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
                                                                                 imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                                                                                 std::array<YCbCrNLF, levels>* nlfParameters,

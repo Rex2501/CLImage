@@ -75,7 +75,6 @@ void convertTosRGB(gls::OpenCLContext* glsContext,
 void despeckleImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                     const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                    bool desaturateShadows,
                     gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void denoiseImage(gls::OpenCLContext* glsContext,

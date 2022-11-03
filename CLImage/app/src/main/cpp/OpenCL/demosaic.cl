@@ -510,7 +510,7 @@ kernel void medianFilterImage3x3x4(read_only image2d_t inputImage, write_only im
     })
 
 kernel void despeckleLumaMedianChromaImage(read_only image2d_t inputImage, float3 var_a, float3 var_b,
-                                           int desaturateShadows, write_only image2d_t denoisedImage) {
+                                           write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     half sample = 0, firstMax = 0, secMax = 0;

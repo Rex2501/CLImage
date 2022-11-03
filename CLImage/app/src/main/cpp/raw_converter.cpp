@@ -35,7 +35,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
         clLinearRGBImageB = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
         clsRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, width, height);
 
-        pyramidalDenoise = std::make_unique<PyramidalDenoise<5>>(glsContext, width, height);
+        pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
     }
 }
 
@@ -92,6 +92,20 @@ void SaveRawChannels(const gls::image<T>& rawImage, float maxVal, const std::str
     chan3.write_png_file(basePath + "3.png");
 }
 
+void saveGreenChannel(const gls::cl_image_2d<gls::luma_pixel_float>& clGreenImage) {
+    gls::image<gls::luma_pixel> out(clGreenImage.width, clGreenImage.height);
+    const auto greenImageCPU = clGreenImage.mapImage();
+    out.apply([&greenImageCPU](gls::luma_pixel* p, int x, int y){
+        const auto& ip = greenImageCPU[y][x];
+        *p = gls::luma_pixel {
+            (uint8_t) (255 * std::sqrt(std::clamp((float) ip.luma, 0.0f, 1.0f)))
+        };
+    });
+    clGreenImage.unmapImage(greenImageCPU);
+    static int count = 1;
+    out.write_png_file("/Users/fabio/green" + std::to_string(count++) + ".png");
+}
+
 std::array<gls::Vector<2>, 3> getRawVariance(const RawNLF& rawNLF) {
     const gls::Vector<2> greenVariance = { (rawNLF.first[1] + rawNLF.first[3]) / 2, (rawNLF.second[1] + rawNLF.second[3]) / 2 };
     const gls::Vector<2> redVariance = { rawNLF.first[0], rawNLF.second[0] };
@@ -141,11 +155,9 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << std::endl;
 
     if (high_noise_image) {
-        allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
-    }
+        std::cout << "Despeckeling RAW Image" << std::endl;
 
-    if (high_noise_image) {
-        std::cout << "denoiseRawRGBAImage" << std::endl;
+        allocateHighNoiseTextures(_glsContext, rawImage.width, rawImage.height);
 
         bayerToRawRGBA(_glsContext, *clScaledRawImage, rgbaRawImage.get(), demosaicParameters->bayerPattern);
 
@@ -155,20 +167,6 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     }
 
     interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
-
-#if DUMP_GREEN_IMAGE
-    gls::image<gls::luma_pixel> out(clGreenImage->width, clGreenImage->height);
-    const auto greenImageCPU = clGreenImage->mapImage();
-    out.apply([&greenImageCPU](gls::luma_pixel* p, int x, int y){
-        const auto& ip = greenImageCPU[y][x];
-        *p = gls::luma_pixel {
-            (uint8_t) (255 * std::sqrt(std::clamp((float) ip.luma, 0.0f, 1.0f)))
-        };
-    });
-    clGreenImage->unmapImage(greenImageCPU);
-    static int count = 1;
-    out.write_png_file("/Users/fabio/green" + std::to_string(count++) + ".png");
-#endif
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
                        rawVariance[0], rawVariance[2]);
@@ -186,16 +184,14 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
     transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), cam_to_ycbcr);
 
     // Luma and Chroma Despeckling
-    std::cout << "despeckleImage" << std::endl;
     const auto& np = noiseModel->pyramidNlf[0];
     despeckleImage(_glsContext, *clLinearRGBImageA,
                    /*var_a=*/ np.first,
                    /*var_b=*/ np.second,
-                   /*desaturateShadows=*/ high_noise_image,  // TODO: this should be a denoise configuration parameter
                    clLinearRGBImageB.get());
 
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
-        pyramidalDenoise->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
+        pyramidProcessor->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
                                   clLinearRGBImageB.get(), demosaicParameters->rgb_cam,
                                   &(noiseModel->pyramidNlf), calibrateFromImage);
 
@@ -203,9 +199,9 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
         const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage = {
-            pyramidalDenoise->denoisedImagePyramid[4].get(),
-            pyramidalDenoise->denoisedImagePyramid[2].get(),
-            pyramidalDenoise->denoisedImagePyramid[0].get()
+            pyramidProcessor->denoisedImagePyramid[4].get(),
+            pyramidProcessor->denoisedImagePyramid[2].get(),
+            pyramidProcessor->denoisedImagePyramid[0].get()
         };
         localToneMapping->createMask(_glsContext, *clDenoisedImage, guideImage, *noiseModel, *demosaicParameters);
     }
@@ -216,6 +212,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::demosaicImage(const gls::image<
 
     // High ISO noise texture replacement
     if (high_noise_image) {
+        std::cout << "Adding Blue Noise" << std::endl;
+
         blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise,
                        /*lumaVariance=*/ { np.first[0], np.second[0] },
                        clLinearRGBImageB.get());

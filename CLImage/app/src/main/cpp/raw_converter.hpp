@@ -17,16 +17,16 @@
 #define raw_converter_hpp
 
 #include "gls_cl_image.hpp"
-#include "pyramidal_denoise.hpp"
+#include "pyramid_processor.hpp"
 
 class LocalToneMapping {
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmLFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanLFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanMFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmHFAbGfImage;
-    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr ltmMeanHFAbGfImage;
     gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr ltmMaskImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr lfAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr lfAbGfMeanImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr mfAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr mfAbGfMeanImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr hfAbGfImage;
+    gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr hfAbGfMeanImage;
 
 public:
     LocalToneMapping(gls::OpenCLContext* glsContext) {
@@ -40,13 +40,13 @@ public:
         auto clContext = glsContext->clContext();
 
         if (ltmMaskImage->width != width || ltmMaskImage->height != height) {
-            ltmMaskImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
-            ltmLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
-            ltmMeanLFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
-            ltmMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
-            ltmMeanMFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
-            ltmHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
-            ltmMeanHFAbGfImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
+            ltmMaskImage    = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
+            lfAbGfImage     = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+            lfAbGfMeanImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/16, height/16);
+            mfAbGfImage     = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+            mfAbGfMeanImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width/4, height/4);
+            hfAbGfImage     = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
+            hfAbGfMeanImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
         }
     }
 
@@ -56,10 +56,10 @@ public:
                     const NoiseModel& noiseModel,
                     const DemosaicParameters& demosaicParameters) {
         const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abImage = {
-            ltmLFAbGfImage.get(), ltmMFAbGfImage.get(), ltmHFAbGfImage.get()
+            lfAbGfImage.get(), mfAbGfImage.get(), hfAbGfImage.get()
         };
         const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abMeanImage = {
-            ltmMeanLFAbGfImage.get(), ltmMeanMFAbGfImage.get(), ltmMeanHFAbGfImage.get()
+            lfAbGfMeanImage.get(), mfAbGfMeanImage.get(), hfAbGfMeanImage.get()
         };
 
         gls::Vector<2> nlf = { noiseModel.pyramidNlf[0].first[0], noiseModel.pyramidNlf[0].second[0] };
@@ -84,7 +84,7 @@ class RawConverter {
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clLinearRGBImageB;
     gls::cl_image_2d<gls::rgba_pixel>::unique_ptr clsRGBImage;
 
-    std::unique_ptr<PyramidalDenoise<5>> pyramidalDenoise;
+    std::unique_ptr<PyramidProcessor<5>> pyramidProcessor;
 
     std::unique_ptr<LocalToneMapping> localToneMapping;
 
