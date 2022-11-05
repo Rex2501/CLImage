@@ -140,4 +140,8 @@ void blendHighlightsImage(gls::OpenCLContext* glsContext,
                           float clip,
                           gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
+YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
+
+RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern);
+
 #endif /* demosaic_cl_hpp */

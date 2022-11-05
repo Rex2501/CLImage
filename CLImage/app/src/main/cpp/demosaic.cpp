@@ -25,13 +25,6 @@
 
 #include "gls_logging.h"
 
-const char* BayerPatternName[4] = {
-    "GRBG",
-    "GBRG",
-    "RGGB",
-    "BGGR"
-};
-
 static const char* TAG = "CLImage Pipeline";
 
 gls::image<gls::rgb_pixel>::unique_ptr runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,

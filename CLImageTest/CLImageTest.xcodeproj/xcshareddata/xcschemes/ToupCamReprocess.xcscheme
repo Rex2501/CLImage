@@ -53,7 +53,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/ToupCamCaptures/GLS30C_Anamorphic/Landscape/10lux/1667437939813134000_40000_10000.png"
+            argument = "/Users/fabio/work/ToupCamCaptures/2022-11-04_CalibrationScene2/GLS30C_Anamorphic_LowExposure/RAW_PNG/"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

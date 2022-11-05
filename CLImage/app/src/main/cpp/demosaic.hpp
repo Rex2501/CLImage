@@ -29,7 +29,12 @@ enum BayerPattern {
     bggr = 3
 };
 
-extern const char* BayerPatternName[4];
+static const char* BayerPatternName[4] = {
+    "GRBG",
+    "GBRG",
+    "RGGB",
+    "BGGR"
+};
 
 typedef struct DenoiseParameters {
     float luma = 1.0;
@@ -263,11 +268,5 @@ void KernelOptimizeBilinear2d(int width, const std::vector<float>& weightsIn,
 
 RawNLF estimateRawParameters(const gls::image<gls::luma_pixel_16>& rawImage, gls::Matrix<3, 3>* cam_xyz, gls::Vector<3>* pre_mul,
                              float black_level, float white_level, BayerPattern bayerPattern, const gls::rectangle& gmb_position, bool rotate_180);
-
-#include "gls_cl_image.hpp"
-
-YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image);
-
-RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, BayerPattern bayerPattern);
 
 #endif /* demosaic_hpp */
