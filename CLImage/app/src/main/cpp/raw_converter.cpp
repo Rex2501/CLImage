@@ -214,7 +214,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
 
         const gls::Vector<2> lumaVariance = { np.first[0], np.second[0] };
 
-        const auto grainAmount = 4 * smoothstep(1.0e-4, 5e-4, lumaVariance[1]);
+        const auto grainAmount = 1 + 15 * smoothstep(1.0e-4, 5e-4, lumaVariance[1]);
 
         blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
     }

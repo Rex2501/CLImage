@@ -175,25 +175,19 @@ std::pair<float, std::array<DenoiseParameters, 5>> CanonEOSRPDenoiseParameters(i
 
     // Default Good
     float highNoise = smoothstep(0.3, 0.6, nlf_alpha);
-    float lmult[5] = {
-        std::lerp(0.5f, 0.5f, highNoise),
-        std::lerp(1.0f, 4.0f, highNoise),
-        std::lerp(0.5f, 0.5f, highNoise),
-        std::lerp(0.25f, 0.5f, highNoise),
-        std::lerp(0.125f, 0.25f, highNoise),
-    };
+    float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
     float cmult[5] = { 1, 1, 1, 1, 1 };
 
     float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
 
-    float gradientBoost = std::lerp(1.0f, 2.0f, highNoise);
+    float gradientBoost = 1 + 2 * smoothstep(0.3, 0.6, nlf_alpha);
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = 2 * chromaBoost,
-            .gradientBoost = 8 * gradientBoost,
+            .gradientBoost = 8,
             .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
         },
         {
@@ -297,8 +291,8 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicCanonEOSRPDNG(RawConverter* rawCo
         },
         .ltmParameters = {
             .eps = 0.01,
-            .shadows = 0.5,
-            .highlights = 1.5,
+            .shadows = 1, // 0.5,
+            .highlights = 1, // 1.5,
             .detail = { 1, 1.1, 1.3 }
         }
     };
