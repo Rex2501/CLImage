@@ -321,9 +321,15 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawCon
 
     unpackDNGMetadata(*inputImage, &dng_metadata, &demosaicParameters, /*auto_white_balance=*/ false, nullptr /* &gmb_position */, /*rotate_180=*/ false);
 
-    uint32_t exposureIndex = 0;
-    getValue(exif_metadata, EXIFTAG_RECOMMENDEDEXPOSUREINDEX, &exposureIndex);
-    const auto iso = exposureIndex;
+//    uint32_t exposureIndex = 0;
+//    getValue(exif_metadata, EXIFTAG_RECOMMENDEDEXPOSUREINDEX, &exposureIndex);
+//    const auto iso = exposureIndex;
+
+    float iso = 100;
+    const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
+    if (exifIsoSpeedRatings.size() > 0) {
+        iso = exifIsoSpeedRatings[0];
+    }
 
     std::cout << "EXIF ISO: " << iso << std::endl;
 

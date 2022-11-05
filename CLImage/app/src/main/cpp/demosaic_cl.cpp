@@ -560,14 +560,17 @@ void blueNoiseImage(gls::OpenCLContext* glsContext,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
                                     cl::Image2D,  // blueNoiseImage
                                     cl_float2,    // lumaVariance
-                                    cl::Image2D   // outputImage
+                                    cl::Image2D,  // outputImage
+                                    cl::Sampler   // linear_sampler
                                     >(program, "blueNoiseImage");
+
+    const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_REPEAT, CL_FILTER_LINEAR);
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
            inputImage.getImage2D(), blueNoiseImage.getImage2D(),
            { lumaVariance[0], lumaVariance[1] },
-           outputImage->getImage2D());
+           outputImage->getImage2D(), linear_sampler);
 }
 
 

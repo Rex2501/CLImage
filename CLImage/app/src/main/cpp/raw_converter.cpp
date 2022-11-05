@@ -36,6 +36,10 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
         clsRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, width, height);
 
         pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
+
+        // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
+        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/HDR_L_0.png");
+        clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
 }
 
@@ -46,9 +50,9 @@ void RawConverter::allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int
         rgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
         denoisedRgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
 
-        // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
-        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/LDR_LLL1_0.png");
-        clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
+//        // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
+//        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/HDR_L_0.png");
+//        clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
 }
 
@@ -208,9 +212,11 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
     if (clBlueNoise != nullptr) {
         std::cout << "Adding Blue Noise" << std::endl;
 
-        blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise,
-                       /*lumaVariance=*/ { np.first[0], np.second[0] },
-                       clLinearRGBImageA.get());
+        const gls::Vector<2> lumaVariance = { np.first[0], np.second[0] };
+
+        const auto grainAmount = 4 * smoothstep(1.0e-4, 5e-4, lumaVariance[1]);
+
+        blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
     }
 
     return clLinearRGBImageA.get();

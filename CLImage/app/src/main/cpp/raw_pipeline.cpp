@@ -247,12 +247,12 @@ int main(int argc, const char* argv[]) {
 
             // transcodeAdobeDNG(input_path);
             // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-            const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
-            // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
+            // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
+            const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
             // const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
             // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
             // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-            rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_calib4.jpg", 95);
+            rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_GRAIN.jpg", 95);
             // rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_hf.png", /*skip_alpha=*/ true);
         }
 

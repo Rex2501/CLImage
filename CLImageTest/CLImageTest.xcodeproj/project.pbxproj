@@ -75,6 +75,8 @@
 		E556BE4F29146D40009FA1E9 /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
 		E556BE5029146D43009FA1E9 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
 		E556BE5129146D46009FA1E9 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
+		E556BE542915AE8A009FA1E9 /* demosaic_utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2525282DB504003305E9 /* demosaic_utils.cpp */; };
+		E556BE552915AEF4009FA1E9 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2531282DB5BB003305E9 /* ThreadPool.cpp */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -708,14 +710,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E556BE4D29146CE9009FA1E9 /* gls_color_science.cpp in Sources */,
 				E556BE4729146CE9009FA1E9 /* gls_logging.cpp in Sources */,
 				E556BE4829146CE9009FA1E9 /* gls_image_jpeg.cpp in Sources */,
 				E556BE4929146CE9009FA1E9 /* gls_image_png.cpp in Sources */,
 				E556BE4A29146CE9009FA1E9 /* gls_image_tiff.cpp in Sources */,
 				E556BE4B29146CE9009FA1E9 /* gls_tiff_metadata.cpp in Sources */,
 				E556BE4C29146CE9009FA1E9 /* gls_dng_lossless_jpeg.cpp in Sources */,
-				E556BE4D29146CE9009FA1E9 /* gls_color_science.cpp in Sources */,
+				E556BE542915AE8A009FA1E9 /* demosaic_utils.cpp in Sources */,
 				E556BE4229146B83009FA1E9 /* toupCamReprocess.cpp in Sources */,
+				E556BE552915AEF4009FA1E9 /* ThreadPool.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1521,15 +1521,13 @@ kernel void highPassLumaImage(read_only image2d_t inputImage, write_only image2d
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
 
-float blueNoiseGenerator(read_only image2d_t blueNoiseImage, int2 blueNoiseCoordinates) {
-    // Generate a "random" set of coordinates for the blueNoiseImage
-    blueNoiseCoordinates ^= (blueNoiseCoordinates << 21);
-    blueNoiseCoordinates ^= (blueNoiseCoordinates >> 35);
-    blueNoiseCoordinates ^= (blueNoiseCoordinates << 4);
-    blueNoiseCoordinates = blueNoiseCoordinates & (get_image_dim(blueNoiseImage) - 1);  // Assumed to be a power of 2
+float blueNoiseGenerator(read_only image2d_t blueNoiseImage, int2 imageCoordinates, sampler_t linear_sampler) {
+    int2 blueNoiseDimensions = get_image_dim(blueNoiseImage);
+    int2 blueNoiseCoordinates = imageCoordinates;
 
     // Read the noise from the texture
-    float blueNoise = read_imagef(blueNoiseImage, blueNoiseCoordinates).x;
+    float2 pos = (convert_float2(blueNoiseCoordinates) + 0.5) / convert_float2(blueNoiseDimensions);
+    float blueNoise = read_imagef(blueNoiseImage, linear_sampler, pos).x;
 
     // Go from a uniform distribution on [0,1] to a symmetric triangular distribution on [-1,1] with maximal density at 0
     blueNoise = mad(blueNoise, 2.0f, -1.0f);
@@ -1541,10 +1539,11 @@ static constant const float3 rgbToY = { 0.2126, 0.7152, 0.0722 };
 kernel void blueNoiseImage(read_only image2d_t inputImage,
                            read_only image2d_t blueNoiseImage,
                            float2 lumaVariance,
-                           write_only image2d_t outputImage) {
+                           write_only image2d_t outputImage,
+                           sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    float blueNoise = blueNoiseGenerator(blueNoiseImage, imageCoordinates);
+    float blueNoise = blueNoiseGenerator(blueNoiseImage, imageCoordinates, linear_sampler);
 
     float3 pixel = read_imagef(inputImage, imageCoordinates).xyz;
 
@@ -1552,7 +1551,7 @@ kernel void blueNoiseImage(read_only image2d_t inputImage,
     float luma = dot(pixel, rgbToY);
     float luma_sigma = sqrt(lumaVariance.x + lumaVariance.y * luma);
 
-    float3 result = pixel + 0.5 * luma_sigma * blueNoise;
+    float3 result = pixel + luma_sigma * blueNoise;
 
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }

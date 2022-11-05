@@ -174,9 +174,9 @@ std::pair<float, std::array<DenoiseParameters, 5>> CanonEOSRPDenoiseParameters(i
     float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
     // Default Good
-    float highNoise = smoothstep(0.0, 0.6, nlf_alpha);
+    float highNoise = smoothstep(0.3, 0.6, nlf_alpha);
     float lmult[5] = {
-        std::lerp(0.25f, 0.5f, highNoise),
+        std::lerp(0.5f, 0.5f, highNoise),
         std::lerp(1.0f, 4.0f, highNoise),
         std::lerp(0.5f, 0.5f, highNoise),
         std::lerp(0.25f, 0.5f, highNoise),
@@ -184,42 +184,44 @@ std::pair<float, std::array<DenoiseParameters, 5>> CanonEOSRPDenoiseParameters(i
     };
     float cmult[5] = { 1, 1, 1, 1, 1 };
 
-    float chromaBoost = 4;
+    float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
+
+    float gradientBoost = std::lerp(1.0f, 2.0f, highNoise);
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = 2 * chromaBoost,
-            .gradientBoost = 8,
-            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
+            .gradientBoost = 8 * gradientBoost,
+            .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1.1
+            .gradientBoost = gradientBoost,
+            .sharpening = 1.2
         },
         {
             .luma = lmult[2] * lerp,
             .chroma = cmult[2] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[3] * lerp,
             .chroma = cmult[3] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         }
     }};
@@ -288,7 +290,16 @@ void calibrateCanonEOSRP(RawConverter* rawConverter, const std::filesystem::path
 gls::image<gls::rgb_pixel>::unique_ptr demosaicCanonEOSRPDNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     DemosaicParameters demosaicParameters = {
         .rgbConversionParameters = {
+            .contrast = 1.05,
+            .saturation = 1.0,
+            .toneCurveSlope = 3.5,
             .localToneMapping = false
+        },
+        .ltmParameters = {
+            .eps = 0.01,
+            .shadows = 0.5,
+            .highlights = 1.5,
+            .detail = { 1, 1.1, 1.3 }
         }
     };
 
