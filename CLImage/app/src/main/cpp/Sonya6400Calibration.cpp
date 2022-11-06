@@ -184,21 +184,16 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
 
     std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
-    float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
+    float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
+    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
 
     // Default Good
-    float highNoise = smoothstep(0.0, 0.6, nlf_alpha);
-    float lmult[5] = {
-        std::lerp(0.25f, 0.5f, highNoise),
-        std::lerp(1.0f, 4.0f, highNoise),
-        std::lerp(0.5f, 0.5f, highNoise),
-        std::lerp(0.25f, 0.5f, highNoise),
-        std::lerp(0.125f, 0.25f, highNoise),
-    };
+    float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
     float cmult[5] = { 1, 1, 1, 1, 1 };
 
-    float chromaBoost = 4;
+    float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
+
+    float gradientBoost = 1 + 2 * smoothstep(0.3, 0.6, nlf_alpha);
 
     std::array<DenoiseParameters, 5> denoiseParameters = {{
         {
@@ -206,34 +201,34 @@ std::pair<float, std::array<DenoiseParameters, 5>> Sonya6400DenoiseParameters(in
             .chroma = cmult[0] * lerp_c,
             .chromaBoost = 2 * chromaBoost,
             .gradientBoost = 8,
-            .sharpening = std::lerp(1.5f, 0.8f, nlf_alpha)
+            .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
         },
         {
             .luma = lmult[1] * lerp,
             .chroma = cmult[1] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1.1
+            .gradientBoost = gradientBoost,
+            .sharpening = 1.2
         },
         {
             .luma = lmult[2] * lerp,
             .chroma = cmult[2] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[3] * lerp,
             .chroma = cmult[3] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         },
         {
             .luma = lmult[4] * lerp,
             .chroma = cmult[4] * lerp_c,
             .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
+            .gradientBoost = gradientBoost,
             .sharpening = 1
         }
     }};

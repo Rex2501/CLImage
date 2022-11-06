@@ -174,7 +174,6 @@ std::pair<float, std::array<DenoiseParameters, 5>> CanonEOSRPDenoiseParameters(i
     float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
     // Default Good
-    float highNoise = smoothstep(0.3, 0.6, nlf_alpha);
     float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
     float cmult[5] = { 1, 1, 1, 1, 1 };
 

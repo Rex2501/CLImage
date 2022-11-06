@@ -22,8 +22,8 @@
 //#define read_imageh read_imagef
 //#define write_imageh write_imagef
 
-//#define LENS_SHADING true
-//#define LENS_SHADING_GAIN 1
+#define LENS_SHADING true
+#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,

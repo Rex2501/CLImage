@@ -210,11 +210,11 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
 
     // High ISO noise texture replacement
     if (clBlueNoise != nullptr) {
-        std::cout << "Adding Blue Noise" << std::endl;
-
         const gls::Vector<2> lumaVariance = { np.first[0], np.second[0] };
 
-        const auto grainAmount = 1 + 15 * smoothstep(1.0e-4, 5e-4, lumaVariance[1]);
+        std::cout << "Adding Blue Noise for variance: " << lumaVariance << std::endl;
+
+        const auto grainAmount = 1 + 3 * smoothstep(4e-4, 6e-4, lumaVariance[1]);
 
         blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
     }
