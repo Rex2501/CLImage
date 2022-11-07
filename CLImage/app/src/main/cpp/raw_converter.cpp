@@ -148,7 +148,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
     const auto rawVariance = getRawVariance(noiseModel->rawNlf);
 
-    const bool high_noise_image = rawVariance[1][1] > kHighNoiseVariance && !calibrateFromImage;
+    const bool high_noise_image = rawVariance[1][1] > kHighNoiseVariance;
 
     std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << std::endl;
 
@@ -175,19 +175,13 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
     return clLinearRGBImageA.get();
 }
 
-gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
-    // Convert linear image to YCbCr for denoising
-    auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
-
-    std::cout << "cam_to_ycbcr: " << std::setprecision(4) << std::scientific << cam_to_ycbcr.span() << std::endl;
-
-    transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), cam_to_ycbcr);
-
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                               DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     NoiseModel* noiseModel = &demosaicParameters->noiseModel;
 
     // Luma and Chroma Despeckling
     const auto& np = noiseModel->pyramidNlf[0];
-    despeckleImage(_glsContext, *clLinearRGBImageA,
+    despeckleImage(_glsContext, inputImage,
                    /*var_a=*/ np.first,
                    /*var_b=*/ np.second,
                    clLinearRGBImageB.get());
@@ -214,18 +208,16 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
 
         const auto grainAmount = 1 + 3 * smoothstep(4e-4, 6e-4, lumaVariance[1]);
 
-        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
+        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageB.get());
+        clDenoisedImage = clLinearRGBImageB.get();
     }
 
-    // Convert result back to camera RGB
-    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
-    transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), normalized_ycbcr_to_cam);
-
-    return clLinearRGBImageA.get();
+    return clDenoisedImage;
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::postProcess(const DemosaicParameters& demosaicParameters) {
-    convertTosRGB(_glsContext, *clLinearRGBImageA, localToneMapping->getMask(), clsRGBImage.get(), demosaicParameters);
+gls::cl_image_2d<gls::rgba_pixel>* RawConverter::postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                             const DemosaicParameters& demosaicParameters) {
+    convertTosRGB(_glsContext, inputImage, localToneMapping->getMask(), clsRGBImage.get(), demosaicParameters);
 
     return clsRGBImage.get();
 }
@@ -235,13 +227,27 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runPipeline(const gls::image<gl
     auto t_start = std::chrono::high_resolution_clock::now();
 
     // --- Image Demosaicing ---
-    demosaic(rawImage, demosaicParameters, calibrateFromImage);
+
+    const auto demosaicedImage = demosaic(rawImage, demosaicParameters, calibrateFromImage);
 
     // --- Image Denoising ---
-    denoise(demosaicParameters, calibrateFromImage);
+
+    // Convert linear image to YCbCr for denoising
+    const auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
+
+    std::cout << "cam_to_ycbcr: " << std::setprecision(4) << std::scientific << cam_to_ycbcr.span() << std::endl;
+
+    transformImage(_glsContext, *demosaicedImage, clLinearRGBImageA.get(), cam_to_ycbcr);
+
+    const auto clDenoisedImage = denoise(*clLinearRGBImageA, demosaicParameters, calibrateFromImage);
+
+    // Convert result back to camera RGB
+    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
+    transformImage(_glsContext, *clDenoisedImage, clLinearRGBImageA.get(), normalized_ycbcr_to_cam);
 
     // --- Image Post Processing ---
-    postProcess(*demosaicParameters);
+
+    const auto sRGBImage = postProcess(*clLinearRGBImageA, *demosaicParameters);
 
     cl::CommandQueue queue = cl::CommandQueue::getDefault();
     queue.finish();
@@ -250,7 +256,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runPipeline(const gls::image<gl
 
     LOG_INFO(TAG) << "OpenCL Pipeline Execution Time: " << (int) elapsed_time_ms << "ms for image of size: " << rawImage.width << " x " << rawImage.height << std::endl;
 
-    return clsRGBImage.get();
+    return sRGBImage;
 }
 
 gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,

@@ -111,8 +111,10 @@ public:
 
     gls::cl_image_2d<gls::rgba_pixel_float>* demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
                                                       DemosaicParameters* demosaicParameters, bool calibrateFromImage);
-    gls::cl_image_2d<gls::rgba_pixel_float>* denoise(DemosaicParameters* demosaicParameters, bool calibrateFromImage);
-    gls::cl_image_2d<gls::rgba_pixel>* postProcess(const DemosaicParameters& demosaicParameters);
+    gls::cl_image_2d<gls::rgba_pixel_float>* denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                     DemosaicParameters* demosaicParameters, bool calibrateFromImage);
+    gls::cl_image_2d<gls::rgba_pixel>* postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                   const DemosaicParameters& demosaicParameters);
 
     gls::cl_image_2d<gls::rgba_pixel>* runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                        const DemosaicParameters& demosaicParameters);
