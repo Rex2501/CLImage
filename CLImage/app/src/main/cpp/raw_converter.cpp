@@ -141,7 +141,9 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
     LOG_INFO(TAG) << "NoiseLevel: " << demosaicParameters->noiseLevel << std::endl;
 
     if (calibrateFromImage) {
-        noiseModel->rawNlf = MeasureRawNLF(_glsContext, *clScaledRawImage, demosaicParameters->bayerPattern);
+        noiseModel->rawNlf = MeasureRawNLF(_glsContext, *clScaledRawImage,
+                                           demosaicParameters->exposure_multiplier,
+                                           demosaicParameters->bayerPattern);
     }
 
     const auto rawVariance = getRawVariance(noiseModel->rawNlf);
@@ -193,7 +195,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
         pyramidProcessor->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
                                   clLinearRGBImageB.get(), demosaicParameters->rgb_cam,
-                                  &(noiseModel->pyramidNlf), calibrateFromImage);
+                                  &(noiseModel->pyramidNlf), demosaicParameters->exposure_multiplier, calibrateFromImage);
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
         const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage = {
@@ -204,10 +206,6 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
         localToneMapping->createMask(_glsContext, *clDenoisedImage, guideImage, *noiseModel, *demosaicParameters);
     }
 
-    // Convert result back to camera RGB
-    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
-    transformImage(_glsContext, *clDenoisedImage, clLinearRGBImageA.get(), normalized_ycbcr_to_cam);
-
     // High ISO noise texture replacement
     if (clBlueNoise != nullptr) {
         const gls::Vector<2> lumaVariance = { np.first[0], np.second[0] };
@@ -216,8 +214,12 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(DemosaicParameter
 
         const auto grainAmount = 1 + 3 * smoothstep(4e-4, 6e-4, lumaVariance[1]);
 
-        blueNoiseImage(_glsContext, *clLinearRGBImageA, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
+        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageA.get());
     }
+
+    // Convert result back to camera RGB
+    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
+    transformImage(_glsContext, *clLinearRGBImageA, clLinearRGBImageA.get(), normalized_ycbcr_to_cam);
 
     return clLinearRGBImageA.get();
 }

@@ -43,7 +43,7 @@ struct PyramidProcessor {
     imageType* denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
                        imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                        std::array<YCbCrNLF, levels>* nlfParameters,
-                       bool calibrateFromImage = false);
+                       float exposure_multiplier, bool calibrateFromImage = false);
 };
 
 #endif /* pyramidal_denoise_h */

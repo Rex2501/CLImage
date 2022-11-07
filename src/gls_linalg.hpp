@@ -38,6 +38,10 @@ struct Vector : public std::array<value_type, N> {
 #endif
     }
 
+    Vector(value_type val) {
+        this->fill(val);
+    }
+
     Vector(const std::array<value_type, N>& v) {
         assert(v.size() == N);
         std::copy(v.begin(), v.end(), this->begin());

@@ -142,16 +142,15 @@ NoiseModel nlfFromIsoiPhone(const std::array<NoiseModel, 8>& NLFData, int iso) {
 }
 
 std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(32)) / (log2(2500) - log2(32)), 0.0, 1.0);
+    const float nlf_alpha = std::clamp((log2(iso) - log2(20)) / (log2(3200) - log2(20)), 0.0, 1.0);
 
     std::cout << "iPhone11DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
     float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
     float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
-    // Default Good
-    float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
-    float cmult[5] = { 1, 1, 0.5f, 0.25f, 0.125f };
+    float lmult[5] = { 0.125, 1.0, 0.5, 0.25, 0.125 };
+    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
 
     float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
 
@@ -161,8 +160,8 @@ std::pair<float, std::array<DenoiseParameters, 5>> iPhone11DenoiseParameters(int
         {
             .luma = lmult[0] * lerp,
             .chroma = cmult[0] * lerp_c,
-            .chromaBoost = 2 * chromaBoost,
-            .gradientBoost = 8,
+            .chromaBoost = 4 * chromaBoost,
+            .gradientBoost = 8 * gradientBoost,
             .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
         },
         {

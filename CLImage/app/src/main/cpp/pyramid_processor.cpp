@@ -23,7 +23,7 @@ PyramidProcessor<5>::PyramidProcessor(gls::OpenCLContext* glsContext, int width,
 template
 typename PyramidProcessor<5>::imageType* PyramidProcessor<5>::denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, 5>* denoiseParameters,
                                                                       imageType* image, const gls::Matrix<3, 3>& rgb_cam,
-                                                                      std::array<YCbCrNLF, 5>* nlfParameters, bool calibrateFromImage);
+                                                                      std::array<YCbCrNLF, 5>* nlfParameters, float exposure_multiplier, bool calibrateFromImage);
 
 struct BilateralDenoiser : ImageDenoiser {
     BilateralDenoiser(gls::OpenCLContext* glsContext, int width, int height) : ImageDenoiser(glsContext, width, height) { }
@@ -68,37 +68,41 @@ gls::Vector<3> nflMultiplier(const DenoiseParameters &denoiseParameters) {
 
 extern const gls::Matrix<3, 3> ycbcr_srgb;
 
+void dumpYCbCrImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
+    gls::image<gls::rgb_pixel> out(image.width, image.height);
+    const auto downsampledCPU = image.mapImage();
+    out.apply([&downsampledCPU](gls::rgb_pixel* p, int x, int y){
+        const auto& ip = downsampledCPU[y][x];
+        const auto& v = ycbcr_srgb * gls::Vector<3>{ip.x, ip.y, ip.z};
+        *p = gls::rgb_pixel {
+            (uint8_t) (255 * std::sqrt(std::clamp(v[0], 0.0f, 1.0f))),
+            (uint8_t) (255 * std::sqrt(std::clamp(v[1], 0.0f, 1.0f))),
+            (uint8_t) (255 * std::sqrt(std::clamp(v[2], 0.0f, 1.0f)))
+        };
+    });
+    image.unmapImage(downsampledCPU);
+    static int count = 1;
+    out.write_png_file("/Users/fabio/pyramid" + std::to_string(count++) + ".png");
+}
+
 template <size_t levels>
 typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
                                                                                 imageType* image, const gls::Matrix<3, 3>& rgb_cam,
                                                                                 std::array<YCbCrNLF, levels>* nlfParameters,
-                                                                                bool calibrateFromImage) {
+                                                                                float exposure_multiplier, bool calibrateFromImage) {
     std::array<YCbCrNLF, levels> calibrated_nlf;
 
     for (int i = 0; i < levels; i++) {
         if (i < levels - 1) {
             resampleImage(glsContext, "downsampleImage", i == 0 ? *image : *imagePyramid[i - 1], imagePyramid[i].get());
 #if DUMP_PYRAMID_IMAGES
-            gls::image<gls::rgb_pixel> out(imagePyramid[i]->width, imagePyramid[i]->height);
-            const auto downsampledCPU = imagePyramid[i]->mapImage();
-            out.apply([&downsampledCPU](gls::rgb_pixel* p, int x, int y){
-                const auto& ip = downsampledCPU[y][x];
-                const auto& v = ycbcr_srgb * gls::Vector<3>{ip.x, ip.y, ip.z};
-                *p = gls::rgb_pixel {
-                    (uint8_t) (255 * std::sqrt(std::clamp(v[0], 0.0f, 1.0f))),
-                    (uint8_t) (255 * std::sqrt(std::clamp(v[1], 0.0f, 1.0f))),
-                    (uint8_t) (255 * std::sqrt(std::clamp(v[2], 0.0f, 1.0f)))
-                };
-            });
-            imagePyramid[i]->unmapImage(downsampledCPU);
-            static int count = 1;
-            out.write_png_file("/Users/fabio/pyramid" + std::to_string(count++) + ".png");
+            dumpYCbCrImage(*imagePyramid[i]);
 #endif
         }
 
         if (calibrateFromImage) {
-            const auto nlf = MeasureYCbCrNLF(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]));
+            const auto nlf = MeasureYCbCrNLF(glsContext, i == 0 ? *image : *(imagePyramid[i - 1]), exposure_multiplier);
             (*nlfParameters)[i] = nlf;
         }
 

@@ -1534,7 +1534,6 @@ float blueNoiseGenerator(read_only image2d_t blueNoiseImage, int2 imageCoordinat
     return sign(blueNoise) * (1.0f - sqrt(1.0f - abs(blueNoise)));
 }
 
-static constant const float3 rgbToY = { 0.2126, 0.7152, 0.0722 };
 
 kernel void blueNoiseImage(read_only image2d_t inputImage,
                            read_only image2d_t blueNoiseImage,
@@ -1548,10 +1547,12 @@ kernel void blueNoiseImage(read_only image2d_t inputImage,
     float3 pixel = read_imagef(inputImage, imageCoordinates).xyz;
 
     // Compute the sigma of the noise from Noise Level Function
-    float luma = dot(pixel, rgbToY);
-    float luma_sigma = sqrt(lumaVariance.x + lumaVariance.y * luma);
+    float luma_sigma = sqrt(lumaVariance.x + lumaVariance.y * pixel.x);
 
-    float3 result = pixel + luma_sigma * blueNoise;
+    float saturation = length(pixel.yz);
+    float darkening = 1 - 0.1 * smoothstep(0.1, 0.2, saturation);
+
+    float3 result = (float3) (darkening * (pixel.x + luma_sigma * blueNoise), pixel.yz);
 
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
