@@ -57,10 +57,11 @@ typedef std::pair<gls::Vector<4>, gls::Vector<4>> RawNLF;
 
 typedef std::pair<gls::Vector<3>, gls::Vector<3>> YCbCrNLF;
 
-typedef struct NoiseModel {
+template <size_t levels>
+struct NoiseModel {
     RawNLF rawNlf;                          // Raw Data NLF
-    std::array<YCbCrNLF, 5> pyramidNlf;     // NLF for interpolated data on a 5-level pyramid
-} NoiseModel;
+    std::array<YCbCrNLF, levels> pyramidNlf;     // NLF for interpolated data on a 5-level pyramid
+};
 
 struct CalibrationEntry {
     int iso;
@@ -69,8 +70,8 @@ struct CalibrationEntry {
     bool rotated;
 };
 
-template <size_t N>
-void dumpNoiseModel(const std::array<CalibrationEntry, N>& calibration_files, const std::array<NoiseModel, N>& noiseModel) {
+template <size_t levels, size_t N>
+void dumpNoiseModel(const std::array<CalibrationEntry, N>& calibration_files, const std::array<NoiseModel<levels>, N>& noiseModel) {
     std::cout << "{{" << std::scientific << std::setprecision(3) << std::endl;
     for (int i = 0; i < calibration_files.size(); i++) {
         std::cout << "\t// ISO " << calibration_files[i].iso << std::endl;
@@ -105,7 +106,7 @@ typedef struct DemosaicParameters {
     gls::Matrix<3, 3> rgb_cam;
 
     // Noise Estimation and Reduction parameters
-    NoiseModel noiseModel;
+    NoiseModel<5> noiseModel;
     std::array<DenoiseParameters, 5> denoiseParameters;
     // In the [0..1] range, used to scale various denoising coefficients
     float noiseLevel;
@@ -174,7 +175,7 @@ std::array<YCbCrNLF, levels> lerp(const std::array<YCbCrNLF, levels>& NLFData0,
 }
 
 template <int levels>
-NoiseModel lerp(const NoiseModel& nm0, const NoiseModel& nm1, float a) {
+NoiseModel<levels> lerp(const NoiseModel<levels>& nm0, const NoiseModel<levels>& nm1, float a) {
     return { lerp(nm0.rawNlf, nm1.rawNlf, a), lerp<levels>(nm0.pyramidNlf, nm1.pyramidNlf, a) };
 }
 

@@ -136,7 +136,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
                  demosaicParameters->scale_mul,
                  demosaicParameters->black_level / 0xffff);
 
-    NoiseModel* noiseModel = &demosaicParameters->noiseModel;
+    NoiseModel<5>* noiseModel = &demosaicParameters->noiseModel;
 
     LOG_INFO(TAG) << "NoiseLevel: " << demosaicParameters->noiseLevel << std::endl;
 
@@ -177,7 +177,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
 gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                                DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
-    NoiseModel* noiseModel = &demosaicParameters->noiseModel;
+    NoiseModel<5>* noiseModel = &demosaicParameters->noiseModel;
 
     // Luma and Chroma Despeckling
     const auto& np = noiseModel->pyramidNlf[0];

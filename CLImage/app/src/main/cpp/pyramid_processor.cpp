@@ -106,20 +106,14 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
             (*nlfParameters)[i] = nlf;
         }
 
-        const auto mult = nflMultiplier((*denoiseParameters)[i]);
+        const auto m = nflMultiplier((*denoiseParameters)[i]);
 
-        calibrated_nlf[i] = { gls::Vector<3> { (*nlfParameters)[i].first } * mult, gls::Vector<3> { (*nlfParameters)[i].second } * mult };
+        calibrated_nlf[i] = { (*nlfParameters)[i].first * m, (*nlfParameters)[i].second * m };
     }
 
-    // Denoise the bottom of the image pyramid
-    const auto& np = calibrated_nlf[levels-1];
-    denoiser[levels-1]->denoise(glsContext, *(imagePyramid[levels-2]),
-                                np.first, np.second,
-                                (*denoiseParameters)[levels-1].chromaBoost, (*denoiseParameters)[levels-1].gradientBoost, /*pyramidLevel=*/ levels-1,
-                                denoisedImagePyramid[levels-1].get());
-
-    for (int i = levels - 2; i >= 0; i--) {
-        gls::cl_image_2d<gls::rgba_pixel_float>* denoiseInput = i > 0 ? imagePyramid[i - 1].get() : image;
+    // Denoise all pyramid layers independently
+    for (int i = 0; i < levels; i++) {
+        const auto denoiseInput = i > 0 ? imagePyramid[i - 1].get() : image;
 
         // Denoise current layer
         const auto& np = calibrated_nlf[i];
@@ -127,9 +121,14 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
                              np.first, np.second,
                              (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, /*pyramidLevel=*/ i,
                              denoisedImagePyramid[i].get());
+    }
 
+    // Reassemble pyramyd from the bottom up
+    for (int i = levels - 2; i >= 0; i--) {
+        const auto& np = calibrated_nlf[i];
+
+        // Subtract the previous layer's noise from the current one
         std::cout << "Reassembling layer " << i << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
-        // Subtract noise from previous layer
         reassembleImage(glsContext, *(denoisedImagePyramid[i]), *(imagePyramid[i]), *(denoisedImagePyramid[i+1]),
                         (*denoiseParameters)[i].sharpening, { np.first[0], np.second[0] }, denoisedImagePyramid[i].get());
     }

@@ -22,7 +22,151 @@
 #include <cmath>
 #include <filesystem>
 
-static const std::array<NoiseModel, 7> RicohGRIII = {{
+template <size_t levels = 5>
+class RicohGRIIICalibration : public CameraCalibration<levels> {
+    static const std::array<NoiseModel<levels>, 7> NLFData;
+
+public:
+    NoiseModel<levels> nlfFromIso(int iso) const override {
+        iso = std::clamp(iso, 100, 6400);
+        if (iso >= 100 && iso < 200) {
+            float a = (iso - 100) / 100;
+            return lerp<levels>(NLFData[0], NLFData[1], a);
+        } else if (iso >= 200 && iso < 400) {
+            float a = (iso - 200) / 200;
+            return lerp<levels>(NLFData[1], NLFData[2], a);
+        } else if (iso >= 400 && iso < 800) {
+            float a = (iso - 400) / 400;
+            return lerp<levels>(NLFData[2], NLFData[3], a);
+        } else if (iso >= 800 && iso < 1600) {
+            float a = (iso - 800) / 800;
+            return lerp<levels>(NLFData[3], NLFData[4], a);
+        } else if (iso >= 1600 && iso < 3200) {
+            float a = (iso - 1600) / 1600;
+            return lerp<levels>(NLFData[4], NLFData[5], a);
+        } else /* if (iso >= 3200 && iso < 6400) */ {
+            float a = (iso - 3200) / 3200;
+            return lerp<levels>(NLFData[5], NLFData[6], a);
+        }
+    }
+
+    std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParameters(int iso) const override {
+        const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(6400) - log2(100)), 0.0, 1.0);
+
+        std::cout << "RicohGRIIIDenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+
+        float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
+        float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
+
+        // Default Good
+        float lmult[5] = { 0.125, 1, 0.5, 0.25, 0.125 };
+        float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
+
+        float chromaBoost = 8;
+
+        std::array<DenoiseParameters, 5> denoiseParameters = {{
+            {
+                .luma = lmult[0] * lerp,
+                .chroma = cmult[0] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = std::lerp(1.3f, 1.0f, nlf_alpha)
+            },
+            {
+                .luma = lmult[1] * lerp,
+                .chroma = cmult[1] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1, // 1.1
+            },
+            {
+                .luma = lmult[2] * lerp,
+                .chroma = cmult[2] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[3] * lerp,
+                .chroma = cmult[3] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[4] * lerp,
+                .chroma = cmult[4] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            }
+        }};
+
+        return { nlf_alpha, denoiseParameters };
+    }
+
+    DemosaicParameters buildDemosaicParameters() const override {
+        return {
+            .rgbConversionParameters = {
+                .localToneMapping = false
+            },
+            .ltmParameters = {
+                .eps = 0.01,
+                .shadows = 0.6,
+                .highlights = 1.2,
+                .detail = { 1, 1.05, 1.5 }
+            }
+        };
+    }
+
+    void calibrate(RawConverter* rawConverter, const std::filesystem::path& input_dir) const override {
+        std::array<CalibrationEntry, 7> calibration_files = {{
+            { 100,  "R0000914_ISO100.DNG",  { 2437, 506, 1123, 733 }, false },
+            { 200,  "R0000917_ISO200.DNG",  { 2437, 506, 1123, 733 }, false },
+            { 400,  "R0000920_ISO400.DNG",  { 2437, 506, 1123, 733 }, false },
+            { 800,  "R0000923_ISO800.DNG",  { 2437, 506, 1123, 733 }, false },
+            { 1600, "R0000926_ISO1600.DNG", { 2437, 506, 1123, 733 }, false },
+            { 3200, "R0000929_ISO3200.DNG", { 2437, 506, 1123, 733 }, false },
+            { 6400, "R0000932_ISO6400.DNG", { 2437, 506, 1123, 733 }, false },
+        }};
+
+        std::array<NoiseModel<5>, 7> noiseModel;
+
+        for (int i = 0; i < calibration_files.size(); i++) {
+            auto& entry = calibration_files[i];
+            const auto input_path = input_dir / entry.fileName;
+
+            DemosaicParameters demosaicParameters = {
+                .rgbConversionParameters = {
+                    .localToneMapping = false
+                }
+            };
+
+            const auto rgb_image = CameraCalibration<5>::calibrate(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position);
+            rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal.png", /*skip_alpha=*/ true);
+
+            noiseModel[i] = demosaicParameters.noiseModel;
+        }
+
+        std::cout << "// RicohGRIII Calibration table:" << std::endl;
+        dumpNoiseModel(calibration_files, noiseModel);
+    }
+};
+
+void calibrateRicohGRIII(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
+    RicohGRIIICalibration calibration;
+    calibration.calibrate(rawConverter, input_dir);
+}
+
+gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+    gls::tiff_metadata dng_metadata, exif_metadata;
+    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
+
+    RicohGRIIICalibration calibration;
+    auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
+
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ true));
+}
+
+// --- NLFData ---
+
+template<>
+const std::array<NoiseModel<5>, 7> RicohGRIIICalibration<5>::NLFData = {{
     // ISO 100
     {
         {{1.038e-06, 1.520e-06, 6.685e-07, 1.474e-06}, {2.471e-04, 1.567e-04, 1.622e-04, 1.570e-04}},
@@ -101,163 +245,3 @@ static const std::array<NoiseModel, 7> RicohGRIII = {{
         }}
     },
 }};
-
-template <int levels>
-static NoiseModel nlfFromIso(const std::array<NoiseModel, 7>& NLFData, int iso) {
-    iso = std::clamp(iso, 100, 6400);
-    if (iso >= 100 && iso < 200) {
-        float a = (iso - 100) / 100;
-        return lerp<levels>(NLFData[0], NLFData[1], a);
-    } else if (iso >= 200 && iso < 400) {
-        float a = (iso - 200) / 200;
-        return lerp<levels>(NLFData[1], NLFData[2], a);
-    } else if (iso >= 400 && iso < 800) {
-        float a = (iso - 400) / 400;
-        return lerp<levels>(NLFData[2], NLFData[3], a);
-    } else if (iso >= 800 && iso < 1600) {
-        float a = (iso - 800) / 800;
-        return lerp<levels>(NLFData[3], NLFData[4], a);
-    } else if (iso >= 1600 && iso < 3200) {
-        float a = (iso - 1600) / 1600;
-        return lerp<levels>(NLFData[4], NLFData[5], a);
-    } else /* if (iso >= 3200 && iso < 6400) */ {
-        float a = (iso - 3200) / 3200;
-        return lerp<levels>(NLFData[5], NLFData[6], a);
-    }
-}
-
-std::pair<float, std::array<DenoiseParameters, 5>> RicohGRIIIDenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(6400) - log2(100)), 0.0, 1.0);
-
-    std::cout << "RicohGRIIIDenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
-
-    float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
-
-    // Default Good
-    float lmult[5] = { 0.125, 1, 0.5, 0.25, 0.125 };
-    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
-
-    float chromaBoost = 8;
-
-    std::array<DenoiseParameters, 5> denoiseParameters = {{
-        {
-            .luma = lmult[0] * lerp,
-            .chroma = cmult[0] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = std::lerp(1.3f, 1.0f, nlf_alpha)
-        },
-        {
-            .luma = lmult[1] * lerp,
-            .chroma = cmult[1] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1, // 1.1
-        },
-        {
-            .luma = lmult[2] * lerp,
-            .chroma = cmult[2] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[3] * lerp,
-            .chroma = cmult[3] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[4] * lerp,
-            .chroma = cmult[4] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        }
-    }};
-
-    return { nlf_alpha, denoiseParameters };
-}
-
-gls::image<gls::rgb_pixel>::unique_ptr calibrateRicohGRIII(RawConverter* rawConverter,
-                                                        const std::filesystem::path& input_path,
-                                                        DemosaicParameters* demosaicParameters,
-                                                        int iso, const gls::rectangle& gmb_position) {
-    gls::tiff_metadata dng_metadata, exif_metadata;
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, /*&gmb_position*/ nullptr, /*rotate_180=*/ false);
-
-    // See if the ISO value is present and override
-    const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
-    if (exifIsoSpeedRatings.size() > 0) {
-        iso = exifIsoSpeedRatings[0];
-    }
-
-    const auto denoiseParameters = RicohGRIIIDenoiseParameters(iso);
-    demosaicParameters->noiseLevel = denoiseParameters.first;
-    demosaicParameters->denoiseParameters = denoiseParameters.second;
-
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
-}
-
-void calibrateRicohGRIII(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    std::array<CalibrationEntry, 7> calibration_files = {{
-        { 100,  "R0000914_ISO100.DNG",  { 2437, 506, 1123, 733 }, false },
-        { 200,  "R0000917_ISO200.DNG",  { 2437, 506, 1123, 733 }, false },
-        { 400,  "R0000920_ISO400.DNG",  { 2437, 506, 1123, 733 }, false },
-        { 800,  "R0000923_ISO800.DNG",  { 2437, 506, 1123, 733 }, false },
-        { 1600, "R0000926_ISO1600.DNG", { 2437, 506, 1123, 733 }, false },
-        { 3200, "R0000929_ISO3200.DNG", { 2437, 506, 1123, 733 }, false },
-        { 6400, "R0000932_ISO6400.DNG", { 2437, 506, 1123, 733 }, false },
-    }};
-
-    std::array<NoiseModel, 7> noiseModel;
-
-    for (int i = 0; i < calibration_files.size(); i++) {
-        auto& entry = calibration_files[i];
-        const auto input_path = input_dir / entry.fileName;
-
-        DemosaicParameters demosaicParameters = {
-            .rgbConversionParameters = {
-                .localToneMapping = false
-            }
-        };
-
-        const auto rgb_image = calibrateRicohGRIII(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position);
-        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal.png", /*skip_alpha=*/ true);
-
-        noiseModel[i] = demosaicParameters.noiseModel;
-    }
-
-    std::cout << "RicohGRIII Calibration table:" << std::endl;
-    dumpNoiseModel(calibration_files, noiseModel);
-}
-
-gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
-    DemosaicParameters demosaicParameters = {
-        .rgbConversionParameters = {
-            .localToneMapping = false
-        },
-        .ltmParameters = {
-            .eps = 0.01,
-            .shadows = 0.6,
-            .highlights = 1.2,
-            .detail = { 1, 1.05, 1.5 }
-        }
-    };
-
-    gls::tiff_metadata dng_metadata, exif_metadata;
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, &demosaicParameters, /*auto_white_balance=*/ false, nullptr /* &gmb_position */, /*rotate_180=*/ false);
-
-    const auto iso = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS)[0];
-
-    std::cout << "EXIF ISO: " << iso << std::endl;
-
-    const auto nlfParams = nlfFromIso<5>(RicohGRIII, iso);
-    const auto denoiseParameters = RicohGRIIIDenoiseParameters(iso);
-    demosaicParameters.noiseModel = nlfParams;
-    demosaicParameters.noiseLevel = denoiseParameters.first;
-    demosaicParameters.denoiseParameters = denoiseParameters.second;
-
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
-}

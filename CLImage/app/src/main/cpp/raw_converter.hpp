@@ -53,7 +53,7 @@ public:
     void createMask(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& image,
                     const std::array<const gls::cl_image_2d<gls::rgba_pixel_float>*, 3>& guideImage,
-                    const NoiseModel& noiseModel,
+                    const NoiseModel<5>& noiseModel,
                     const DemosaicParameters& demosaicParameters) {
         const std::array<const gls::cl_image_2d<gls::luma_alpha_pixel_float>*, 3>& abImage = {
             lfAbGfImage.get(), mfAbGfImage.get(), hfAbGfImage.get()
@@ -111,8 +111,10 @@ public:
 
     gls::cl_image_2d<gls::rgba_pixel_float>* demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
                                                       DemosaicParameters* demosaicParameters, bool calibrateFromImage);
+
     gls::cl_image_2d<gls::rgba_pixel_float>* denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                      DemosaicParameters* demosaicParameters, bool calibrateFromImage);
+
     gls::cl_image_2d<gls::rgba_pixel>* postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                    const DemosaicParameters& demosaicParameters);
 
@@ -120,7 +122,6 @@ public:
                                                        const DemosaicParameters& demosaicParameters);
 
     static gls::image<gls::rgb_pixel>::unique_ptr convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel>& clRGBAImage);
-
 };
 
 #endif /* raw_converter_hpp */

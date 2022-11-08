@@ -19,7 +19,169 @@
 #include <cmath>
 #include <filesystem>
 
-static const std::array<NoiseModel, 10> LeicaQ2 = {{
+template <size_t levels = 5>
+class LeicaQ2Calibration : public CameraCalibration<levels> {
+    static const std::array<NoiseModel<levels>, 10> NLFData;
+
+public:
+    NoiseModel<levels> nlfFromIso(int iso) const override {
+        iso = std::clamp(iso, 100, 50000);
+        if (iso >= 100 && iso < 200) {
+            float a = (iso - 100) / 100;
+            return lerp<levels>(NLFData[0], NLFData[1], a);
+        } else if (iso >= 200 && iso < 400) {
+            float a = (iso - 200) / 200;
+            return lerp<levels>(NLFData[1], NLFData[2], a);
+        } else if (iso >= 400 && iso < 800) {
+            float a = (iso - 400) / 400;
+            return lerp<levels>(NLFData[2], NLFData[3], a);
+        } else if (iso >= 800 && iso < 1600) {
+            float a = (iso - 800) / 800;
+            return lerp<levels>(NLFData[3], NLFData[4], a);
+        } else if (iso >= 1600 && iso < 3200) {
+            float a = (iso - 1600) / 1600;
+            return lerp<levels>(NLFData[4], NLFData[5], a);
+        } else if (iso >= 3200 && iso < 6400) {
+            float a = (iso - 3200) / 3200;
+            return lerp<levels>(NLFData[5], NLFData[6], a);
+        } else if (iso >= 6400 && iso < 12500) {
+            float a = (iso - 6100) / 6100;
+            return lerp<levels>(NLFData[6], NLFData[7], a);
+        } else if (iso >= 12500 && iso < 25000) {
+            float a = (iso - 12500) / 12500;
+            return lerp<levels>(NLFData[7], NLFData[8], a);
+        } else /* if (iso >= 25000 && iso <= 50000) */ {
+            float a = (iso - 25000) / 25000;
+            return lerp<levels>(NLFData[8], NLFData[9], a);
+        }
+    }
+
+    std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParameters(int iso) const override {
+        const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
+
+        std::cout << "LeicaQ2 DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+
+        float lerp = 0.5 * std::lerp(0.125f, 2.0f, nlf_alpha);
+        float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+
+        // Default Good
+        float lmult[5] = { 0.125, 1, 0.25, 0.125, 0.125 / 2 };
+        float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
+
+        float chromaBoost = 8;
+
+        std::array<DenoiseParameters, 5> denoiseParameters = {{
+            {
+                .luma = lmult[0] * lerp,
+                .chroma = cmult[0] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .gradientBoost = 32,
+                .sharpening = 1.2, // Sharpen HF in LTM
+            },
+            {
+                .luma = lmult[1] * lerp,
+                .chroma = cmult[1] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1.1
+            },
+            {
+                .luma = lmult[2] * lerp,
+                .chroma = cmult[2] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[3] * lerp,
+                .chroma = cmult[3] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[4] * lerp,
+                .chroma = cmult[4] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .sharpening = 1
+            }
+        }};
+
+        return { nlf_alpha, denoiseParameters };
+    }
+
+    DemosaicParameters buildDemosaicParameters() const override {
+        return {
+            .rgbConversionParameters = {
+                .contrast = 1.05,
+                .saturation = 1.0,
+                .toneCurveSlope = 3.5,
+                .localToneMapping = false
+            },
+            .ltmParameters = {
+                .eps = 0.01,
+                .shadows = 0.7,
+                .highlights = 1.3,
+                .detail = { 1, 1.05, 1.3 }
+            }
+        };
+    }
+
+    void calibrate(RawConverter* rawConverter, const std::filesystem::path& input_dir) const override {
+        std::array<CalibrationEntry, 10> calibration_files = {{
+            { 100,   "L1010611.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 200,   "L1010614.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 400,   "L1010617.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 800,   "L1010620.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 1600,  "L1010623.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 3200,  "L1010626.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 6400,  "L1010629.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 12500, "L1010632.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 25000, "L1010635.DNG", { 3440, 777, 1549, 1006 }, false },
+            { 50000, "L1010638.DNG", { 3440, 777, 1549, 1006 }, false },
+        }};
+
+        std::array<NoiseModel<5>, 10> noiseModel;
+
+        for (int i = 0; i < calibration_files.size(); i++) {
+            auto& entry = calibration_files[i];
+            const auto input_path = input_dir / entry.fileName;
+
+            DemosaicParameters demosaicParameters = {
+                .rgbConversionParameters = {
+                    .contrast = 1.05,
+                    .saturation = 1.0,
+                    .toneCurveSlope = 3.5,
+                }
+            };
+
+            const auto rgb_image = CameraCalibration<5>::calibrate(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position);
+            rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal.png", /*skip_alpha=*/ true);
+
+            noiseModel[i] = demosaicParameters.noiseModel;
+        }
+
+        std::cout << "// Canon EOR RP Calibration table:" << std::endl;
+        dumpNoiseModel(calibration_files, noiseModel);
+    }
+};
+
+void calibrateiLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
+    LeicaQ2Calibration calibration;
+    calibration.calibrate(rawConverter, input_dir);
+}
+
+gls::image<gls::rgb_pixel>::unique_ptr demosaiciLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+    gls::tiff_metadata dng_metadata, exif_metadata;
+    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
+
+    LeicaQ2Calibration calibration;
+    auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
+
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ true));
+}
+
+// --- NLFData ---
+
+template<>
+const std::array<NoiseModel<5>, 10> LeicaQ2Calibration<5>::NLFData = {{
     // ISO 100
     {
         {{6.998e-07, 1.030e-06, 1.000e-08, 1.034e-06}, {2.054e-04, 1.487e-04, 1.564e-04, 1.496e-04}},
@@ -131,181 +293,3 @@ static const std::array<NoiseModel, 10> LeicaQ2 = {{
         }}
     },
 }};
-
-template <int levels>
-static NoiseModel nlfFromIso(const std::array<NoiseModel, 10>& NLFData, int iso) {
-    iso = std::clamp(iso, 100, 50000);
-    if (iso >= 100 && iso < 200) {
-        float a = (iso - 100) / 100;
-        return lerp<levels>(NLFData[0], NLFData[1], a);
-    } else if (iso >= 200 && iso < 400) {
-        float a = (iso - 200) / 200;
-        return lerp<levels>(NLFData[1], NLFData[2], a);
-    } else if (iso >= 400 && iso < 800) {
-        float a = (iso - 400) / 400;
-        return lerp<levels>(NLFData[2], NLFData[3], a);
-    } else if (iso >= 800 && iso < 1600) {
-        float a = (iso - 800) / 800;
-        return lerp<levels>(NLFData[3], NLFData[4], a);
-    } else if (iso >= 1600 && iso < 3200) {
-        float a = (iso - 1600) / 1600;
-        return lerp<levels>(NLFData[4], NLFData[5], a);
-    } else if (iso >= 3200 && iso < 6400) {
-        float a = (iso - 3200) / 3200;
-        return lerp<levels>(NLFData[5], NLFData[6], a);
-    } else if (iso >= 6400 && iso < 12500) {
-        float a = (iso - 6100) / 6100;
-        return lerp<levels>(NLFData[6], NLFData[7], a);
-    } else if (iso >= 12500 && iso < 25000) {
-        float a = (iso - 12500) / 12500;
-        return lerp<levels>(NLFData[7], NLFData[8], a);
-    } else /* if (iso >= 25000 && iso <= 50000) */ {
-        float a = (iso - 25000) / 25000;
-        return lerp<levels>(NLFData[8], NLFData[9], a);
-    }
-}
-
-std::pair<float, std::array<DenoiseParameters, 5>> LeicaQ2DenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
-
-    std::cout << "LeicaQ2DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
-
-    float lerp = 0.5 * std::lerp(0.125f, 2.0f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
-
-    // Default Good
-    float lmult[5] = { 0.125, 1, 0.25, 0.125, 0.125 / 2 };
-    float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
-
-    float chromaBoost = 8;
-
-    std::array<DenoiseParameters, 5> denoiseParameters = {{
-        {
-            .luma = lmult[0] * lerp,
-            .chroma = cmult[0] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 32,
-            .sharpening = 1.2, // Sharpen HF in LTM
-        },
-        {
-            .luma = lmult[1] * lerp,
-            .chroma = cmult[1] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1.1
-        },
-        {
-            .luma = lmult[2] * lerp,
-            .chroma = cmult[2] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[3] * lerp,
-            .chroma = cmult[3] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[4] * lerp,
-            .chroma = cmult[4] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .sharpening = 1
-        }
-    }};
-
-    return { nlf_alpha, denoiseParameters };
-}
-
-gls::image<gls::rgb_pixel>::unique_ptr calibrateLeicaQ2(RawConverter* rawConverter,
-                                                        const std::filesystem::path& input_path,
-                                                        DemosaicParameters* demosaicParameters,
-                                                        int iso, const gls::rectangle& gmb_position) {
-    gls::tiff_metadata dng_metadata, exif_metadata;
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, /*&gmb_position*/ nullptr, /*rotate_180=*/ false);
-
-    // See if the ISO value is present and override
-    const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
-    if (exifIsoSpeedRatings.size() > 0) {
-        iso = exifIsoSpeedRatings[0];
-    }
-
-    const auto denoiseParameters = LeicaQ2DenoiseParameters(iso);
-    demosaicParameters->noiseLevel = denoiseParameters.first;
-    demosaicParameters->denoiseParameters = denoiseParameters.second;
-
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
-}
-
-void calibrateLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    std::array<CalibrationEntry, 10> calibration_files = {{
-        { 100,   "L1010611.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 200,   "L1010614.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 400,   "L1010617.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 800,   "L1010620.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 1600,  "L1010623.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 3200,  "L1010626.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 6400,  "L1010629.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 12500, "L1010632.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 25000, "L1010635.DNG", { 3440, 777, 1549, 1006 }, false },
-        { 50000, "L1010638.DNG", { 3440, 777, 1549, 1006 }, false },
-    }};
-
-    std::array<NoiseModel, 10> noiseModel;
-
-    for (int i = 0; i < calibration_files.size(); i++) {
-        auto& entry = calibration_files[i];
-        const auto input_path = input_dir / entry.fileName;
-
-        DemosaicParameters demosaicParameters = {
-            .rgbConversionParameters = {
-                .contrast = 1.05,
-                .saturation = 1.0,
-                .toneCurveSlope = 3.5,
-            }
-        };
-
-        const auto rgb_image = calibrateLeicaQ2(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position);
-        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal_new_full_v1.png", /*skip_alpha=*/ true);
-
-        noiseModel[i] = demosaicParameters.noiseModel;
-    }
-
-    std::cout << "// LeicaQ2 Calibration table:" << std::endl;
-    dumpNoiseModel(calibration_files, noiseModel);
-}
-
-gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
-    DemosaicParameters demosaicParameters = {
-        .rgbConversionParameters = {
-            .contrast = 1.05,
-            .saturation = 1.0,
-            .toneCurveSlope = 3.5,
-            .localToneMapping = false
-        },
-        .ltmParameters = {
-            .eps = 0.01,
-            .shadows = 0.7,
-            .highlights = 1.3,
-            .detail = { 1, 1.05, 1.3 }
-        }
-    };
-
-    gls::tiff_metadata dng_metadata, exif_metadata;
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, &demosaicParameters, /*auto_white_balance=*/ false, nullptr /* &gmb_position */, /*rotate_180=*/ false);
-
-    const auto iso = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS)[0];
-
-    std::cout << "EXIF ISO: " << iso << std::endl;
-
-    const auto nlfParams = nlfFromIso<5>(LeicaQ2, iso);
-    const auto denoiseParameters = LeicaQ2DenoiseParameters(iso);
-    demosaicParameters.noiseModel = nlfParams;
-    demosaicParameters.noiseLevel = denoiseParameters.first;
-    demosaicParameters.denoiseParameters = denoiseParameters.second;
-
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
-}

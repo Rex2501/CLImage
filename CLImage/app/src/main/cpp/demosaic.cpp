@@ -28,7 +28,7 @@
 static const char* TAG = "CLImage Pipeline";
 
 gls::image<gls::rgb_pixel>::unique_ptr runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                     DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
+                                                   DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     gls::OpenCLContext glsContext("");
 
     auto rawConverter = std::make_unique<RawConverter>(&glsContext);
@@ -48,7 +48,7 @@ gls::image<gls::rgb_pixel>::unique_ptr runPipeline(const gls::image<gls::luma_pi
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                          const DemosaicParameters& demosaicParameters) {
+                                                       const DemosaicParameters& demosaicParameters) {
     gls::OpenCLContext glsContext("");
 
     auto rawConverter = std::make_unique<RawConverter>(&glsContext);

@@ -57,7 +57,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/iPhone11/IPHONE11hSLI2500NRD.dng"
+            argument = "/Users/fabio/work/ImageRegistration/iPhoneRawCaptures/Office12Mini2/IMG_2220.DNG"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

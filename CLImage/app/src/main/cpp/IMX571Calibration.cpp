@@ -22,7 +22,177 @@
 #include <cmath>
 #include <filesystem>
 
-static const std::array<NoiseModel, 11> NLF_IMX571 = {{
+template <size_t levels = 5>
+class IMX571DNGCalibration : public CameraCalibration<levels> {
+    static const std::array<NoiseModel<levels>, 11> NLFData;
+
+public:
+    NoiseModel<levels> nlfFromIso(int iso) const override {
+        iso = std::clamp(iso, 100, 102400);
+        if (iso >= 100 && iso < 200) {
+            float a = (iso - 100) / 100;
+            return lerp<levels>(NLFData[0], NLFData[1], a);
+        } else if (iso >= 200 && iso < 400) {
+            float a = (iso - 200) / 200;
+            return lerp<levels>(NLFData[1], NLFData[2], a);
+        } else if (iso >= 400 && iso < 800) {
+            float a = (iso - 400) / 400;
+            return lerp<levels>(NLFData[2], NLFData[3], a);
+        } else if (iso >= 800 && iso < 1600) {
+            float a = (iso - 800) / 800;
+            return lerp<levels>(NLFData[3], NLFData[4], a);
+        } else if (iso >= 1600 && iso < 3200) {
+            float a = (iso - 1600) / 1600;
+            return lerp<levels>(NLFData[4], NLFData[5], a);
+        } else if (iso >= 3200 && iso < 6400) {
+            float a = (iso - 3200) / 3200;
+            return lerp<levels>(NLFData[5], NLFData[6], a);
+        } else if (iso >= 6400 && iso < 12800) {
+            float a = (iso - 6400) / 6400;
+            return lerp<levels>(NLFData[6], NLFData[7], a);
+        } else if (iso >= 12800 && iso < 25600) {
+            float a = (iso - 12800) / 12800;
+            return lerp<levels>(NLFData[7], NLFData[8], a);
+        } else if (iso >= 25600 && iso < 51200) {
+            float a = (iso - 25600) / 25600;
+            return lerp<levels>(NLFData[8], NLFData[9], a);
+        } else /* if (iso >= 51200 && iso <= 102400) */ {
+            float a = (iso - 51200) / 51200;
+            return lerp<levels>(NLFData[9], NLFData[10], a);
+        }
+    }
+
+    std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParameters(int iso) const override {
+        const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
+
+        std::cout << "IMX571DNG DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+
+        float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
+        float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+
+        // Default Good
+        float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
+        float cmult[5] = { 1, 1, 1, 1, 1 };
+
+        float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
+
+        float gradientBoost = 1 + 2 * smoothstep(0.3, 0.6, nlf_alpha);
+
+        std::array<DenoiseParameters, 5> denoiseParameters = {{
+            {
+                .luma = lmult[0] * lerp,
+                .chroma = cmult[0] * lerp_c,
+                .chromaBoost = 2 * chromaBoost,
+                .gradientBoost = 8,
+                .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
+            },
+            {
+                .luma = lmult[1] * lerp,
+                .chroma = cmult[1] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .gradientBoost = gradientBoost,
+                .sharpening = 1.2
+            },
+            {
+                .luma = lmult[2] * lerp,
+                .chroma = cmult[2] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .gradientBoost = gradientBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[3] * lerp,
+                .chroma = cmult[3] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .gradientBoost = gradientBoost,
+                .sharpening = 1
+            },
+            {
+                .luma = lmult[4] * lerp,
+                .chroma = cmult[4] * lerp_c,
+                .chromaBoost = chromaBoost,
+                .gradientBoost = gradientBoost,
+                .sharpening = 1
+            }
+        }};
+
+        return { nlf_alpha, denoiseParameters };
+    }
+
+    DemosaicParameters buildDemosaicParameters() const override {
+        return {
+            .rgbConversionParameters = {
+                .contrast = 1.05,
+                .saturation = 1.0,
+                .toneCurveSlope = 3.5,
+                .localToneMapping = true
+            },
+            .ltmParameters = {
+                .eps = 0.01,
+                .shadows = 0.8,
+                .highlights = 1.5,
+                .detail = { 1, 1.2, 2.0 }
+            }
+        };
+    }
+
+    void calibrate(RawConverter* rawConverter, const std::filesystem::path& input_dir) const override {
+        std::array<CalibrationEntry, 11> calibration_files = {{
+            { 100,    "DSC00185_ISO_100.DNG",    { 2435, 521, 1109, 732 }, false },
+            { 200,    "DSC00188_ISO_200.DNG",    { 2435, 521, 1109, 732 }, false },
+            { 400,    "DSC00192_ISO_400.DNG",    { 2435, 521, 1109, 732 }, false },
+            { 800,    "DSC00195_ISO_800.DNG",    { 2435, 521, 1109, 732 }, false },
+            { 1600,   "DSC00198_ISO_1600.DNG",   { 2435, 521, 1109, 732 }, false },
+            { 3200,   "DSC00201_ISO_3200.DNG",   { 2435, 521, 1109, 732 }, false },
+            { 6400,   "DSC00204_ISO_6400.DNG",   { 2435, 521, 1109, 732 }, false },
+            { 12800,  "DSC00207_ISO_12800.DNG",  { 2435, 521, 1109, 732 }, false },
+            { 25600,  "DSC00210_ISO_25600.DNG",  { 2435, 521, 1109, 732 }, false },
+            { 51200,  "DSC00227_ISO_51200.DNG",  { 2435, 521, 1109, 732 }, false },
+            { 102400, "DSC00230_ISO_102400.DNG", { 2435, 521, 1109, 732 }, false },
+        }};
+
+        std::array<NoiseModel<5>, 11> noiseModel;
+
+        for (int i = 0; i < calibration_files.size(); i++) {
+            auto& entry = calibration_files[i];
+            const auto input_path = input_dir / entry.fileName;
+
+            DemosaicParameters demosaicParameters = {
+                .rgbConversionParameters = {
+                    .localToneMapping = false
+                }
+            };
+
+            const auto rgb_image = CameraCalibration<5>::calibrate(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position);
+            rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal.png", /*skip_alpha=*/ true);
+
+            noiseModel[i] = demosaicParameters.noiseModel;
+        }
+
+        std::cout << "// iPhone 11 Calibration table:" << std::endl;
+        dumpNoiseModel(calibration_files, noiseModel);
+    }
+};
+
+void calibrateIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
+    IMX571DNGCalibration calibration;
+    calibration.calibrate(rawConverter, input_dir);
+}
+
+gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+    gls::tiff_metadata dng_metadata, exif_metadata;
+    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
+
+    IMX571DNGCalibration calibration;
+    auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
+
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ true));
+}
+
+// --- NLFData ---
+
+template<>
+const std::array<NoiseModel<5>, 11> IMX571DNGCalibration<5>::NLFData = {{
     // ISO 100
     {
         {{1.000e-08, 1.000e-08, 1.000e-08, 1.000e-08}, {3.681e-04, 3.448e-04, 2.846e-04, 3.447e-04}},
@@ -146,104 +316,7 @@ static const std::array<NoiseModel, 11> NLF_IMX571 = {{
     },
 }};
 
-template <int levels>
-static NoiseModel nlfFromIso(const std::array<NoiseModel, 11>& NLFData, int iso) {
-    iso = std::clamp(iso, 100, 102400);
-    if (iso >= 100 && iso < 200) {
-        float a = (iso - 100) / 100;
-        return lerp<levels>(NLFData[0], NLFData[1], a);
-    } else if (iso >= 200 && iso < 400) {
-        float a = (iso - 200) / 200;
-        return lerp<levels>(NLFData[1], NLFData[2], a);
-    } else if (iso >= 400 && iso < 800) {
-        float a = (iso - 400) / 400;
-        return lerp<levels>(NLFData[2], NLFData[3], a);
-    } else if (iso >= 800 && iso < 1600) {
-        float a = (iso - 800) / 800;
-        return lerp<levels>(NLFData[3], NLFData[4], a);
-    } else if (iso >= 1600 && iso < 3200) {
-        float a = (iso - 1600) / 1600;
-        return lerp<levels>(NLFData[4], NLFData[5], a);
-    } else if (iso >= 3200 && iso < 6400) {
-        float a = (iso - 3200) / 3200;
-        return lerp<levels>(NLFData[5], NLFData[6], a);
-    } else if (iso >= 6400 && iso < 12800) {
-        float a = (iso - 6400) / 6400;
-        return lerp<levels>(NLFData[6], NLFData[7], a);
-    } else if (iso >= 12800 && iso < 25600) {
-        float a = (iso - 12800) / 12800;
-        return lerp<levels>(NLFData[7], NLFData[8], a);
-    } else if (iso >= 25600 && iso < 51200) {
-        float a = (iso - 25600) / 25600;
-        return lerp<levels>(NLFData[8], NLFData[9], a);
-    } else /* if (iso >= 51200 && iso <= 102400) */ {
-        float a = (iso - 51200) / 51200;
-        return lerp<levels>(NLFData[9], NLFData[10], a);
-    }
-}
-
-std::pair<float, std::array<DenoiseParameters, 5>> IMX571DenoiseParameters(int iso) {
-    const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
-
-    std::cout << "Sonya6400DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
-
-    float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
-    float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
-
-    // Default Good
-    float highNoise = smoothstep(0.3, 0.6, nlf_alpha);
-    float lmult[5] = {
-        std::lerp(0.25f, 0.25f, highNoise),
-        std::lerp(1.0f, 2.0f, highNoise),
-        std::lerp(0.5f, 0.5f, highNoise),
-        std::lerp(0.25f, 0.5f, highNoise),
-        std::lerp(0.125f, 0.25f, highNoise),
-    };
-    float cmult[5] = { 1, 1, 1, 1, 1 };
-
-    float chromaBoost = 4;
-
-    std::array<DenoiseParameters, 5> denoiseParameters = {{
-        {
-            .luma = lmult[0] * lerp,
-            .chroma = cmult[0] * lerp_c,
-            .chromaBoost = 2 * chromaBoost,
-            .gradientBoost = 8,
-            .sharpening = std::lerp(2.0f, 1.0f, nlf_alpha)
-        },
-        {
-            .luma = lmult[1] * lerp,
-            .chroma = cmult[1] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1.2
-        },
-        {
-            .luma = lmult[2] * lerp,
-            .chroma = cmult[2] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[3] * lerp,
-            .chroma = cmult[3] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1
-        },
-        {
-            .luma = lmult[4] * lerp,
-            .chroma = cmult[4] * lerp_c,
-            .chromaBoost = chromaBoost,
-            .gradientBoost = 1,
-            .sharpening = 1
-        }
-    }};
-
-    return { nlf_alpha, denoiseParameters };
-}
-
+#if 0
 void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
     for (int y = 0; y < inputImage->height; y++) {
         for (int x = 0; x < inputImage->width / 2; x++) {
@@ -392,3 +465,4 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
     return RawConverter::convertToRGBImage(*rawConverter->runPipeline(inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
     // return RawConverter::convertToRGBImage(*rawConverter->runFastPipeline(inputImage, demosaicParameters));
 }
+#endif
