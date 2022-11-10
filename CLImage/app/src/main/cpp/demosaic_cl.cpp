@@ -267,6 +267,26 @@ void convertTosRGB(gls::OpenCLContext* glsContext,
            linearImage.getImage2D(), ltmMaskImage.getImage2D(), rgbImage->getImage2D(), clTransform, demosaicParameters.rgbConversionParameters);
 }
 
+void convertToGrayscale(gls::OpenCLContext* glsContext,
+                        const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
+                        gls::cl_image_2d<float>* grayscaleImage,
+                        const DemosaicParameters& demosaicParameters) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    const auto& transform = demosaicParameters.rgb_cam;
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // linearImage
+                                    cl::Image2D,  // grayscaleImage
+                                    cl_float3     // transform
+                                    >(program, "convertToGrayscale");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(grayscaleImage->width, grayscaleImage->height),
+           linearImage.getImage2D(), grayscaleImage->getImage2D(), { transform[0][0], transform[0][1], transform[0][2] });
+}
+
 void despeckleImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                     const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
@@ -808,3 +828,59 @@ RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls:
         gls::Vector<4> { (float) nlfB[0], (float) nlfB[1], (float) nlfB[2], (float) nlfB[3] }  // B values
     );
 }
+
+void clFuseFrames(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& previousFusedImage,
+                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b, int fusedFrames,
+                  gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                    cl::Image2D,  // inputFusedImage
+                                    cl_float3,    // var_a
+                                    cl_float3,    // var_b
+                                    int,          // fusedFrames
+                                    cl::Image2D   // outputFusedImage
+                                    >(program, "fuseFrames");
+
+    cl_float3 cl_var_a = { var_a[0], var_a[1], var_a[2] };
+    cl_float3 cl_var_b = { var_b[0], var_b[1], var_b[2] };
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(newFusedImage->width, newFusedImage->height),
+           inputImage.getImage2D(),
+           previousFusedImage.getImage2D(),
+           cl_var_a, cl_var_b,
+           fusedFrames,
+           newFusedImage->getImage2D());
+}
+
+template <typename T>
+void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
+                          const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
+                          gls::cl_image_2d<T>* outputImage) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImageDenoised0
+                                    cl::Image2D,  // inputImage1
+                                    cl::Image2D,  // inputImageDenoised1
+                                    cl::Image2D,  // outputImage
+                                    cl::Sampler   // linear_sampler
+                                    >(program, "reassembleFusedImage");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
+           inputImageDenoised0.getImage2D(), inputImage1.getImage2D(), inputImageDenoised1.getImage2D(),
+           outputImage->getImage2D(), linear_sampler);
+}
+
+template
+void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised0,
+                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
+                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);

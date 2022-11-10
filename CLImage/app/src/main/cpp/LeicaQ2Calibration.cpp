@@ -65,7 +65,7 @@ public:
         float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
 
         // Default Good
-        float lmult[5] = { 0.125, 1, 0.25, 0.125, 0.125 / 2 };
+        float lmult[5] = { 0.25, 1, 0.25, 0.125, 0.125 / 2 };
         float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
 
         float chromaBoost = 8;
@@ -162,6 +162,10 @@ public:
         dumpNoiseModel(calibration_files, noiseModel);
     }
 };
+
+std::unique_ptr<CameraCalibration<5>> getLeicaQ2Calibration() {
+    return std::make_unique<LeicaQ2Calibration<5>>();
+}
 
 void calibrateiLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
     LeicaQ2Calibration calibration;

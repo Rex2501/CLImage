@@ -85,6 +85,10 @@ public:
     }
 };
 
+std::unique_ptr<CameraCalibration<5>> getIPhone11Calibration();
+
+std::unique_ptr<CameraCalibration<5>> getLeicaQ2Calibration();
+
 gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path);
 void calibrateIMX571(RawConverter* rawConverter, const std::filesystem::path& input_dir);
 

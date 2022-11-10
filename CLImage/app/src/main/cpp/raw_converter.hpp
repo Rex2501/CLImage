@@ -115,6 +115,10 @@ public:
     gls::cl_image_2d<gls::rgba_pixel_float>* denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                      DemosaicParameters* demosaicParameters, bool calibrateFromImage);
 
+    void fuseFrame(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage, DemosaicParameters* demosaicParameters, bool calibrateFromImage);
+
+    gls::cl_image_2d<gls::rgba_pixel_float>* getFusedImage();
+
     gls::cl_image_2d<gls::rgba_pixel>* postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                    const DemosaicParameters& demosaicParameters);
 

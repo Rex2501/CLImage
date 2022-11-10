@@ -898,7 +898,7 @@ SURF_OpenCL::SURF_OpenCL(gls::OpenCLContext* glsContext, int width, int height, 
 }
 
 void SURF_OpenCL::integral(const gls::image<float>& img,
-                      const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) {
+                           const std::array<gls::cl_image_2d<float>::unique_ptr, 4>& sum) {
     static const int tileSize = 8;
 
     gls::size tmpSize(((_height + tileSize - 1) / tileSize) * tileSize, ((_width + tileSize - 1) / tileSize) * tileSize);
@@ -1597,9 +1597,10 @@ void clRegisterAndFuse(gls::OpenCLContext* cLContext,
            inputImage0.getImage2D(), inputImage1.getImage2D(), outputImage->getImage2D(), homography, linear_sampler);
 }
 
+template <typename T>
 void clRegisterImage(gls::OpenCLContext* cLContext,
-                     const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
-                     gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                     const gls::cl_image_2d<T>& inputImage,
+                     gls::cl_image_2d<T>* outputImage,
                      const gls::Matrix<3, 3>& homography) {
     // Load the shader source
     const auto program = cLContext->loadProgram("SURF");
@@ -1621,4 +1622,17 @@ void clRegisterImage(gls::OpenCLContext* cLContext,
 #endif
            inputImage.getImage2D(), outputImage->getImage2D(), homography, linear_sampler);
 }
+
+template
+void clRegisterImage(gls::OpenCLContext* cLContext,
+                     const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
+                     gls::cl_image_2d<gls::rgba_pixel>* outputImage,
+                     const gls::Matrix<3, 3>& homography);
+
+template
+void clRegisterImage(gls::OpenCLContext* cLContext,
+                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                     gls::cl_image_2d<gls::rgba_pixel_float>* outputImage,
+                     const gls::Matrix<3, 3>& homography);
+
 } // namespace surf

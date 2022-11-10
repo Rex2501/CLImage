@@ -188,7 +188,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
 
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
         pyramidProcessor->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
-                                  clLinearRGBImageB.get(), demosaicParameters->rgb_cam,
+                                  clLinearRGBImageB.get(),
                                   &(noiseModel->pyramidNlf), demosaicParameters->exposure_multiplier, calibrateFromImage);
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {
@@ -204,7 +204,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
     if (clBlueNoise != nullptr) {
         const gls::Vector<2> lumaVariance = { np.first[0], np.second[0] };
 
-        std::cout << "Adding Blue Noise for variance: " << lumaVariance << std::endl;
+        std::cout << "Adding Blue Noise for variance: " << std::scientific << lumaVariance << std::endl;
 
         const auto grainAmount = 1 + 3 * smoothstep(4e-4, 6e-4, lumaVariance[1]);
 
@@ -213,6 +213,16 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
     }
 
     return clDenoisedImage;
+}
+
+void RawConverter::fuseFrame(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage, DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
+    NoiseModel<5>* noiseModel = &demosaicParameters->noiseModel;
+    pyramidProcessor->fuseFrame(_glsContext, &(demosaicParameters->denoiseParameters), inputImage,
+                                &(noiseModel->pyramidNlf), demosaicParameters->exposure_multiplier, calibrateFromImage);
+}
+
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::getFusedImage() {
+    return pyramidProcessor->getFusedImage(_glsContext);
 }
 
 gls::cl_image_2d<gls::rgba_pixel>* RawConverter::postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

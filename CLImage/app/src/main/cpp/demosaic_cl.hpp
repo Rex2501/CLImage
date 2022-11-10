@@ -61,6 +61,11 @@ void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& 
                      const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
                      float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage);
 
+template <typename T>
+void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
+                          const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
+                          gls::cl_image_2d<T>* outputImage);
+
 void transformImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
                     gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
@@ -71,6 +76,11 @@ void convertTosRGB(gls::OpenCLContext* glsContext,
                    const gls::cl_image_2d<gls::luma_pixel_float>& ltmMaskImage,
                    gls::cl_image_2d<gls::rgba_pixel>* rgbImage,
                    const DemosaicParameters& demosaicParameters);
+
+void convertToGrayscale(gls::OpenCLContext* glsContext,
+                        const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
+                        gls::cl_image_2d<float>* grayscaleImage,
+                        const DemosaicParameters& demosaicParameters);
 
 void despeckleImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
@@ -143,5 +153,11 @@ void blendHighlightsImage(gls::OpenCLContext* glsContext,
 YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& image, float exposure_multiplier);
 
 RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, float exposure_multiplier, BayerPattern bayerPattern);
+
+void clFuseFrames(gls::OpenCLContext* glsContext,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& previousFusedImage,
+                  const gls::Vector<3>& var_a, const gls::Vector<3>& var_b, int fusedFrames,
+                  gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage);
 
 #endif /* demosaic_cl_hpp */

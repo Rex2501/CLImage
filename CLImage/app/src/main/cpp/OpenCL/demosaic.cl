@@ -22,8 +22,8 @@
 //#define read_imageh read_imagef
 //#define write_imageh write_imagef
 
-#define LENS_SHADING true
-#define LENS_SHADING_GAIN 1
+//#define LENS_SHADING true
+//#define LENS_SHADING_GAIN 1
 
 enum BayerPattern {
     grbg = 0,
@@ -874,6 +874,61 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, 0.0));
 }
 
+kernel void fuseFrames(read_only image2d_t inputImage,
+                       read_only image2d_t fusedInputImage,
+                       float3 var_a, float3 var_b, int fusedFrames,
+                       write_only image2d_t fusedOutputImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    float4 fusedInputPixel = read_imagef(fusedInputImage, imageCoordinates);
+
+    float3 referencePixel = fusedInputPixel.xyz;
+
+    float oldWeight = fusedFrames > 1 ? fusedInputPixel.w : 1;
+
+    float3 sigma = sqrt(var_a + var_b * referencePixel.x);
+
+    float outWeight = 0;
+    float3 outSum = 0;
+    for (int y = -4; y <= 4; y++) {
+        for (int x = -4; x <= 4; x++) {
+            float3 newPixel = read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
+
+            float weight = 1 - step(1, length((referencePixel - newPixel) / sigma));
+            float3 outputPixel = weight * newPixel;
+
+            outWeight += weight;
+            outSum += outputPixel;
+        }
+    }
+    outSum /= max(outWeight, 1);
+
+    float weight = min(outWeight, 1.0);
+
+    float3 outputPixel = (weight * outSum + (oldWeight + 1 - weight) * referencePixel) / (oldWeight + 1);
+
+    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, oldWeight + 1));
+}
+
+//kernel void fuseFrames(read_only image2d_t inputImage,
+//                       read_only image2d_t fusedInputImage,
+//                       float3 var_a, float3 var_b, int fusedFrames,
+//                       write_only image2d_t fusedOutputImage) {
+//    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+//
+//    float4 fusedInputPixel = read_imagef(fusedInputImage, imageCoordinates);
+//
+//    float3 referencePixel = fusedInputPixel.xyz;
+//
+//    float oldWeight = fusedFrames > 1 ? fusedInputPixel.w : 1;
+//
+//    float3 newPixel = read_imagef(inputImage, imageCoordinates).xyz;
+//
+//    float3 outputPixel = (newPixel + oldWeight * referencePixel) / (oldWeight + 1);
+//
+//    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, oldWeight + 1));
+//}
+
 float3 denoiseLumaChromaGuided(float3 var_a, float3 var_b, image2d_t inputImage, int2 imageCoordinates) {
     const float3 input = read_imagef(inputImage, imageCoordinates).xyz;
 
@@ -1055,6 +1110,28 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
     denoisedPixel = mix(inputPixelDenoised1, denoisedPixel, sharpening);
 
     write_imagef(outputImage, output_pos, (float4) (denoisedPixel, 0));
+}
+
+kernel void reassembleFusedImage(read_only image2d_t inputImageDenoised0, read_only image2d_t inputImage1,
+                                 read_only image2d_t inputImageDenoised1, write_only image2d_t outputImage,
+                                 sampler_t linear_sampler) {
+    const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
+    const float2 input_pos = (convert_float2(output_pos) + 0.5) * inputNorm;
+
+    float4 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos);
+
+#if USE_LANCZOS_INTERPOLATION
+    float3 inputPixel1 = lanczosInterpolation(inputImage1, input_pos, inputNorm, linear_sampler);
+    float3 inputPixelDenoised1 = lanczosInterpolation(inputImageDenoised1, input_pos, inputNorm, linear_sampler);
+#else
+    float3 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos).xyz;
+    float3 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos).xyz;
+#endif
+
+    float3 denoisedPixel = inputPixelDenoised0.xyz - (inputPixel1 - inputPixelDenoised1);
+
+    write_imagef(outputImage, output_pos, (float4) (denoisedPixel, inputPixelDenoised0.w));
 }
 
 kernel void bayerToRawRGBA(read_only image2d_t rawImage, write_only image2d_t rgbaImage, int bayerPattern) {
@@ -1592,19 +1669,22 @@ float3 algebraic(float3 x) {
     return x / sqrt(1 + x * x);
 }
 
-float3 superSigma(float3 x) {
-    float z = 2;
-    return copysign(powr(tanh(powr(abs(0.6 * x), z)), 1/z), x);
+float3 __attribute__((overloadable)) sigmoid(float3 x, float s) {
+    return 0.5 * (tanh(s * x - 0.3 * s) + 1);
 }
 
-float3 sigmoid(float3 x, float s) {
+float __attribute__((overloadable)) sigmoid(float x, float s) {
     return 0.5 * (tanh(s * x - 0.3 * s) + 1);
 }
 
 // This tone curve is designed to mostly match the default curve from DNG files
 // TODO: it would be nice to have separate control on highlights and shhadows contrast
 
-float3 toneCurve(float3 x, float s) {
+float3 __attribute__((overloadable)) toneCurve(float3 x, float s) {
+    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+}
+
+float __attribute__((overloadable)) toneCurve(float x, float s) {
     return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
 }
 
@@ -1680,6 +1760,19 @@ kernel void convertTosRGB(read_only image2d_t linearImage, read_only image2d_t l
     }
 
     write_imagef(rgbImage, imageCoordinates, (float4) (clamp(rgb, 0.0, 1.0), 0.0));
+}
+
+kernel void convertToGrayscale(read_only image2d_t linearImage, write_only image2d_t grayscaleImage, float3 transform) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    float3 pixel_value = read_imagef(linearImage, imageCoordinates).xyz;
+
+    // Conversion to grayscale, ensure definite positiveness
+    // float grayscale = sqrt(max(dot(transform, pixel_value), 0));
+
+    float grayscale = toneCurve(max(dot(transform, pixel_value), 0.0), 3.5);
+
+    write_imagef(grayscaleImage, imageCoordinates, (float4) (grayscale, 0, 0, 0));
 }
 
 kernel void resample(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {

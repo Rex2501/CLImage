@@ -33,17 +33,27 @@ struct ImageDenoiser {
 
 template <size_t levels>
 struct PyramidProcessor {
+    const int width, height;
+    int fusedFrames;
+
     typedef gls::cl_image_2d<gls::rgba_pixel_float> imageType;
     std::array<imageType::unique_ptr, levels-1> imagePyramid;
     std::array<imageType::unique_ptr, levels> denoisedImagePyramid;
+    std::array<imageType::unique_ptr, levels> fusionImagePyramid;
+
     std::array<std::unique_ptr<ImageDenoiser>, levels> denoiser;
 
     PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height);
 
     imageType* denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
-                       imageType* image, const gls::Matrix<3, 3>& rgb_cam,
-                       std::array<YCbCrNLF, levels>* nlfParameters,
+                       imageType* image, std::array<YCbCrNLF, levels>* nlfParameters,
                        float exposure_multiplier, bool calibrateFromImage = false);
+
+    void fuseFrame(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
+                   const imageType& image, std::array<YCbCrNLF, levels>* nlfParameters,
+                   float exposure_multiplier, bool calibrateFromImage = false);
+
+    imageType* getFusedImage(gls::OpenCLContext* glsContext);
 };
 
 #endif /* pyramidal_denoise_h */
