@@ -880,11 +880,7 @@ kernel void fuseFrames(read_only image2d_t inputImage,
                        write_only image2d_t fusedOutputImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    float4 fusedInputPixel = read_imagef(fusedInputImage, imageCoordinates);
-
-    float3 referencePixel = fusedInputPixel.xyz;
-
-    float oldWeight = fusedFrames > 1 ? fusedInputPixel.w : 1;
+    float3 referencePixel = read_imagef(fusedInputImage, imageCoordinates).xyz;
 
     float3 sigma = sqrt(var_a + var_b * referencePixel.x);
 
@@ -894,7 +890,7 @@ kernel void fuseFrames(read_only image2d_t inputImage,
         for (int x = -4; x <= 4; x++) {
             float3 newPixel = read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
-            float weight = 1 - step(1, length((referencePixel - newPixel) / sigma));
+            float weight = 1 - step(1.0, length((referencePixel - newPixel) / sigma));
             float3 outputPixel = weight * newPixel;
 
             outWeight += weight;
@@ -905,29 +901,10 @@ kernel void fuseFrames(read_only image2d_t inputImage,
 
     float weight = min(outWeight, 1.0);
 
-    float3 outputPixel = (weight * outSum + (oldWeight + 1 - weight) * referencePixel) / (oldWeight + 1);
+    float3 outputPixel = (weight * outSum + (fusedFrames + 1 - weight) * referencePixel) / (fusedFrames + 1);
 
-    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, oldWeight + 1));
+    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, 0));
 }
-
-//kernel void fuseFrames(read_only image2d_t inputImage,
-//                       read_only image2d_t fusedInputImage,
-//                       float3 var_a, float3 var_b, int fusedFrames,
-//                       write_only image2d_t fusedOutputImage) {
-//    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-//
-//    float4 fusedInputPixel = read_imagef(fusedInputImage, imageCoordinates);
-//
-//    float3 referencePixel = fusedInputPixel.xyz;
-//
-//    float oldWeight = fusedFrames > 1 ? fusedInputPixel.w : 1;
-//
-//    float3 newPixel = read_imagef(inputImage, imageCoordinates).xyz;
-//
-//    float3 outputPixel = (newPixel + oldWeight * referencePixel) / (oldWeight + 1);
-//
-//    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, oldWeight + 1));
-//}
 
 float3 denoiseLumaChromaGuided(float3 var_a, float3 var_b, image2d_t inputImage, int2 imageCoordinates) {
     const float3 input = read_imagef(inputImage, imageCoordinates).xyz;

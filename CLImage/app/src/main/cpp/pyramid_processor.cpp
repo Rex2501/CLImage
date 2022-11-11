@@ -165,9 +165,9 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
 
         if (i < levels - 1) {
             // Generate next layer in the pyramid
-            resampleImage(glsContext, "downsampleImage", *currentLayer, imagePyramid[i].get());
+            resampleImage(glsContext, "downsampleImage", *currentLayer, fusedFrames == 0 ? newFusedImagePyramid[i].get() : imagePyramid[i].get());
         }
-        if (fusedFrames == 0) {
+        if (i == 0 && fusedFrames == 0) {
             cl::enqueueCopyImage(currentLayer->getImage2D(), newFusedImagePyramid[i]->getImage2D(),
                                  {0, 0, 0}, {0, 0, 0}, {(size_t) currentLayer->width, (size_t) currentLayer->height, 1});
         }
