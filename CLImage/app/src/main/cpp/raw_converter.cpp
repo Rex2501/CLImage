@@ -164,6 +164,9 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
+//    malvar(_glsContext, *clScaledRawImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
+//           rawVariance[0], rawVariance[1], rawVariance[2]);
+
     interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,

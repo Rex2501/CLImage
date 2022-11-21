@@ -87,6 +87,31 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
            { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
 }
 
+void malvar(gls::OpenCLContext* glsContext,
+            const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+            gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
+            BayerPattern bayerPattern, gls::Vector<2> redVariance,
+            gls::Vector<2> greenVariance, gls::Vector<2> blueVariance) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
+                                    cl::Image2D,  // rgbImage
+                                    int,          // bayerPattern
+                                    cl_float2,    // redVariance
+                                    cl_float2,    // greenVariance
+                                    cl_float2     // blueVariance
+                                    >(program, "malvar");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
+           rawImage.getImage2D(), rgbImage->getImage2D(), bayerPattern,
+           { redVariance[0], redVariance[1] },
+           { greenVariance[0], greenVariance[1] },
+           { blueVariance[0], blueVariance[1] });
+}
+
 void fasteDebayer(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                   gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,

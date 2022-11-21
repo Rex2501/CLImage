@@ -41,6 +41,12 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
                         gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
                         BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance);
 
+void malvar(gls::OpenCLContext* glsContext,
+            const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+            gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
+            BayerPattern bayerPattern, gls::Vector<2> redVariance,
+            gls::Vector<2> greenVariance, gls::Vector<2> blueVariance);
+
 void fasteDebayer(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                   gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
