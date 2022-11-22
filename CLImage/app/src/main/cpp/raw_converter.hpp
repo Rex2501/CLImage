@@ -106,6 +106,10 @@ public:
         localToneMapping = std::make_unique<LocalToneMapping>(_glsContext);
     }
 
+    gls::OpenCLContext* getContext() const {
+        return _glsContext;
+    }
+
     gls::cl_image_2d<gls::rgba_pixel>* runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
                                                    DemosaicParameters* demosaicParameters, bool calibrateFromImage = false);
 

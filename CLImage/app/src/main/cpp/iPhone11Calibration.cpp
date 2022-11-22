@@ -54,6 +54,62 @@ public:
         }
     }
 
+//    std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParametersPlain(int iso) const override {
+//        const float nlf_alpha = std::clamp((log2(iso) - log2(20)) / (log2(3200) - log2(20)), 0.0, 1.0);
+//
+//        std::cout << "iPhone11 DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+//
+//        float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
+//        float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
+//
+//        float lmult[5] = { 0.125, 0.5, 0.25, 0.125, 0.125 / 2 };
+//        float cmult[5] = { 0.5, 0.5, 0.5, 0.5, 0.5 };
+//
+//        float chromaBoost = std::lerp(4.0f, 16.0f, nlf_alpha);
+//
+//        float gradientBoost = 1 + 3 * smoothstep(0.3, 0.6, nlf_alpha);
+//
+//        std::array<DenoiseParameters, 5> denoiseParameters = {{
+//            {
+//                .luma = lmult[0] * lerp,
+//                .chroma = cmult[0] * lerp_c,
+//                .chromaBoost = 4 * chromaBoost,
+//                .gradientBoost = 8 * gradientBoost,
+//                .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
+//            },
+//            {
+//                .luma = lmult[1] * lerp,
+//                .chroma = cmult[1] * lerp_c,
+//                .chromaBoost = chromaBoost,
+//                .gradientBoost = gradientBoost,
+//                .sharpening = 1.2
+//            },
+//            {
+//                .luma = lmult[2] * lerp,
+//                .chroma = cmult[2] * lerp_c,
+//                .chromaBoost = chromaBoost,
+//                .gradientBoost = gradientBoost,
+//                .sharpening = 1
+//            },
+//            {
+//                .luma = lmult[3] * lerp,
+//                .chroma = cmult[3] * lerp_c,
+//                .chromaBoost = chromaBoost,
+//                .gradientBoost = gradientBoost,
+//                .sharpening = 1
+//            },
+//            {
+//                .luma = lmult[4] * lerp,
+//                .chroma = cmult[4] * lerp_c,
+//                .chromaBoost = chromaBoost,
+//                .gradientBoost = gradientBoost,
+//                .sharpening = 1
+//            }
+//        }};
+//
+//        return { nlf_alpha, denoiseParameters };
+//    }
+
     std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParameters(int iso) const override {
         const float nlf_alpha = std::clamp((log2(iso) - log2(20)) / (log2(3200) - log2(20)), 0.0, 1.0);
 
@@ -62,10 +118,10 @@ public:
         float lerp = std::lerp(0.125f, 1.2f, nlf_alpha);
         float lerp_c = std::lerp(0.5f, 1.2f, nlf_alpha);
 
-        float lmult[5] = { 0.125, 1.0, 0.5, 0.25, 0.125 };
-        float cmult[5] = { 1, 1, 0.5, 0.25, 0.125 };
+        float lmult[5] = { 0.125, 0.5, 0.25, 0.125, 0.125 / 2 };
+        float cmult[5] = { 0.5, 0.5, 0.5, 0.5, 0.5 };
 
-        float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
+        float chromaBoost = std::lerp(4.0f, 16.0f, nlf_alpha);
 
         float gradientBoost = 1 + 3 * smoothstep(0.3, 0.6, nlf_alpha);
 
@@ -115,12 +171,12 @@ public:
             .rgbConversionParameters = {
                 // .exposureBias = 0.3,
                 // .blacks = 0.1,
-                .localToneMapping = false
+                .localToneMapping = true
             },
                 .ltmParameters = {
                     .eps = 0.01,
-                    .shadows = 1.0,
-                    .highlights = 1.5,
+                    .shadows = 0.8,
+                    .highlights = 1.1,
                     .detail = { 1, 1.1, 1.5 }
                 }
         };

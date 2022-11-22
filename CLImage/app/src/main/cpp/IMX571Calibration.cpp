@@ -15,15 +15,14 @@
 
 #include "CameraCalibration.hpp"
 
-#include "demosaic.hpp"
-#include "raw_converter.hpp"
-
 #include <array>
 #include <cmath>
 #include <filesystem>
 
+#include "demosaic.hpp"
+
 template <size_t levels = 5>
-class IMX571DNGCalibration : public CameraCalibration<levels> {
+class IMX571Calibration : public CameraCalibration<levels> {
     static const std::array<NoiseModel<levels>, 11> NLFData;
 
 public:
@@ -65,7 +64,7 @@ public:
     std::pair<float, std::array<DenoiseParameters, levels>> getDenoiseParameters(int iso) const override {
         const float nlf_alpha = std::clamp((log2(iso) - log2(100)) / (log2(102400) - log2(100)), 0.0, 1.0);
 
-        std::cout << "IMX571DNG DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
+        std::cout << "IMX571 DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
         float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
         float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
@@ -76,14 +75,14 @@ public:
 
         float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
 
-        float gradientBoost = 1 + 2 * smoothstep(0.3, 0.6, nlf_alpha);
+        float gradientBoost = 1 + 3 * smoothstep(0.3, 0.8, nlf_alpha);
 
         std::array<DenoiseParameters, 5> denoiseParameters = {{
             {
                 .luma = lmult[0] * lerp,
                 .chroma = cmult[0] * lerp_c,
                 .chromaBoost = 2 * chromaBoost,
-                .gradientBoost = 8,
+                .gradientBoost = 8 * gradientBoost,
                 .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
             },
             {
@@ -97,21 +96,21 @@ public:
                 .luma = lmult[2] * lerp,
                 .chroma = cmult[2] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[3] * lerp,
                 .chroma = cmult[3] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[4] * lerp,
                 .chroma = cmult[4] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             }
         }};
@@ -122,6 +121,8 @@ public:
     DemosaicParameters buildDemosaicParameters() const override {
         return {
             .rgbConversionParameters = {
+                .exposureBias = -1.0,
+                // .blacks = 0.1,
                 .contrast = 1.05,
                 .saturation = 1.0,
                 .toneCurveSlope = 3.5,
@@ -129,9 +130,9 @@ public:
             },
             .ltmParameters = {
                 .eps = 0.01,
-                .shadows = 0.8,
+                .shadows = 1.0,
                 .highlights = 1.5,
-                .detail = { 1, 1.2, 2.0 }
+                .detail = { 1, 2.0, 2.5 }
             }
         };
     }
@@ -174,25 +175,47 @@ public:
     }
 };
 
-void calibrateIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-    IMX571DNGCalibration calibration;
+void calibrateIMX571(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
+    IMX571Calibration calibration;
     calibration.calibrate(rawConverter, input_dir);
 }
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     gls::tiff_metadata dng_metadata, exif_metadata;
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
+    // const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
 
-    IMX571DNGCalibration calibration;
+    auto fullInputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
+    // A crop size with dimensions multiples of 128 and ratio of exactly 3:2, for a total resolution of 16MP
+    const gls::size imageSize = { 4992, 3328 };
+    const gls::rectangle crop({(fullInputImage->width - imageSize.width) / 2, (fullInputImage->height - imageSize.height) / 2 + 1}, imageSize);
+    auto inputImage = std::make_unique<gls::image<gls::luma_pixel_16>>(*fullInputImage, crop);
+
+    IMX571Calibration calibration;
     auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
 
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ true));
+    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ true, nullptr, false);
+
+    const auto demosaicedImage = rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+
+    const gls::Matrix<3, 3> homography = {
+        1, 0, 0,
+        0, 1, 0,
+        0, 0, 1
+    };
+
+    gls::cl_image_2d<gls::rgba_pixel> unsquishedImage(rawConverter->getContext()->clContext(), demosaicedImage->width, demosaicedImage->height * 1.2);
+    clTransformImage(rawConverter->getContext(),
+                     *demosaicedImage,
+                     &unsquishedImage,
+                     homography);
+
+    return RawConverter::convertToRGBImage(unsquishedImage);
 }
 
 // --- NLFData ---
 
 template<>
-const std::array<NoiseModel<5>, 11> IMX571DNGCalibration<5>::NLFData = {{
+const std::array<NoiseModel<5>, 11> IMX571Calibration<5>::NLFData = {{
     // ISO 100
     {
         {{1.000e-08, 1.000e-08, 1.000e-08, 1.000e-08}, {3.681e-04, 3.448e-04, 2.846e-04, 3.447e-04}},
@@ -252,217 +275,66 @@ const std::array<NoiseModel<5>, 11> IMX571DNGCalibration<5>::NLFData = {{
     {
         {{1.660e-05, 1.000e-08, 1.000e-08, 1.000e-08}, {2.888e-03, 1.320e-03, 1.644e-03, 1.325e-03}},
         {{
-            {{1.000e-08, 3.341e-07, 6.274e-07}, {7.355e-04, 4.991e-05, 1.119e-04}},
-            {{1.000e-08, 2.090e-07, 3.597e-07}, {5.348e-04, 4.119e-05, 8.415e-05}},
-            {{1.000e-08, 1.243e-07, 1.349e-07}, {7.457e-04, 2.282e-05, 3.848e-05}},
-            {{1.000e-08, 2.878e-07, 3.276e-07}, {9.170e-04, 1.014e-05, 1.329e-05}},
-            {{1.000e-08, 8.197e-07, 8.623e-07}, {1.387e-03, 8.432e-06, 7.595e-06}},
+            {{1.000e-08, 5.176e-07, 7.774e-07}, {9.818e-04, 6.376e-05, 1.439e-04}},
+            {{1.000e-08, 2.866e-07, 4.436e-07}, {5.614e-04, 4.559e-05, 9.371e-05}},
+            {{1.000e-08, 1.398e-07, 1.546e-07}, {7.514e-04, 2.278e-05, 3.856e-05}},
+            {{1.000e-08, 2.900e-07, 3.274e-07}, {9.181e-04, 9.926e-06, 1.301e-05}},
+            {{1.000e-08, 8.220e-07, 8.594e-07}, {1.381e-03, 8.419e-06, 7.551e-06}},
         }}
     },
     // ISO 6400
     {
         {{4.137e-05, 1.000e-08, 4.311e-06, 1.000e-08}, {5.539e-03, 2.345e-03, 3.110e-03, 2.352e-03}},
         {{
-            {{1.000e-08, 8.455e-07, 1.279e-06}, {1.185e-03, 9.089e-05, 2.219e-04}},
-            {{1.000e-08, 5.327e-07, 8.838e-07}, {5.921e-04, 7.463e-05, 1.611e-04}},
-            {{1.000e-08, 2.519e-07, 3.422e-07}, {7.514e-04, 3.785e-05, 6.937e-05}},
-            {{1.000e-08, 3.212e-07, 3.736e-07}, {8.733e-04, 1.480e-05, 2.279e-05}},
-            {{1.000e-08, 9.016e-07, 9.733e-07}, {1.240e-03, 8.445e-06, 8.934e-06}},
+            {{1.634e-06, 1.265e-06, 1.432e-06}, {1.585e-03, 1.157e-04, 2.866e-04}},
+            {{1.000e-08, 6.595e-07, 9.218e-07}, {6.463e-04, 8.421e-05, 1.826e-04}},
+            {{1.000e-08, 2.738e-07, 3.553e-07}, {7.587e-04, 3.806e-05, 6.996e-05}},
+            {{1.000e-08, 3.175e-07, 3.725e-07}, {8.731e-04, 1.458e-05, 2.216e-05}},
+            {{1.000e-08, 9.064e-07, 9.689e-07}, {1.236e-03, 8.252e-06, 8.845e-06}},
         }}
     },
     // ISO 12800
     {
         {{6.766e-05, 2.051e-06, 1.645e-05, 2.807e-06}, {1.142e-02, 4.548e-03, 6.092e-03, 4.585e-03}},
         {{
-            {{1.223e-05, 2.376e-06, 3.516e-06}, {1.851e-03, 1.628e-04, 4.385e-04}},
-            {{1.000e-08, 1.565e-06, 2.196e-06}, {7.661e-04, 1.375e-04, 3.242e-04}},
-            {{1.000e-08, 5.940e-07, 8.404e-07}, {7.688e-04, 6.826e-05, 1.345e-04}},
-            {{1.000e-08, 3.956e-07, 5.176e-07}, {9.036e-04, 2.481e-05, 4.223e-05}},
-            {{1.000e-08, 8.896e-07, 9.831e-07}, {1.305e-03, 1.131e-05, 1.458e-05}},
+            {{2.206e-05, 3.045e-06, 3.033e-06}, {2.528e-03, 2.095e-04, 5.749e-04}},
+            {{1.000e-08, 1.672e-06, 1.998e-06}, {8.673e-04, 1.579e-04, 3.680e-04}},
+            {{1.000e-08, 5.859e-07, 7.594e-07}, {7.845e-04, 6.907e-05, 1.366e-04}},
+            {{1.000e-08, 3.830e-07, 4.875e-07}, {9.025e-04, 2.413e-05, 4.117e-05}},
+            {{1.000e-08, 8.809e-07, 9.512e-07}, {1.303e-03, 1.116e-05, 1.463e-05}},
         }}
     },
     // ISO 25600
     {
         {{1.579e-04, 1.000e-08, 1.000e-08, 3.245e-07}, {1.696e-02, 9.136e-03, 1.286e-02, 9.248e-03}},
         {{
-            {{5.303e-05, 5.603e-06, 6.124e-06}, {3.034e-03, 3.044e-04, 9.005e-04}},
-            {{1.000e-08, 3.296e-06, 3.904e-06}, {1.149e-03, 2.726e-04, 6.647e-04}},
-            {{1.000e-08, 1.229e-06, 1.379e-06}, {8.270e-04, 1.321e-04, 2.748e-04}},
-            {{1.000e-08, 6.522e-07, 8.282e-07}, {8.899e-04, 4.346e-05, 7.882e-05}},
-            {{1.000e-08, 9.640e-07, 1.148e-06}, {1.232e-03, 1.640e-05, 2.286e-05}},
+            {{7.544e-05, 7.086e-06, 3.769e-06}, {4.212e-03, 3.907e-04, 1.213e-03}},
+            {{1.000e-08, 3.283e-06, 3.365e-06}, {1.327e-03, 3.095e-04, 7.497e-04}},
+            {{1.000e-08, 1.072e-06, 1.201e-06}, {8.396e-04, 1.341e-04, 2.781e-04}},
+            {{1.000e-08, 5.847e-07, 7.495e-07}, {8.875e-04, 4.236e-05, 7.692e-05}},
+            {{1.000e-08, 9.475e-07, 1.120e-06}, {1.221e-03, 1.611e-05, 2.217e-05}},
         }}
     },
     // ISO 51200
     {
         {{2.426e-04, 1.000e-08, 1.693e-06, 1.000e-08}, {1.800e-02, 1.339e-02, 1.708e-02, 1.357e-02}},
         {{
-            {{1.419e-04, 1.359e-05, 1.243e-05}, {4.036e-03, 5.020e-04, 1.808e-03}},
-            {{7.951e-06, 7.008e-06, 8.821e-06}, {1.783e-03, 5.022e-04, 1.299e-03}},
-            {{1.000e-08, 2.720e-06, 2.610e-06}, {1.014e-03, 2.477e-04, 5.623e-04}},
-            {{1.000e-08, 8.383e-07, 1.257e-06}, {9.205e-04, 8.711e-05, 1.646e-04}},
-            {{1.000e-08, 1.070e-06, 1.377e-06}, {1.212e-03, 2.778e-05, 4.549e-05}},
+            {{1.611e-04, 1.476e-05, 1.097e-05}, {4.615e-03, 5.094e-04, 1.937e-03}},
+            {{7.772e-06, 6.942e-06, 8.358e-06}, {1.925e-03, 5.114e-04, 1.327e-03}},
+            {{1.000e-08, 2.492e-06, 2.101e-06}, {1.032e-03, 2.499e-04, 5.670e-04}},
+            {{1.000e-08, 7.571e-07, 1.032e-06}, {9.193e-04, 8.701e-05, 1.658e-04}},
+            {{1.000e-08, 1.040e-06, 1.307e-06}, {1.208e-03, 2.773e-05, 4.544e-05}},
         }}
     },
     // ISO 102400
     {
         {{2.763e-04, 1.000e-08, 5.632e-05, 1.000e-08}, {2.324e-02, 2.530e-02, 2.491e-02, 2.492e-02}},
         {{
-            {{3.307e-04, 5.977e-05, 5.801e-05}, {6.235e-03, 3.553e-04, 3.563e-03}},
-            {{3.489e-05, 1.801e-05, 3.339e-05}, {3.409e-03, 1.084e-03, 2.719e-03}},
-            {{1.000e-08, 3.644e-06, 3.951e-06}, {1.634e-03, 5.695e-04, 1.281e-03}},
-            {{1.000e-08, 1.006e-06, 1.585e-06}, {1.121e-03, 1.922e-04, 3.851e-04}},
-            {{1.000e-08, 1.189e-06, 1.971e-06}, {1.365e-03, 5.397e-05, 9.966e-05}},
+            {{3.416e-04, 6.339e-05, 5.365e-05}, {6.797e-03, 2.545e-04, 3.741e-03}},
+            {{3.558e-05, 1.744e-05, 2.873e-05}, {3.637e-03, 1.092e-03, 2.794e-03}},
+            {{1.000e-08, 2.768e-06, 2.035e-06}, {1.652e-03, 5.720e-04, 1.284e-03}},
+            {{1.000e-08, 6.270e-07, 8.442e-07}, {1.133e-03, 1.931e-04, 3.861e-04}},
+            {{1.000e-08, 1.104e-06, 1.611e-06}, {1.372e-03, 5.371e-05, 1.010e-04}},
         }}
     },
 }};
-
-#if 0
-void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
-        }
-    }
-
-    for (int x = 0; x < inputImage->width; x++) {
-        for (int y = 0; y < inputImage->height / 2; y++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[inputImage->height - 1 - y][x];
-            (*inputImage)[inputImage->height - 1 - y][x] = t;
-        }
-    }
-
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
-        }
-    }
-}
-
-gls::image<gls::rgb_pixel>::unique_ptr calibrateIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path,
-                                                          DemosaicParameters* demosaicParameters, int iso,
-                                                          const gls::rectangle& gmb_position, bool rotate_180) {
-    gls::tiff_metadata dng_metadata, exif_metadata;
-    dng_metadata.insert({ TIFFTAG_MAKE, "Glass Imaging" });
-    dng_metadata.insert({ TIFFTAG_UNIQUECAMERAMODEL, "Glass 2" });
-
-    dng_metadata.insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 } });
-    dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 1 / 1.8930, 1.0000, 1 / 1.7007 } });
-
-    const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters, /*auto_white_balance=*/ false, &gmb_position, rotate_180);
-
-    // See if the ISO value is present and override
-    const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
-    if (exifIsoSpeedRatings.size() > 0) {
-        iso = exifIsoSpeedRatings[0];
-    }
-
-    const auto denoiseParameters = IMX571DenoiseParameters(iso);
-    demosaicParameters->noiseLevel = denoiseParameters.first;
-    demosaicParameters->denoiseParameters = denoiseParameters.second;
-
-    auto result = RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters, /*calibrateFromImage=*/ true));
-
-//    dng_metadata[TIFFTAG_CFAPATTERN] = std::vector<uint8_t>{ 1, 0, 2, 1 };
-//    exif_metadata[EXIFTAG_ISOSPEEDRATINGS] = std::vector<uint16_t>{ (uint16_t) iso };
-//    inputImage->write_dng_file((input_path.parent_path() / input_path.stem()).string() + "_ok.dng", gls::JPEG, &dng_metadata, &exif_metadata);
-
-    return result;
-}
-
-//void calibrateIMX571(RawConverter* rawConverter, const std::filesystem::path& input_dir) {
-//    std::array<CalibrationEntry, 1> calibration_files = {{
-//        { 100,   "2022-06-15-11-03-22-196.dng",   {2246, 803, 2734, 1762}, false },
-//    }};
-//
-//    std::array<NoiseModel, 8> noiseModel;
-//
-//    for (int i = 0; i < calibration_files.size(); i++) {
-//        auto& entry = calibration_files[i];
-//        const auto input_path = input_dir / entry.fileName;
-//
-//        DemosaicParameters demosaicParameters = {
-//            .rgbConversionParameters = {
-//                .contrast = 1.05,
-//                .saturation = 1.0,
-//                .toneCurveSlope = 3.5,
-//            }
-//        };
-//
-//        const auto rgb_image = calibrateIMX571DNG(rawConverter, input_path, &demosaicParameters, entry.iso, entry.gmb_position, entry.rotated);
-//        rgb_image->write_png_file((input_path.parent_path() / input_path.stem()).string() + "_cal_rgb.png", /*skip_alpha=*/ true);
-//
-//        noiseModel[i] = demosaicParameters.noiseModel;
-//    }
-//
-//    std::cout << "Calibration table for IMX571:" << std::endl;
-//    dumpNoiseModel<1, 8>(calibration_files, noiseModel);
-//}
-
-gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
-    DemosaicParameters demosaicParameters = {
-        .rgbConversionParameters = {
-            .contrast = 1.05,
-            .saturation = 1.0,
-            .toneCurveSlope = 3.5,
-            .localToneMapping = true
-        },
-        .ltmParameters = {
-            .eps = 0.01,
-            .shadows = 0.8,
-            .highlights = 1.5,
-            .detail = { 1, 1.2, 2.0 }
-        }
-    };
-
-    gls::tiff_metadata dng_metadata, exif_metadata;
-//    dng_metadata.insert({ TIFFTAG_COLORMATRIX1, std::vector<float>{ 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 } });
-//    dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, std::vector<float>{ 1 / 1.8930, 1.0000, 1 / 1.7007 } });
-//
-//    dng_metadata.insert({ TIFFTAG_MAKE, "Glass Imaging" });
-//    dng_metadata.insert({ TIFFTAG_UNIQUECAMERAMODEL, "Glass 2" });
-
-    auto fullInputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
-
-    // A crop size with dimensions multiples of 128 and ratio of exactly 3:2, for a total resolution of 16MP
-    const gls::size imageSize = { 4992, 3328 };
-    const gls::rectangle crop({(fullInputImage->width - imageSize.width) / 2, (fullInputImage->height - imageSize.height) / 2}, imageSize);
-
-    auto inputImage = gls::image<gls::luma_pixel_16>(*fullInputImage,
-                                                     (fullInputImage->width - imageSize.width) / 2,
-                                                     (fullInputImage->height - imageSize.height) / 2,
-                                                     imageSize.width, imageSize.height);
-
-    float highlights = 0;
-    unpackDNGMetadata(inputImage, &dng_metadata, &demosaicParameters, /*auto_white_balance=*/ true, /*gmb_position=*/ nullptr, /*rotate_180=*/ false, &highlights);
-    std::cout << "highlights: " << highlights << std::endl;
-
-    float iso = 100;
-    const auto exifIsoSpeedRatings = getVector<uint16_t>(exif_metadata, EXIFTAG_ISOSPEEDRATINGS);
-    if (exifIsoSpeedRatings.size() > 0) {
-        iso = exifIsoSpeedRatings[0];
-    }
-
-    const auto nlfParams = nlfFromIso<5>(NLF_IMX571, iso);
-    const auto denoiseParameters = IMX571DenoiseParameters(iso);
-    demosaicParameters.noiseModel = nlfParams;
-    demosaicParameters.noiseLevel = denoiseParameters.first;
-    demosaicParameters.denoiseParameters = denoiseParameters.second;
-
-//    float exposureCompensation = 0.5 * smoothstep(0.01, 0.1, highlights) + 0.7;
-//    if (exposureCompensation > 0) {
-//        demosaicParameters.rgbConversionParameters.exposureBias = -exposureCompensation;
-//        demosaicParameters.ltmParameters.shadows += 0.3 * exposureCompensation;
-//        std::cout << "exposureBias: " << -exposureCompensation << std::endl;
-//    }
-
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(inputImage, &demosaicParameters, /*calibrateFromImage=*/ false));
-    // return RawConverter::convertToRGBImage(*rawConverter->runFastPipeline(inputImage, demosaicParameters));
-}
-#endif

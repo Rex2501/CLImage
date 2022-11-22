@@ -168,4 +168,10 @@ void clFuseFrames(gls::OpenCLContext* glsContext,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b, int fusedFrames,
                   gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage);
 
+template <typename T>
+void clTransformImage(gls::OpenCLContext* cLContext,
+                      const gls::cl_image_2d<T>& inputImage,
+                      gls::cl_image_2d<T>* outputImage,
+                      const gls::Matrix<3, 3>& homography);
+
 #endif /* demosaic_cl_hpp */

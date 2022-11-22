@@ -1916,3 +1916,77 @@ kernel void resample(read_only image2d_t inputImage, write_only image2d_t output
     float3 outputPixel = read_imagef(inputImage, linear_sampler, convert_float2(imageCoordinates) * inputNorm + 0.5 * inputNorm).xyz;
     write_imagef(outputImage, imageCoordinates, (float4) (outputPixel, 0.0));
 }
+
+// Catmull-Rom interpolation passes by the control points, no prefiltering is needed.
+// Despite some of the coefficients being negative, this implementation uses only 9
+// linear samples instead of 16 nearest neighbor samples.
+void CatmullRomInterpolation(read_only image2d_t src, write_only image2d_t dst, sampler_t linear_sampler) {
+    int2 dst_coord = {get_global_id(0), get_global_id(1)};
+
+    float2 dst_size = convert_float2(get_image_dim(dst));
+    float2 src_size = convert_float2(get_image_dim(src));
+
+    float2 uv = (convert_float2(dst_coord) + 0.5f) / dst_size;
+
+    float2 src_pos = uv * src_size - 0.5f;
+
+    float2 src_coord;
+    float2 frac = fract(src_pos, &src_coord);
+
+    // Compute the Catmull-Rom weights.
+    float2 w0 = frac * (-0.5f + frac * (1.0f - 0.5f * frac));
+    float2 w1 = 1.0f + frac * frac * (-2.5f + 1.5f * frac);
+    float2 w2 = frac * (0.5f + frac * (2.0f - 1.5f * frac));
+    float2 w3 = frac * frac * (-0.5f + 0.5f * frac);
+
+    // Work out weighting factors and sampling offsets that will let us use bilinear filtering to
+    // simultaneously evaluate the middle 2 samples from the 4x4 grid.
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / w12;
+
+    // Compute the final UV coordinates we'll use for sampling the texture
+    float2 texPos0 = native_divide(src_coord - 0.5f, src_size);
+    float2 texPos3 = native_divide(src_coord + 2.5f, src_size);
+    float2 texPos12 = native_divide(src_coord + 0.5f + offset12, src_size);
+
+    float4 result = read_imagef(src, linear_sampler, (float2) (texPos0.x, texPos0.y)) * w0.x * w0.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos12.x, texPos0.y)) * w12.x * w0.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos3.x, texPos0.y)) * w3.x * w0.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos0.x, texPos12.y)) * w0.x * w12.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos12.x, texPos12.y)) * w12.x * w12.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos3.x, texPos12.y)) * w3.x * w12.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos0.x, texPos3.y)) * w0.x * w3.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos12.x, texPos3.y)) * w12.x * w3.y;
+    result += read_imagef(src, linear_sampler, (float2) (texPos3.x, texPos3.y)) * w3.x * w3.y;
+
+    write_imagef(dst, dst_coord, clamp(result, 0.0f, 1.0f));
+}
+
+typedef struct transform {
+    float matrix[3][3];
+} transform;
+
+kernel void homographyTransformImage(read_only image2d_t inputImage,
+                                     write_only image2d_t outputImage,
+                                     transform homography,
+                                     sampler_t linear_sampler) {
+#if true
+    CatmullRomInterpolation(inputImage, outputImage, linear_sampler);
+#else
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
+
+    float x = imageCoordinates.x;
+    float y = imageCoordinates.y;
+
+    float u = homography.matrix[0][0] * x + homography.matrix[0][1] * y + homography.matrix[0][2];
+    float v = homography.matrix[1][0] * x + homography.matrix[1][1] * y + homography.matrix[1][2];
+    float w = homography.matrix[2][0] * x + homography.matrix[2][1] * y + homography.matrix[2][2];
+    float xx = u / w;
+    float yy = v / w;
+
+    float4 input = read_imagef(inputImage, linear_sampler, ((float2)(xx, yy) + 0.5) * input_norm);
+
+    write_imagef(outputImage, imageCoordinates, input);
+#endif
+}

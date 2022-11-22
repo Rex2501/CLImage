@@ -217,14 +217,14 @@ void demosaicFile(RawConverter* rawConverter, std::filesystem::path input_path) 
     LOG_INFO(TAG) << "Processing File: " << input_path.filename() << std::endl;
 
     // transcodeAdobeDNG(input_path);
-    // const auto rgb_image = demosaicIMX571DNG(rawConverter, input_path);
-    const auto rgb_image = demosaicSonya6400DNG(rawConverter, input_path);
+    const auto rgb_image = demosaicIMX571DNG(rawConverter, input_path);
+    // const auto rgb_image = demosaicSonya6400DNG(rawConverter, input_path);
     // const auto rgb_image = demosaicCanonEOSRPDNG(rawConverter, input_path);
     // const auto rgb_image = demosaiciPhone11(rawConverter, input_path);
     // const auto rgb_image = demosaicRicohGRIII2DNG(rawConverter, input_path);
     // const auto rgb_image = demosaicLeicaQ2DNG(rawConverter, input_path);
-    // rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new.jpg", 100);
-    rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
+    rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new_sharp.jpg", 100);
+    // rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_nu.png", /*skip_alpha=*/ true);
 }
 
 void demosaicDirectory(RawConverter* rawConverter, std::filesystem::path input_path) {
@@ -271,9 +271,9 @@ int main(int argc, const char* argv[]) {
         // calibrateSonya6400(&rawConverter, input_path.parent_path());
         // calibrateLeicaQ2(&rawConverter, input_path.parent_path());
 
-        // demosaicDirectory(&rawConverter, input_path);
+        demosaicDirectory(&rawConverter, input_path);
 
-        demosaicFile(&rawConverter, input_path);
+        // demosaicFile(&rawConverter, input_path);
 
 //        {
 //            gls::tiff_metadata dng_metadata, exif_metadata;

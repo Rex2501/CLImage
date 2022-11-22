@@ -19,6 +19,8 @@
 #include <cmath>
 #include <filesystem>
 
+#include "demosaic.hpp"
+
 template <size_t levels = 5>
 class Sonya6400Calibration : public CameraCalibration<levels> {
     static const std::array<NoiseModel<levels>, 11> NLFData;
@@ -73,14 +75,14 @@ public:
 
         float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
 
-        float gradientBoost = 1 + 2 * smoothstep(0.3, 0.6, nlf_alpha);
+        float gradientBoost = 1 + 3 * smoothstep(0.3, 0.8, nlf_alpha);
 
         std::array<DenoiseParameters, 5> denoiseParameters = {{
             {
                 .luma = lmult[0] * lerp,
                 .chroma = cmult[0] * lerp_c,
                 .chromaBoost = 2 * chromaBoost,
-                .gradientBoost = 8,
+                .gradientBoost = 8 * gradientBoost,
                 .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
             },
             {
@@ -88,27 +90,27 @@ public:
                 .chroma = cmult[1] * lerp_c,
                 .chromaBoost = chromaBoost,
                 .gradientBoost = gradientBoost,
-                .sharpening = 1.2
+                .sharpening = 1.1
             },
             {
                 .luma = lmult[2] * lerp,
                 .chroma = cmult[2] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[3] * lerp,
                 .chroma = cmult[3] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[4] * lerp,
                 .chroma = cmult[4] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = gradientBoost,
+                .gradientBoost = 0, // gradientBoost,
                 .sharpening = 1
             }
         }};
@@ -119,16 +121,18 @@ public:
     DemosaicParameters buildDemosaicParameters() const override {
         return {
             .rgbConversionParameters = {
+                // .exposureBias = -1.0,
+                // .blacks = 0.1,
                 .contrast = 1.05,
                 .saturation = 1.0,
                 .toneCurveSlope = 3.5,
-                .localToneMapping = false
+                .localToneMapping = true
             },
             .ltmParameters = {
                 .eps = 0.01,
-                .shadows = 1, // 0.7,
-                .highlights = 1, // 1.5,
-                .detail = { 1, 1.1, 1.3 }
+                .shadows = 1.0,
+                .highlights = 1.0,
+                .detail = { 1, 1.0, 1.3 }
             }
         };
     }
@@ -183,7 +187,11 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawCon
     Sonya6400Calibration calibration;
     auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
 
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false));
+    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ false, nullptr, false);
+
+    const auto demosaicedImage = rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+
+    return RawConverter::convertToRGBImage(*demosaicedImage);
 }
 
 // --- NLFData ---
