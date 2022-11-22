@@ -172,6 +172,20 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
                        rawVariance[0], rawVariance[2]);
 
+//    {
+//        gls::image<gls::luma_pixel> out(clLinearRGBImageA->width, clLinearRGBImageA->height);
+//        const auto convertedImage = clLinearRGBImageA->mapImage();
+//        out.apply([&convertedImage](gls::luma_pixel* p, int x, int y){
+//            const auto& ip = convertedImage[y][x];
+//            *p = gls::luma_pixel {
+//                (uint8_t) (255 * std::sqrt(std::clamp((float) ip.alpha, 0.0f, 1.0f)))
+//            };
+//        });
+//        clLinearRGBImageA->unmapImage(convertedImage);
+//        static int count = 1;
+//        out.write_png_file("/Users/fabio/whiteness" + std::to_string(count++) + ".png");
+//    }
+
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());
 

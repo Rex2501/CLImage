@@ -223,7 +223,7 @@ void demosaicFile(RawConverter* rawConverter, std::filesystem::path input_path) 
     // const auto rgb_image = demosaiciPhone11(rawConverter, input_path);
     // const auto rgb_image = demosaicRicohGRIII2DNG(rawConverter, input_path);
     // const auto rgb_image = demosaicLeicaQ2DNG(rawConverter, input_path);
-    rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new_sharp.jpg", 100);
+    rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new_sharp_2.jpg", 100);
     // rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_nu.png", /*skip_alpha=*/ true);
 }
 

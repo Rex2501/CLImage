@@ -79,7 +79,10 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
 
     rotate180AndFlipHorizontal(raw_data.get());
 
-    const auto gmb_position = gls::rectangle { 2717, 1825, 725, 415 };
+#if 0 // Use Gretag Machbeth Cart Coordinates
+    // const auto gmb_position = gls::rectangle { 2538, 314, 868, 485 };
+
+    const auto gmb_position = gls::rectangle { 4944, 1698, 909, 489 };
 
     gls::Vector<3> pre_mul;
     gls::Matrix<3, 3> cam_xyz;
@@ -93,9 +96,16 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
 
     std::vector<float> as_shot_neutral(inv_pre_mul.begin(), inv_pre_mul.end());
 
-//    // Obtain the rgb_cam matrix and pre_mul
-//    const auto rgb_cam = cam_xyz_coeff(&pre_mul, cam_xyz);
-//    std::cout << "rgb_cam:\n" << rgb_cam << "\npre_mul: " << pre_mul[1] / pre_mul << std::endl;
+    // Obtain the rgb_cam matrix and pre_mul
+    const auto rgb_cam = cam_xyz_coeff(&pre_mul, cam_xyz);
+    std::cout << "rgb_cam:\n" << rgb_cam << "\npre_mul: " << pre_mul[1] / pre_mul << std::endl;
+#else
+//    std::vector<float> color_matrix = { 1.9283, -0.8810, -0.1134, -0.0432, 0.8803, 0.1629, -0.0006, 0.1300, 0.3198 };
+//    std::vector<float> as_shot_neutral = { 1 / 1.2273, 1.0000, 1 / 2.1288 };
+
+    std::vector<float> color_matrix = { 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 };
+    std::vector<float> as_shot_neutral = { 1 / 1.8930, 1.0000, 1 / 1.7007 };
+#endif
 
     gls::tiff_metadata dng_metadata, exif_metadata;
 
@@ -104,6 +114,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     dng_metadata.insert({ TIFFTAG_UNIQUECAMERAMODEL, "ToupCam 1" });
     dng_metadata.insert({ TIFFTAG_COLORMATRIX1, color_matrix });
     dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
+
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
     dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
     dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
@@ -116,27 +127,40 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     exif_metadata.insert({ EXIFTAG_DATETIMEDIGITIZED, timestamp});
     exif_metadata.insert({ EXIFTAG_EXPOSURETIME, exposure_time});
 
-    auto dng_file = (input_path.parent_path() / input_path.stem()).string() + ".dng";
+    auto dng_file = (input_path.parent_path() / input_path.stem()).string() + "_b.dng";
     raw_data->write_dng_file(dng_file, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
 }
 
-int main(int argc, const char * argv[]) {
-    const auto input_path = std::filesystem::path(argv[1]);
+void processDirectory(std::filesystem::path input_path) {
+    std::cout << "Processing Directory: " << input_path.filename() << std::endl;
 
-    std::cout << "Processing file: " << input_path << std::endl;
-
-    auto input_dir = std::filesystem::path(input_path.parent_path());
+    auto input_dir = std::filesystem::directory_entry(input_path).is_directory() ? input_path : input_path.parent_path();
     std::vector<std::filesystem::path> directory_listing;
     std::copy(std::filesystem::directory_iterator(input_dir), std::filesystem::directory_iterator(),
               std::back_inserter(directory_listing));
     std::sort(directory_listing.begin(), directory_listing.end());
 
     for (const auto& input_path : directory_listing) {
-        if (input_path.extension() != ".png") {
+        if (input_path.filename().string().starts_with(".")) {
             continue;
         }
-        raw_png_to_dng(input_path);
+
+        if (std::filesystem::directory_entry(input_path).is_regular_file()) {
+            const auto extension = input_path.extension();
+            if ((extension != ".png" && extension != ".PNG")) {
+                continue;
+            }
+            raw_png_to_dng(input_path);
+        } else if (std::filesystem::directory_entry(input_path).is_directory()) {
+            processDirectory(input_path);
+        }
     }
+}
+
+int main(int argc, const char * argv[]) {
+    const auto input_path = std::filesystem::path(argv[1]);
+
+    processDirectory(input_path);
 
     return 0;
 }

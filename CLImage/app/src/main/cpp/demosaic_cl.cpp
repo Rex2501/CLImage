@@ -921,19 +921,17 @@ void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d
                           gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 template <typename T>
-void clTransformImage(gls::OpenCLContext* cLContext,
-                      const gls::cl_image_2d<T>& inputImage,
-                      gls::cl_image_2d<T>* outputImage,
-                      const gls::Matrix<3, 3>& homography) {
+void clRescaleImage(gls::OpenCLContext* cLContext,
+                    const gls::cl_image_2d<T>& inputImage,
+                    gls::cl_image_2d<T>* outputImage) {
     // Load the shader source
     const auto program = cLContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,        // inputImage
                                     cl::Image2D,        // outputImage
-                                    gls::Matrix<3, 3>,  // homography
                                     cl::Sampler         // linear_sampler
-                                    >(program, "homographyTransformImage");
+                                    >(program, "rescaleImage");
 
     const auto linear_sampler = cl::Sampler(cLContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
 
@@ -943,17 +941,15 @@ void clTransformImage(gls::OpenCLContext* cLContext,
 #else
            cl::EnqueueArgs(cl::NDRange(outputImage->width, outputImage->height), cl::NDRange(32, 32)),
 #endif
-           inputImage.getImage2D(), outputImage->getImage2D(), homography, linear_sampler);
+           inputImage.getImage2D(), outputImage->getImage2D(), linear_sampler);
 }
 
 template
-void clTransformImage(gls::OpenCLContext* cLContext,
-                      const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
-                      gls::cl_image_2d<gls::rgba_pixel>* outputImage,
-                      const gls::Matrix<3, 3>& homography);
+void clRescaleImage(gls::OpenCLContext* cLContext,
+                    const gls::cl_image_2d<gls::rgba_pixel>& inputImage,
+                    gls::cl_image_2d<gls::rgba_pixel>* outputImage);
 
 template
-void clTransformImage(gls::OpenCLContext* cLContext,
-                      const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                      gls::cl_image_2d<gls::rgba_pixel_float>* outputImage,
-                      const gls::Matrix<3, 3>& homography);
+void clRescaleImage(gls::OpenCLContext* cLContext,
+                    const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                    gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);

@@ -170,7 +170,7 @@ int main(int argc, const char * argv[]) {
         const auto sRGBImage = rawConverter.postProcess(*denoisedImage, *demosaicParameters);
         const auto result_image = RawConverter::convertToRGBImage(*sRGBImage);
 
-        result_image->write_png_file(reference_image_path.parent_path() / "fused_nu.png");
+        result_image->write_png_file(reference_image_path.parent_path() / "fused_nu2.png");
     }
 
 //    {

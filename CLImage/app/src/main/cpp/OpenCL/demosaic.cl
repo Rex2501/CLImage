@@ -1966,27 +1966,8 @@ typedef struct transform {
     float matrix[3][3];
 } transform;
 
-kernel void homographyTransformImage(read_only image2d_t inputImage,
-                                     write_only image2d_t outputImage,
-                                     transform homography,
-                                     sampler_t linear_sampler) {
-#if true
+kernel void rescaleImage(read_only image2d_t inputImage,
+                         write_only image2d_t outputImage,
+                         sampler_t linear_sampler) {
     CatmullRomInterpolation(inputImage, outputImage, linear_sampler);
-#else
-    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-    const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
-
-    float x = imageCoordinates.x;
-    float y = imageCoordinates.y;
-
-    float u = homography.matrix[0][0] * x + homography.matrix[0][1] * y + homography.matrix[0][2];
-    float v = homography.matrix[1][0] * x + homography.matrix[1][1] * y + homography.matrix[1][2];
-    float w = homography.matrix[2][0] * x + homography.matrix[2][1] * y + homography.matrix[2][2];
-    float xx = u / w;
-    float yy = v / w;
-
-    float4 input = read_imagef(inputImage, linear_sampler, ((float2)(xx, yy) + 0.5) * input_norm);
-
-    write_imagef(outputImage, imageCoordinates, input);
-#endif
 }

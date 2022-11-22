@@ -169,9 +169,8 @@ void clFuseFrames(gls::OpenCLContext* glsContext,
                   gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage);
 
 template <typename T>
-void clTransformImage(gls::OpenCLContext* cLContext,
-                      const gls::cl_image_2d<T>& inputImage,
-                      gls::cl_image_2d<T>* outputImage,
-                      const gls::Matrix<3, 3>& homography);
+void clRescaleImage(gls::OpenCLContext* cLContext,
+                    const gls::cl_image_2d<T>& inputImage,
+                    gls::cl_image_2d<T>* outputImage);
 
 #endif /* demosaic_cl_hpp */

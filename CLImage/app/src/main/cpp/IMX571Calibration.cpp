@@ -197,17 +197,8 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicIMX571DNG(RawConverter* rawConver
 
     const auto demosaicedImage = rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
 
-    const gls::Matrix<3, 3> homography = {
-        1, 0, 0,
-        0, 1, 0,
-        0, 0, 1
-    };
-
     gls::cl_image_2d<gls::rgba_pixel> unsquishedImage(rawConverter->getContext()->clContext(), demosaicedImage->width, demosaicedImage->height * 1.2);
-    clTransformImage(rawConverter->getContext(),
-                     *demosaicedImage,
-                     &unsquishedImage,
-                     homography);
+    clRescaleImage(rawConverter->getContext(), *demosaicedImage, &unsquishedImage);
 
     return RawConverter::convertToRGBImage(unsquishedImage);
 }

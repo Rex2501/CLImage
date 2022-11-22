@@ -172,14 +172,14 @@ void calibrateiLeicaQ2(RawConverter* rawConverter, const std::filesystem::path& 
     calibration.calibrate(rawConverter, input_dir);
 }
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaiciLeicaQ2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
+gls::image<gls::rgb_pixel>::unique_ptr demosaicLeicaQ2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     gls::tiff_metadata dng_metadata, exif_metadata;
     const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
 
     LeicaQ2Calibration calibration;
     auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
 
-    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ true));
+    return RawConverter::convertToRGBImage(*rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false));
 }
 
 // --- NLFData ---
