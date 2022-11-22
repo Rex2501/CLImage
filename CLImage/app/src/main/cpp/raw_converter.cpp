@@ -150,7 +150,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
     const bool high_noise_image = rawVariance[1][1] > kHighNoiseVariance;
 
-    std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << std::endl;
+    std::cout << "Green Channel RAW Variance: " << std::scientific << rawVariance[1][1] << ", high_noise_image: " << high_noise_image << std::endl;
 
     if (high_noise_image) {
         std::cout << "Despeckeling RAW Image" << std::endl;
@@ -191,7 +191,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
 
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
         pyramidProcessor->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
-                                  clLinearRGBImageB.get(),
+                                  *clLinearRGBImageB,
                                   &(noiseModel->pyramidNlf), demosaicParameters->exposure_multiplier, calibrateFromImage);
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {

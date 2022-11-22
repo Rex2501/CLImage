@@ -159,17 +159,37 @@ int main(int argc, const char * argv[]) {
         fused_images++;
     }
 
-    const auto cl_result_image = rawConverter.getFusedImage();
-    const auto denoisedImage = rawConverter.denoise(*cl_result_image, demosaicParameters.get(), /*calibrateFromImage=*/ true);
+    {
+        const auto cl_result_image = rawConverter.getFusedImage();
+        const auto denoisedImage = rawConverter.denoise(*cl_result_image, demosaicParameters.get(), /*calibrateFromImage=*/ true);
 
-    // Convert result back to camera RGB
-    const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
-    transformImage(&glsContext, *denoisedImage, denoisedImage, normalized_ycbcr_to_cam);
+        // Convert result back to camera RGB
+        const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
+        transformImage(&glsContext, *denoisedImage, denoisedImage, normalized_ycbcr_to_cam);
 
-    const auto sRGBImage = rawConverter.postProcess(*denoisedImage, *demosaicParameters);
-    const auto result_image = RawConverter::convertToRGBImage(*sRGBImage);
+        const auto sRGBImage = rawConverter.postProcess(*denoisedImage, *demosaicParameters);
+        const auto result_image = RawConverter::convertToRGBImage(*sRGBImage);
 
-    result_image->write_png_file(reference_image_path.parent_path() / "fused.png");
+        result_image->write_png_file(reference_image_path.parent_path() / "fused_nu.png");
+    }
+
+//    {
+//        reference_image_rgb = runPipeline(&glsContext, &rawConverter, reference_image_path.string(), &demosaicParameters);
+//
+//        // Convert linear image to YCbCr for denoising
+//        transformImage(&glsContext, *reference_image_rgb, reference_image_rgb, cam_to_ycbcr);
+//
+//        const auto denoisedImage = rawConverter.denoise(*reference_image_rgb, demosaicParameters.get(), /*calibrateFromImage=*/ true);
+//
+//        // Convert result back to camera RGB
+//        const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
+//        transformImage(&glsContext, *denoisedImage, denoisedImage, normalized_ycbcr_to_cam);
+//
+//        const auto sRGBImage = rawConverter.postProcess(*denoisedImage, *demosaicParameters);
+//        const auto result_image = RawConverter::convertToRGBImage(*sRGBImage);
+//
+//        result_image->write_png_file(reference_image_path.parent_path() / "reference_denoised.png");
+//    }
 
     return 0;
 }

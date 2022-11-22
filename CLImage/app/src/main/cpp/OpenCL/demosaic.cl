@@ -978,19 +978,34 @@ half tunnel(half x, half y, half angle, half sigma) {
     return exp(-(a * a) / sigma);
 }
 
-kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 var_b, float chromaBoost, float gradientBoost, write_only image2d_t denoisedImage) {
+kernel void denoiseImage(read_only image2d_t inputImage,
+                         read_only image2d_t inputImageLF,
+                         sampler_t linear_sampler,
+                         float3 var_a, float3 var_b,
+                         float3 thresholdMultipliers,
+                         float chromaBoost, float gradientBoost, int layer,
+                         write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    // Compute the luma's gradient on LF image
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(denoisedImage));
+    const float2 input_pos = (convert_float2(imageCoordinates) + 0.5) * inputNorm;
+    half inputPixelLF = read_imageh(inputImageLF, linear_sampler, input_pos).x;
+    half inputPixelLFLeft = read_imageh(inputImageLF, linear_sampler, input_pos - (float2)(inputNorm.x, 0)).x;
+    half inputPixelLFTop = read_imageh(inputImageLF, linear_sampler, input_pos - (float2)(0, inputNorm.y)).x;
+    half2 gradient = (layer < 4 ? 4 : 1) * (half2) (inputPixelLF - inputPixelLFLeft, inputPixelLF - inputPixelLFTop);
 
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
 
     half3 sigma = convert_half3(sqrt(var_a + var_b * inputYCC.x));
+    half3 diffMultiplier = 1 / (sigma * sqrt(convert_half3(thresholdMultipliers)));
 
-    float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
+//    float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
     // TODO: make this a tunable parameter
-    half flat = 0; // 1 - smoothstep(1, 4, magnitude / sigma.x);
+    half flat = 0.25 * (1 - smoothstep(0.25h, 1, magnitude / sigma.x));
 
     const int size = gradientBoost > 1 ? 4 : 2;
 
@@ -1000,10 +1015,10 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
         for (int x = -size; x <= size; x++) {
             half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
-            half3 inputDiff = (inputSampleYCC - inputYCC) / sigma;
+            half3 inputDiff = (inputSampleYCC - inputYCC) * diffMultiplier;
 
             half w = (half) mix(1, tunnel(x, y, angle, 0.25h), edge);
-            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * edge + flat, abs(inputDiff.x)));
+            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * (edge + flat), abs(inputDiff.x)));
             half chromaWeight = abs(x) <= 2 && abs(y) <= 2 ? 1 - step((half) chromaBoost, length(inputDiff)) : 0;
             half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
 
@@ -1013,7 +1028,7 @@ kernel void denoiseImage(read_only image2d_t inputImage, float3 var_a, float3 va
     }
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, 0.0));
+    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, edge));
 }
 
 kernel void fuseFrames(read_only image2d_t inputImage,
@@ -1028,8 +1043,8 @@ kernel void fuseFrames(read_only image2d_t inputImage,
 
     float outWeight = 0;
     float3 outSum = 0;
-    for (int y = -4; y <= 4; y++) {
-        for (int x = -4; x <= 4; x++) {
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
             float3 newPixel = read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
 
             float weight = 1 - step(1.0, length((referencePixel - newPixel) / sigma));

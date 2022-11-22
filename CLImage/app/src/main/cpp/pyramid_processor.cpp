@@ -17,33 +17,6 @@
 
 #include <iomanip>
 
-template
-PyramidProcessor<5>::PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height);
-
-struct BilateralDenoiser : ImageDenoiser {
-    BilateralDenoiser(gls::OpenCLContext* glsContext, int width, int height) : ImageDenoiser(glsContext, width, height) { }
-
-    void denoise(gls::OpenCLContext* glsContext,
-                 const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                 const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
-              gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        ::denoiseImage(glsContext, inputImage, var_a, var_b, chromaBoost, gradientBoost, outputImage);
-    }
-};
-
-struct GuidedFastDenoiser : ImageDenoiser {
-    GuidedFastDenoiser(gls::OpenCLContext* glsContext, int width, int height) : ImageDenoiser(glsContext, width, height) { }
-
-    void denoise(gls::OpenCLContext* glsContext,
-                 const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                 const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                 float chromaBoost, float gradientBoost, int pyramidLevel,
-                 gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) override {
-        ::denoiseImageGuided(glsContext, inputImage, var_a, var_b, outputImage);
-    }
-};
-
 template <size_t levels>
 PyramidProcessor<levels>::PyramidProcessor(gls::OpenCLContext* glsContext, int _width, int _height) : width(_width), height(_height), fusedFrames(0) {
     for (int i = 0, scale = 2; i < levels-1; i++, scale *= 2) {
@@ -51,7 +24,6 @@ PyramidProcessor<levels>::PyramidProcessor(gls::OpenCLContext* glsContext, int _
     }
     for (int i = 0, scale = 1; i < levels; i++, scale *= 2) {
         denoisedImagePyramid[i] = std::make_unique<imageType>(glsContext->clContext(), width/scale, height/scale);
-        denoiser[i] = std::make_unique<BilateralDenoiser>(glsContext, width/scale, height/scale);
     }
 }
 
@@ -61,6 +33,7 @@ gls::Vector<3> nflMultiplier(const DenoiseParameters &denoiseParameters) {
     return { luma_mul, chroma_mul, chroma_mul };
 }
 
+#if DEBUG_PYRAMID
 extern const gls::Matrix<3, 3> ycbcr_srgb;
 
 void dumpYCbCrImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
@@ -80,16 +53,31 @@ void dumpYCbCrImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
     out.write_png_file("/Users/fabio/pyramid" + std::to_string(count++) + ".png");
 }
 
+void dumpGradientImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
+    gls::image<gls::luma_pixel> out(image.width, image.height);
+    const auto downsampledCPU = image.mapImage();
+    out.apply([&downsampledCPU](gls::luma_pixel* p, int x, int y){
+        const auto& ip = downsampledCPU[y][x];
+        *p = gls::luma_pixel {
+            (uint8_t) (255 * std::sqrt(std::clamp((float) ip.w, 0.0f, 1.0f)))
+        };
+    });
+    image.unmapImage(downsampledCPU);
+    static int count = 1;
+    out.write_png_file("/Users/fabio/gradient_lf" + std::to_string(count++) + ".png");
+}
+#endif  // DEBUG_PYRAMID
+
 template <size_t levels>
 typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
-                                                                                imageType* image, std::array<YCbCrNLF, levels>* nlfParameters,
+                                                                                const imageType& image, std::array<YCbCrNLF, levels>* nlfParameters,
                                                                                 float exposure_multiplier, bool calibrateFromImage) {
-    std::array<YCbCrNLF, levels> calibrated_nlf;
+    std::array<gls::Vector<3>, levels> thresholdMultipliers;
 
     // Create gaussian image pyramid an setup noise model
     for (int i = 0; i < levels; i++) {
-        const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : image;
+        const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : &image;
 
         if (i < levels - 1) {
             // Generate next layer in the pyramid
@@ -97,30 +85,28 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
         }
 
         if (calibrateFromImage) {
-            const auto nlf = MeasureYCbCrNLF(glsContext, *currentLayer, exposure_multiplier);
-            (*nlfParameters)[i] = nlf;
+            (*nlfParameters)[i] = MeasureYCbCrNLF(glsContext, *currentLayer, exposure_multiplier);
         }
 
-        const auto m = nflMultiplier((*denoiseParameters)[i]);
-
-        calibrated_nlf[i] = { (*nlfParameters)[i].first * m, (*nlfParameters)[i].second * m };
+        thresholdMultipliers[i] = nflMultiplier((*denoiseParameters)[i]);
     }
 
     // Denoise all pyramid layers independently
-    for (int i = 0; i < levels; i++) {
-        const auto denoiseInput = i > 0 ? imagePyramid[i - 1].get() : image;
+    for (int i = levels - 1; i >= 0; i--) {
+        const auto denoiseInput = i > 0 ? imagePyramid[i - 1].get() : &image;
+        const auto denoiseInputLF = imagePyramid[std::min(i, (int) levels - 2)].get();
 
         // Denoise current layer
-        const auto& np = calibrated_nlf[i];
-        denoiser[i]->denoise(glsContext, *denoiseInput,
-                             np.first, np.second,
-                             (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, /*pyramidLevel=*/ i,
-                             denoisedImagePyramid[i].get());
+        denoiseImage(glsContext, *denoiseInput, *denoiseInputLF,
+                     (*nlfParameters)[i].first, (*nlfParameters)[i].second, thresholdMultipliers[i],
+                     (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, i,
+                     denoisedImagePyramid[i].get());
     }
 
     // Reassemble pyramyd from the bottom up
     for (int i = levels - 2; i >= 0; i--) {
-        const auto& np = calibrated_nlf[i];
+        // TODO: this really is a kludge
+        const auto np = YCbCrNLF {(*nlfParameters)[i].first * thresholdMultipliers[i], (*nlfParameters)[i].second * thresholdMultipliers[i]};
 
         // Subtract the previous layer's noise from the current one
         std::cout << "Reassembling layer " << i << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
@@ -134,11 +120,14 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
     return denoisedImagePyramid[0].get();
 }
 
-template
-typename PyramidProcessor<5>::imageType* PyramidProcessor<5>::denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, 5>* denoiseParameters,
-                                                                      imageType* image, std::array<YCbCrNLF, 5>* nlfParameters,
-                                                                      float exposure_multiplier, bool calibrateFromImage);
-const float fusionWeights[5] = { 2, 1, 0.5, 0.25, 0.125 };
+// TODO: tunables
+const gls::Vector<2> fusionWeights[5] = {
+    {4, 4},
+    {4, 4},
+    {4, 4},
+    {4, 4},
+    {4, 4}
+};
 
 template <size_t levels>
 void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
@@ -152,20 +141,20 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
         for (int i = 0, scale = 1; i < levels; i++, scale *= 2) {
             fusionImagePyramid[i] = std::make_unique<imageType>(glsContext->clContext(), width/scale, height/scale);
         }
+        fusionBuffer[0] = &denoisedImagePyramid;
+        fusionBuffer[1] = &fusionImagePyramid;
     }
 
-    auto& newFusedImagePyramid = (fusedFrames & 1) == 0 ? fusionImagePyramid : denoisedImagePyramid;
-    auto& previousFusedImagePyramid = (fusedFrames & 1) == 1 ? fusionImagePyramid : denoisedImagePyramid;
+    auto& newFusedImagePyramid = *fusionBuffer[(fusedFrames & 1) == 0];
+    auto& previousFusedImagePyramid = *fusionBuffer[(fusedFrames & 1) == 1];
 
-    std::array<YCbCrNLF, levels> calibrated_nlf;
-
-    // Create gaussian image pyramid an setup noise model
+    // Create gaussian image pyramid
     for (int i = 0; i < levels; i++) {
-        const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : &image;
+        const auto currentLayer = i > 0 ? (fusedFrames == 0 ? newFusedImagePyramid[i].get() : imagePyramid[i - 1].get()) : &image;
 
         if (i < levels - 1) {
             // Generate next layer in the pyramid
-            resampleImage(glsContext, "downsampleImage", *currentLayer, fusedFrames == 0 ? newFusedImagePyramid[i].get() : imagePyramid[i].get());
+            resampleImage(glsContext, "downsampleImage", *currentLayer, fusedFrames == 0 ? newFusedImagePyramid[i+1].get() : imagePyramid[i].get());
         }
         if (i == 0 && fusedFrames == 0) {
             cl::enqueueCopyImage(currentLayer->getImage2D(), newFusedImagePyramid[i]->getImage2D(),
@@ -173,21 +162,18 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
         }
 
         if (calibrateFromImage) {
-            const auto nlf = MeasureYCbCrNLF(glsContext, *currentLayer, exposure_multiplier);
-            (*nlfParameters)[i] = nlf;
+            (*nlfParameters)[i] = MeasureYCbCrNLF(glsContext, *currentLayer, exposure_multiplier);
         }
-
-        const auto m = gls::Vector<3> {1, 4.0f, 4.0f};
-        calibrated_nlf[i] = { (*nlfParameters)[i].first * m, (*nlfParameters)[i].second * m };
     }
 
     if (fusedFrames > 0) {
         for (int i = levels - 1; i >= 0; i--) {
-            const auto& np = calibrated_nlf[i];
+            const auto m = gls::Vector<3> { fusionWeights[i][0], fusionWeights[i][1], fusionWeights[i][1] };
+            const auto& np = YCbCrNLF { (*nlfParameters)[i].first * m * m, (*nlfParameters)[i].second * m * m };
             const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : &image;
+
             clFuseFrames(glsContext, *currentLayer, *previousFusedImagePyramid[i],
                          np.first, np.second, fusedFrames, newFusedImagePyramid[i].get());
-
         }
 
         // Reassemble pyramyd from the bottom up
@@ -203,22 +189,13 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
     fusedFrames++;
 }
 
-template
-void PyramidProcessor<5>::fuseFrame(gls::OpenCLContext* glsContext,
-                                    std::array<DenoiseParameters, 5>* denoiseParameters,
-                                    const imageType& image, std::array<YCbCrNLF, 5>* nlfParameters,
-                                    float exposure_multiplier, bool calibrateFromImage);
-
 template <size_t levels>
 typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::getFusedImage(gls::OpenCLContext* glsContext) {
-    auto& newFusedImagePyramid = (fusedFrames & 1) == 1 ? fusionImagePyramid : denoisedImagePyramid;
-
-    std::cout << "Returning fused image" << std::endl;
+    auto& newFusedImagePyramid = *fusionBuffer[(fusedFrames & 1) == 1];
 
     fusedFrames = 0;
 
     return newFusedImagePyramid[0].get();
 }
 
-template
-typename PyramidProcessor<5>::imageType* PyramidProcessor<5>::getFusedImage(gls::OpenCLContext* glsContext);
+template struct PyramidProcessor<5>;

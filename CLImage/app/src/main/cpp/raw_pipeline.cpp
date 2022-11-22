@@ -213,6 +213,46 @@ void processKodakSet(gls::OpenCLContext* glsContext, const std::filesystem::path
     }
 }
 
+void demosaicFile(RawConverter* rawConverter, std::filesystem::path input_path) {
+    LOG_INFO(TAG) << "Processing File: " << input_path.filename() << std::endl;
+
+    // transcodeAdobeDNG(input_path);
+    // const auto rgb_image = demosaicIMX571DNG(rawConverter, input_path);
+    const auto rgb_image = demosaicSonya6400DNG(rawConverter, input_path);
+    // const auto rgb_image = demosaicCanonEOSRPDNG(rawConverter, input_path);
+    // const auto rgb_image = demosaiciPhone11(rawConverter, input_path);
+    // const auto rgb_image = demosaicRicohGRIII2DNG(rawConverter, input_path);
+    // const auto rgb_image = demosaicLeicaQ2DNG(rawConverter, input_path);
+    // rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new.jpg", 100);
+    rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
+}
+
+void demosaicDirectory(RawConverter* rawConverter, std::filesystem::path input_path) {
+    LOG_INFO(TAG) << "Processing Directory: " << input_path.filename() << std::endl;
+
+    auto input_dir = std::filesystem::directory_entry(input_path).is_directory() ? input_path : input_path.parent_path();
+    std::vector<std::filesystem::path> directory_listing;
+    std::copy(std::filesystem::directory_iterator(input_dir), std::filesystem::directory_iterator(),
+              std::back_inserter(directory_listing));
+    std::sort(directory_listing.begin(), directory_listing.end());
+
+    for (const auto& input_path : directory_listing) {
+        if (input_path.filename().string().starts_with(".")) {
+            continue;
+        }
+
+        if (std::filesystem::directory_entry(input_path).is_regular_file()) {
+            const auto extension = input_path.extension();
+            if ((extension != ".dng" && extension != ".DNG")) {
+                continue;
+            }
+            demosaicFile(rawConverter, input_path);
+        } else if (std::filesystem::directory_entry(input_path).is_directory()) {
+            demosaicDirectory(rawConverter, input_path);
+        }
+    }
+}
+
 int main(int argc, const char* argv[]) {
     printf("RawPipeline Test!\n");
 
@@ -231,40 +271,9 @@ int main(int argc, const char* argv[]) {
         // calibrateSonya6400(&rawConverter, input_path.parent_path());
         // calibrateLeicaQ2(&rawConverter, input_path.parent_path());
 
-        auto input_dir = std::filesystem::path(input_path.parent_path());
-        std::vector<std::filesystem::path> directory_listing;
-        std::copy(std::filesystem::directory_iterator(input_dir), std::filesystem::directory_iterator(),
-                  std::back_inserter(directory_listing));
-        std::sort(directory_listing.begin(), directory_listing.end());
+        // demosaicDirectory(&rawConverter, input_path);
 
-        for (const auto& input_path : directory_listing) {
-            const auto extension = input_path.extension();
-            if ((extension != ".dng" && extension != ".DNG") || input_path.filename().string().starts_with(".")) {
-                continue;
-            }
-
-            LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
-
-            // transcodeAdobeDNG(input_path);
-            // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-            // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
-            // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
-            const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
-            // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
-            // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-            rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_GRAIN_G.jpg", 100);
-            // rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_hf.png", /*skip_alpha=*/ true);
-        }
-
-//        LOG_INFO(TAG) << "Processing: " << input_path.filename() << std::endl;
-//
-//        // const auto rgb_image = demosaicIMX571DNG(&rawConverter, input_path);
-//        const auto rgb_image = demosaiciPhone11(&rawConverter, input_path);
-//        // const auto rgb_image = demosaicCanonEOSRPDNG(&rawConverter, input_path);
-//        // const auto rgb_image = demosaicSonya6400DNG(&rawConverter, input_path);
-//        // const auto rgb_image = demosaicRicohGRIII2DNG(&rawConverter, input_path);
-//        // const auto rgb_image = demosaicLeicaQ2DNG(&rawConverter, input_path);
-//        rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb.png", /*skip_alpha=*/ true);
+        demosaicFile(&rawConverter, input_path);
 
 //        {
 //            gls::tiff_metadata dng_metadata, exif_metadata;

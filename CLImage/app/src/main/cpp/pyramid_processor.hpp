@@ -19,18 +19,6 @@
 #include "demosaic.hpp"
 #include "demosaic_cl.hpp"
 
-struct ImageDenoiser {
-    ImageDenoiser(gls::OpenCLContext* glsContext, int width, int height) {}
-
-    virtual ~ImageDenoiser() { }
-
-    virtual void denoise(gls::OpenCLContext* glsContext,
-                         const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                         const gls::Vector<3>& sigma_a, const gls::Vector<3>& sigma_b,
-                         float chromaBoost, float gradientBoost, int pyramidLevel,
-                         gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) = 0;
-};
-
 template <size_t levels>
 struct PyramidProcessor {
     const int width, height;
@@ -40,13 +28,12 @@ struct PyramidProcessor {
     std::array<imageType::unique_ptr, levels-1> imagePyramid;
     std::array<imageType::unique_ptr, levels> denoisedImagePyramid;
     std::array<imageType::unique_ptr, levels> fusionImagePyramid;
-
-    std::array<std::unique_ptr<ImageDenoiser>, levels> denoiser;
+    std::array<imageType::unique_ptr, levels>* fusionBuffer[2];
 
     PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height);
 
     imageType* denoise(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
-                       imageType* image, std::array<YCbCrNLF, levels>* nlfParameters,
+                       const imageType& image, std::array<YCbCrNLF, levels>* nlfParameters,
                        float exposure_multiplier, bool calibrateFromImage = false);
 
     void fuseFrame(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,

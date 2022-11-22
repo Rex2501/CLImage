@@ -56,7 +56,7 @@ void interpolateGreen(gls::OpenCLContext* glsContext,
     auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
                                     cl::Image2D,  // greenImage
                                     int,          // bayerPattern
-                                    cl_float2     // lumaVariance
+                                    cl_float2     // greenVariance
                                     >(program, "interpolateGreen");
 
     // Schedule the kernel on the GPU
@@ -339,27 +339,37 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageLF,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
-                  float chromaBoost, float gradientBoost,
+                  const gls::Vector<3> thresholdMultipliers,
+                  float chromaBoost, float gradientBoost, int layer,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
+                                    cl::Image2D,  // inputImageLF
+                                    cl::Sampler,  // linear_sampler
                                     cl_float3,    // var_a
                                     cl_float3,    // var_b
+                                    cl_float3,    // thresholdMultipliers
                                     float,        // chromaBoost
                                     float,        // gradientBoost
+                                    int,          // layer
                                     cl::Image2D   // outputImage
                                     >(program, "denoiseImage");
 
     cl_float3 cl_var_a = { var_a[0], var_a[1], var_a[2] };
     cl_float3 cl_var_b = { var_b[0], var_b[1], var_b[2] };
 
+    const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), cl_var_a, cl_var_b, chromaBoost, gradientBoost, outputImage->getImage2D());
+           inputImage.getImage2D(), inputImageLF.getImage2D(), linear_sampler,
+           cl_var_a, cl_var_b, { thresholdMultipliers[0], thresholdMultipliers[1], thresholdMultipliers[2] },
+           chromaBoost, gradientBoost, layer, outputImage->getImage2D());
 }
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,
