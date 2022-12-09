@@ -21,6 +21,7 @@ template <size_t levels>
 PyramidProcessor<levels>::PyramidProcessor(gls::OpenCLContext* glsContext, int _width, int _height) : width(_width), height(_height), fusedFrames(0) {
     for (int i = 0, scale = 2; i < levels-1; i++, scale *= 2) {
         imagePyramid[i] = std::make_unique<imageType>(glsContext->clContext(), width/scale, height/scale);
+        gradientPyramid[i] = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(glsContext->clContext(), width/scale, height/scale);
     }
     for (int i = 0, scale = 1; i < levels; i++, scale *= 2) {
         denoisedImagePyramid[i] = std::make_unique<imageType>(glsContext->clContext(), width/scale, height/scale);
@@ -28,8 +29,8 @@ PyramidProcessor<levels>::PyramidProcessor(gls::OpenCLContext* glsContext, int _
 }
 
 gls::Vector<3> nflMultiplier(const DenoiseParameters &denoiseParameters) {
-    float luma_mul = denoiseParameters.luma * denoiseParameters.luma;
-    float chroma_mul = denoiseParameters.chroma * denoiseParameters.chroma;
+    float luma_mul = denoiseParameters.luma;
+    float chroma_mul = denoiseParameters.chroma;
     return { luma_mul, chroma_mul, chroma_mul };
 }
 
@@ -53,35 +54,44 @@ void dumpYCbCrImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
     out.write_png_file("/Users/fabio/pyramid" + std::to_string(count++) + ".png");
 }
 
-void dumpGradientImage(const gls::cl_image_2d<gls::rgba_pixel_float>& image) {
+void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& image, float nlfa, float nlfb) {
     gls::image<gls::luma_pixel> out(image.width, image.height);
-    const auto downsampledCPU = image.mapImage();
-    out.apply([&downsampledCPU](gls::luma_pixel* p, int x, int y){
-        const auto& ip = downsampledCPU[y][x];
+    const auto image_cpu = image.mapImage();
+    out.apply([&](gls::luma_pixel* p, int x, int y) {
+        const auto& ip = image_cpu[y][x];
+
+        const float sigma = sqrt(nlfa + ip.x * nlfb);
+
         *p = gls::luma_pixel {
-            (uint8_t) (255 * std::sqrt(std::clamp((float) ip.w, 0.0f, 1.0f)))
+            (uint8_t) (255 * std::sqrt(std::clamp((float) (ip.w > 4 * sigma ? ip.w : 0), 0.0f, 1.0f)))
         };
     });
-    image.unmapImage(downsampledCPU);
+    image.unmapImage(image_cpu);
     static int count = 1;
-    out.write_png_file("/Users/fabio/gradient_lf" + std::to_string(count++) + ".png");
+    out.write_png_file("/Users/fabio/gradient_lfb" + std::to_string(count++) + ".png");
 }
 #endif  // DEBUG_PYRAMID
+
+void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& image);
 
 template <size_t levels>
 typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
-                                                                                const imageType& image, std::array<YCbCrNLF, levels>* nlfParameters,
+                                                                                const imageType& image,
+                                                                                const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                                                                                std::array<YCbCrNLF, levels>* nlfParameters,
                                                                                 float exposure_multiplier, bool calibrateFromImage) {
     std::array<gls::Vector<3>, levels> thresholdMultipliers;
 
     // Create gaussian image pyramid an setup noise model
     for (int i = 0; i < levels; i++) {
         const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : &image;
+        const auto currentGradientLayer = i > 0 ? gradientPyramid[i - 1].get() : &gradientImage;
 
         if (i < levels - 1) {
             // Generate next layer in the pyramid
-            resampleImage(glsContext, "downsampleImage", *currentLayer, imagePyramid[i].get());
+            resampleImage(glsContext, "downsampleImageXYZ", *currentLayer, imagePyramid[i].get());
+            resampleImage(glsContext, "downsampleImageXY", *currentGradientLayer, gradientPyramid[i].get());
         }
 
         if (calibrateFromImage) {
@@ -94,10 +104,14 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
     // Denoise all pyramid layers independently
     for (int i = levels - 1; i >= 0; i--) {
         const auto denoiseInput = i > 0 ? imagePyramid[i - 1].get() : &image;
-        const auto denoiseInputLF = imagePyramid[std::min(i, (int) levels - 2)].get();
+        const auto gradientInput = i > 0 ? gradientPyramid[i - 1].get() : &gradientImage;
+
+        std::cout << "Denoising image level " << i << " with multipliers " << thresholdMultipliers[i] << std::endl;
+
+        // dumpGradientImage(*gradientInput);
 
         // Denoise current layer
-        denoiseImage(glsContext, *denoiseInput, *denoiseInputLF,
+        denoiseImage(glsContext, *denoiseInput, *gradientInput,
                      (*nlfParameters)[i].first, (*nlfParameters)[i].second, thresholdMultipliers[i],
                      (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, i,
                      denoisedImagePyramid[i].get());
@@ -116,6 +130,27 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
                         (*denoiseParameters)[i].sharpening, { np.first[0], np.second[0] },
                         denoisedImagePyramid[i].get());
     }
+
+    const float nlfa = (*nlfParameters)[0].first[0];
+    const float nlfb = (*nlfParameters)[0].second[0];
+
+    // dumpGradientImage(*denoisedImagePyramid[0], nlfa, nlfb);
+
+    gls::cl_image_2d<gls::rgba_pixel_float> blurredImage(glsContext->clContext(), image.size());
+    gaussianBlurImage(glsContext, image, 1, &blurredImage);
+
+    const auto image_cpu = image.mapImage();
+    const auto blurredImage_cpu = blurredImage.mapImage();
+    denoisedImagePyramid[0]->apply([&](gls::rgba_pixel_float *p, int x, int y){
+        const float sigma = sqrt(nlfa + p->x * nlfb);
+        const float high_gradient = smoothstep(sigma, 4 * sigma, p->w);
+
+        p->x += 0.5 * high_gradient * (image_cpu[y][x][0] - blurredImage_cpu[y][x][0]);
+        // p->x = std::lerp(p->x, image_cpu[y][x][0], high_gradient);
+        // p->red = image_cpu[y][x][0];
+    });
+    image.unmapImage(image_cpu);
+    blurredImage.unmapImage(blurredImage_cpu);
 
     return denoisedImagePyramid[0].get();
 }
@@ -154,7 +189,7 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
 
         if (i < levels - 1) {
             // Generate next layer in the pyramid
-            resampleImage(glsContext, "downsampleImage", *currentLayer, fusedFrames == 0 ? newFusedImagePyramid[i+1].get() : imagePyramid[i].get());
+            resampleImage(glsContext, "downsampleImageXYZ", *currentLayer, fusedFrames == 0 ? newFusedImagePyramid[i+1].get() : imagePyramid[i].get());
         }
         if (i == 0 && fusedFrames == 0) {
             cl::enqueueCopyImage(currentLayer->getImage2D(), newFusedImagePyramid[i]->getImage2D(),

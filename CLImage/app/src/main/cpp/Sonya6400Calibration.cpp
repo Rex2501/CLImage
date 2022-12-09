@@ -67,23 +67,22 @@ public:
         std::cout << "Sonya6400 DenoiseParameters nlf_alpha: " << nlf_alpha << ", ISO: " << iso << std::endl;
 
         float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
-        float lerp_c = std::lerp(0.5f, 2.0f, nlf_alpha);
+        float lerp_c = 1;
 
-        // Default Good
-        float lmult[5] = { 0.125f, 1.0f, 0.5f, 0.25f, 0.125f };
+        float lmult[5] = { 1.0, 1.0, 0.5, 0.25, 0.125 };
         float cmult[5] = { 1, 1, 1, 1, 1 };
 
-        float chromaBoost = std::lerp(4.0f, 8.0f, nlf_alpha);
+        float chromaBoost = 8;
 
-        float gradientBoost = 1 + 3 * smoothstep(0.3, 0.8, nlf_alpha);
+        float gradientBoost = smoothstep(0.3, 0.8, nlf_alpha);
 
         std::array<DenoiseParameters, 5> denoiseParameters = {{
             {
                 .luma = lmult[0] * lerp,
                 .chroma = cmult[0] * lerp_c,
-                .chromaBoost = 2 * chromaBoost,
+                .chromaBoost = chromaBoost,
                 .gradientBoost = 8 * gradientBoost,
-                .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
+                .sharpening = 1, // std::lerp(1.5f, 1.0f, nlf_alpha)
             },
             {
                 .luma = lmult[1] * lerp,
@@ -96,27 +95,28 @@ public:
                 .luma = lmult[2] * lerp,
                 .chroma = cmult[2] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0, // gradientBoost,
+                .gradientBoost = 0,
                 .sharpening = 1
             },
             {
                 .luma = lmult[3] * lerp,
                 .chroma = cmult[3] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0, // gradientBoost,
+                .gradientBoost = 0,
                 .sharpening = 1
             },
             {
                 .luma = lmult[4] * lerp,
                 .chroma = cmult[4] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0, // gradientBoost,
+                .gradientBoost = 0,
                 .sharpening = 1
             }
         }};
 
         return { nlf_alpha, denoiseParameters };
     }
+
 
     DemosaicParameters buildDemosaicParameters() const override {
         return {
@@ -126,12 +126,12 @@ public:
                 .contrast = 1.05,
                 .saturation = 1.0,
                 .toneCurveSlope = 3.5,
-                .localToneMapping = true
+                .localToneMapping = false
             },
             .ltmParameters = {
                 .eps = 0.01,
-                .shadows = 1.0,
-                .highlights = 1.0,
+                .shadows = 0.8,
+                .highlights = 1.5,
                 .detail = { 1, 1.0, 1.3 }
             }
         };

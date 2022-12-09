@@ -45,15 +45,35 @@ void scaleRawData(gls::OpenCLContext* glsContext,
            rawImage.getImage2D(), scaledRawImage->getImage2D(), bayerPattern, {scaleMul[0], scaleMul[1], scaleMul[2], scaleMul[3]}, blackLevel);
 }
 
-void interpolateGreen(gls::OpenCLContext* glsContext,
-                     const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
-                     gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
-                     BayerPattern bayerPattern, gls::Vector<2> greenVariance) {
+void rawImageGradient(gls::OpenCLContext* glsContext,
+                      const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                      gls::Vector<2> rawVariance,
+                      gls::cl_image_2d<gls::luma_alpha_pixel_float>* gradientImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
+                                    cl_float2,    // rawVariance
+                                    cl::Image2D   // gradientImage
+                                    >(program, "rawImageGradient");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(gradientImage->width, gradientImage->height),
+           rawImage.getImage2D(), { rawVariance[0], rawVariance[1] }, gradientImage->getImage2D());
+}
+
+void interpolateGreen(gls::OpenCLContext* glsContext,
+                      const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                      const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                      gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
+                      BayerPattern bayerPattern, gls::Vector<2> greenVariance) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
+                                    cl::Image2D,  // gradientImage
                                     cl::Image2D,  // greenImage
                                     int,          // bayerPattern
                                     cl_float2     // greenVariance
@@ -61,20 +81,22 @@ void interpolateGreen(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(greenImage->width, greenImage->height),
-           rawImage.getImage2D(), greenImage->getImage2D(), bayerPattern, { greenVariance[0], greenVariance[1] });
+           rawImage.getImage2D(), gradientImage.getImage2D(), greenImage->getImage2D(), bayerPattern, { greenVariance[0], greenVariance[1] });
 }
 
 void interpolateRedBlue(gls::OpenCLContext* glsContext,
-                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
-                       const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
-                       gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
-                       BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance) {
+                        const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                        const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
+                        const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                        gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
+                        BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
                                     cl::Image2D,  // greenImage
+                                    cl::Image2D,  // gradientImage
                                     cl::Image2D,  // rgbImage
                                     int,          // bayerPattern
                                     cl_float2,    // redVariance
@@ -83,7 +105,8 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
-           rawImage.getImage2D(), greenImage.getImage2D(), rgbImage->getImage2D(), bayerPattern,
+           rawImage.getImage2D(), greenImage.getImage2D(), gradientImage.getImage2D(),
+           rgbImage->getImage2D(), bayerPattern,
            { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
 }
 
@@ -179,7 +202,17 @@ void applyKernel(gls::OpenCLContext* glsContext, const std::string& kernelName,
 
 template
 void applyKernel(gls::OpenCLContext* glsContext, const std::string& kernelName,
+                 const gls::cl_image_2d<gls::luma_alpha_pixel_float>& inputImage,
+                 gls::cl_image_2d<gls::luma_alpha_pixel_float>* outputImage);
+
+template
+void applyKernel(gls::OpenCLContext* glsContext, const std::string& kernelName,
                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                 gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+
+template
+void applyKernel(gls::OpenCLContext* glsContext, const std::string& kernelName,
+                 const gls::cl_image_2d<gls::luma_pixel_float>& inputImage,
                  gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 template <typename T>
@@ -204,6 +237,10 @@ void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName
 template
 void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                    gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+
+template
+void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName, const gls::cl_image_2d<gls::luma_alpha_pixel_float>& inputImage,
+                   gls::cl_image_2d<gls::luma_alpha_pixel_float>* outputImage);
 
 template <typename T>
 void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
@@ -339,7 +376,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageLF,
+                  const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
                   const gls::Vector<3> thresholdMultipliers,
                   float chromaBoost, float gradientBoost, int layer,
@@ -349,7 +386,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
-                                    cl::Image2D,  // inputImageLF
+                                    cl::Image2D,  // gradientImage
                                     cl::Sampler,  // linear_sampler
                                     cl_float3,    // var_a
                                     cl_float3,    // var_b
@@ -367,7 +404,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImage.getImage2D(), inputImageLF.getImage2D(), linear_sampler,
+           inputImage.getImage2D(), gradientImage.getImage2D(), linear_sampler,
            cl_var_a, cl_var_b, { thresholdMultipliers[0], thresholdMultipliers[1], thresholdMultipliers[2] },
            chromaBoost, gradientBoost, layer, outputImage->getImage2D());
 }

@@ -30,14 +30,21 @@ void scaleRawData(gls::OpenCLContext* glsContext,
                   gls::cl_image_2d<gls::luma_pixel_float>* scaledRawImage,
                   BayerPattern bayerPattern, gls::Vector<4> scaleMul, float blackLevel);
 
+void rawImageGradient(gls::OpenCLContext* glsContext,
+                      const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                      gls::Vector<2> rawVariance,
+                      gls::cl_image_2d<gls::luma_alpha_pixel_float>* gradientImage);
+
 void interpolateGreen(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                      const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                       gls::cl_image_2d<gls::luma_pixel_float>* greenImage,
                       BayerPattern bayerPattern, gls::Vector<2> greenVariance);
 
 void interpolateRedBlue(gls::OpenCLContext* glsContext,
                         const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
                         const gls::cl_image_2d<gls::luma_pixel_float>& greenImage,
+                        const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                         gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
                         BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance);
 
@@ -95,7 +102,7 @@ void despeckleImage(gls::OpenCLContext* glsContext,
 
 void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageLF,
+                  const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
                   const gls::Vector<3> thresholdMultipliers,
                   float chromaBoost, float gradientBoost, int layer,

@@ -172,6 +172,16 @@ class cl_image_2d : public cl_image<T> {
         cl::enqueueUnmapMemObject(_payload->image, (void*)mappedImage[0]);
     }
 
+    void apply(std::function<void(T* pixel, int x, int y)> process) {
+        auto cpu_image = mapImage();
+        for (int y = 0; y < basic_image<T>::height; y++) {
+            for (int x = 0; x < basic_image<T>::width; x++) {
+                process(&cpu_image[y][x], x, y);
+            }
+        }
+        unmapImage(cpu_image);
+    }
+
     cl::Image2D getImage2D() const { return _payload->image; }
 };
 

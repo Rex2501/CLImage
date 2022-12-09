@@ -27,9 +27,10 @@ static const char* TAG = "RAW Converter";
 void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, int height) {
     auto clContext = glsContext->clContext();
 
-    if (!clRawImage) {
+    if (!clRawImage || clRawImage->width != width || clRawImage->height != height) {
         clRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(clContext, width, height);
         clScaledRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
+        clRawGradientImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
         clGreenImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
         clLinearRGBImageA = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
         clLinearRGBImageB = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
@@ -46,7 +47,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
 void RawConverter::allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int width, int height) {
     auto clContext = glsContext->clContext();
 
-    if (!rgbaRawImage) {
+    if (!rgbaRawImage || rgbaRawImage->width != width/2 || rgbaRawImage->height != height/2) {
         rgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
         denoisedRgbaRawImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
 
@@ -59,7 +60,7 @@ void RawConverter::allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int
 void RawConverter::allocateFastDemosaicTextures(gls::OpenCLContext* glsContext, int width, int height) {
     auto clContext = glsContext->clContext();
 
-    if (!clFastLinearRGBImage) {
+    if (!clFastLinearRGBImage || clFastLinearRGBImage->width != width/2 || clFastLinearRGBImage->height != height/2) {
         clRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(clContext, width, height);
         clScaledRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
         clFastLinearRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
@@ -118,6 +119,30 @@ std::array<gls::Vector<2>, 3> getRawVariance(const RawNLF& rawNLF) {
     return { redVariance, greenVariance, blueVariance };
 }
 
+void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& image) {
+    gls::image<gls::rgb_pixel> out(image.width, image.height);
+    const auto image_cpu = image.mapImage();
+    out.apply([&](gls::rgb_pixel* p, int x, int y) {
+        const auto& ip = image_cpu[y][x];
+
+        // float direction = (1 + atan2(ip.y, ip.x) / M_PI) / 2;
+        // float direction = atan2(abs(ip.y), ip.x) / M_PI;
+        float direction = atan2(abs(ip.y), abs(ip.x)) / M_PI_2;
+        float magnitude = sqrt((float) (ip.x * ip.x + ip.y * ip.y));
+
+        uint8_t val = std::clamp(255 * sqrt(magnitude), 0.0f, 255.0f);
+
+        *p = gls::rgb_pixel {
+            (uint8_t) (val * std::lerp(1.0f, 0.0f, direction)),
+            0,
+            (uint8_t) (val * std::lerp(1.0f, 0.0f, 1 - direction)),
+        };
+    });
+    image.unmapImage(image_cpu);
+    static int count = 1;
+    out.write_png_file("/Users/fabio/raw_gradient_sgn_" + std::to_string(count++) + ".png");
+}
+
 gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
                                                                 DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     LOG_INFO(TAG) << "Begin Demosaicing..." << std::endl;
@@ -161,15 +186,20 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
         despeckleRawRGBAImage(_glsContext, *rgbaRawImage, noiseModel->rawNlf.second, denoisedRgbaRawImage.get());
 
-        rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
+        denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf.second, rgbaRawImage.get());
+
+        rawRGBAToBayer(_glsContext, *rgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
+
+    rawImageGradient(_glsContext, *clScaledRawImage, (rawVariance[0] + 2.0f * rawVariance[1] + rawVariance[2]) / 3.0f, clRawGradientImage.get());
+    // dumpGradientImage(*clRawGradientImage, rawVariance[1]);
 
 //    malvar(_glsContext, *clScaledRawImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
 //           rawVariance[0], rawVariance[1], rawVariance[2]);
 
-    interpolateGreen(_glsContext, *clScaledRawImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
+    interpolateGreen(_glsContext, *clScaledRawImage, *clRawGradientImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
 
-    interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
+    interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, *clRawGradientImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
                        rawVariance[0], rawVariance[2]);
 
 //    {
@@ -206,6 +236,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
     gls::cl_image_2d<gls::rgba_pixel_float>* clDenoisedImage =
         pyramidProcessor->denoise(_glsContext, &(demosaicParameters->denoiseParameters),
                                   *clLinearRGBImageB,
+                                  *clRawGradientImage,
                                   &(noiseModel->pyramidNlf), demosaicParameters->exposure_multiplier, calibrateFromImage);
 
     if (demosaicParameters->rgbConversionParameters.localToneMapping) {

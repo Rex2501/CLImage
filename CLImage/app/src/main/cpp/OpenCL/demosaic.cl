@@ -154,15 +154,25 @@ float2 sobel(read_only image2d_t inputImage, int x, int y) {
     return value / sqrt(4.5);
 }
 
-float2 gaussFilteredAbsSobel3x3(read_only image2d_t inputImage, int x, int y) {
+float2 gaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
     // Average Sobel Filter on a 3x3 raw patch
     float2 sum = 0;
+    float2 absSum = 0;
     for (int j = -1; j <= 1; j++) {
         for (int i = -1; i <= 1; i++) {
-            sum += gaussianBlur3x3[j + 1][i + 1] * abs(sobel(inputImage, x + i, y + j));
+            float2 sample = gaussianBlur3x3[j + 1][i + 1] * sobel(inputImage, x + i, y + j);
+            sum += sample;
+            absSum += abs(sample);
         }
     }
-    return sum;
+    return copysign(absSum, sum);
+}
+
+kernel void rawImageGradient(read_only image2d_t inputImage, float2 rawVariance, write_only image2d_t gradientImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    float2 gradient = gaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
+
+    write_imagef(gradientImage, imageCoordinates, (float4) (gradient, 0, 0));
 }
 
 // Modified Hamilton-Adams green channel interpolation
@@ -171,7 +181,11 @@ constant const float kHighNoiseVariance = 1e-3;
 
 #define RAW(i, j) read_imagef(rawImage, (int2)(x + i, y + j)).x
 
-kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t greenImage, int bayerPattern, float2 greenVariance) {
+kernel void interpolateGreen(read_only image2d_t rawImage,
+                             read_only image2d_t gradientImage,
+                             write_only image2d_t greenImage,
+                             int bayerPattern,
+                             float2 greenVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     const int x = imageCoordinates.x;
@@ -182,6 +196,8 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
     const bool red_pixel = (r.x & 1) == (x & 1) && (r.y & 1) == (y & 1);
     const bool blue_pixel = (b.x & 1) == (x & 1) && (b.y & 1) == (y & 1);
+
+    const float lowNoise = 1 - smoothstep(3.5e-4, 2e-3, greenVariance.y);
 
     if (red_pixel || blue_pixel) {
         // Red and Blue pixel locations
@@ -205,7 +221,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
         // Estimate gradient intensity and direction
         float g_ave = (g_left + g_right + g_up + g_down) / 4;
-        float2 gradient = gaussFilteredAbsSobel3x3(rawImage, x, y);
+        float2 gradient = abs(read_imagef(gradientImage, imageCoordinates).xy);
 
         // Hamilton-Adams second order Laplacian Interpolation
         float2 g_lf = { (g_left + g_right) / 2, (g_up + g_down) / 2 };
@@ -217,7 +233,7 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         float low_gradient_threshold = 1 - smoothstep(2 * rawStdDev, 8 * rawStdDev, length(gradient));
 
         // Sharpen low contrast areas
-        float sharpening = 1 + low_gradient_threshold * gradient_threshold;
+        float sharpening = (0.5 + 0.5 * lowNoise) * gradient_threshold * (1 + lowNoise * low_gradient_threshold);
 
         // Edges that are in strong highlights tend to exagerate the gradient
         float highlights_edge = 1 - smoothstep(0.25, 1.0, max(c_xy, max(max(c_left, c_right), max(c_up, c_down))));
@@ -235,7 +251,9 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
         direction = mix(1 - direction, direction, gradient_threshold);
 
         // Estimate the degree of correlation between channels to drive the amount of HF extraction
-        float whiteness = min(c_xy, min(g_ave, c2_ave)) / max(c_xy, max(g_ave, c2_ave));
+        const float cmin = min(c_xy, min(g_ave, c2_ave));
+        const float cmax = max(c_xy, max(g_ave, c2_ave));
+        float whiteness = cmin / cmax;
 
         // Modulate the HF component of the reconstructed green using the whiteness and the gradient magnitude
         float2 g_est = g_lf - highlights_edge * whiteness * sharpening * g_hf;
@@ -262,8 +280,11 @@ kernel void interpolateGreen(read_only image2d_t rawImage, write_only image2d_t 
 
 #define GREEN(i, j) read_imagef(greenImage, (int2)(x + i, y + j)).x
 
-kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t greenImage,
-                               write_only image2d_t rgbImage, int bayerPattern,
+kernel void interpolateRedBlue(read_only image2d_t rawImage,
+                               read_only image2d_t greenImage,
+                               read_only image2d_t gradientImage,
+                               write_only image2d_t rgbImage,
+                               int bayerPattern,
                                float2 redVariance, float2 blueVariance) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
@@ -277,12 +298,12 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
     const bool blue_pixel = (b.x & 1) == (x & 1) && (b.y & 1) == (y & 1);
     const bool red_line = (r.y & 1) == (y & 1);
 
-    float green = read_imagef(greenImage, imageCoordinates).x;
+    float green = GREEN(0, 0);
     float c1, c2;
 
     if (red_pixel || blue_pixel) {
         // Red and Blue pixel locations
-        c1 = read_imagef(rawImage, imageCoordinates).x;
+        c1 = RAW(0, 0);
 
         float g_top_left      = GREEN(-1, -1);
         float g_top_right     = GREEN(1, -1);
@@ -315,12 +336,12 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
         float gc_bottom_left2  = g_bottom_left2  - c_bottom_left2;
         float gc_bottom_right2 = g_bottom_right2 - c_bottom_right2;
 
-        // Estimate the gradient direction taking into account the raw noise model
+        // Estimate the (diagonal) gradient direction taking into account the raw noise model
         float2 variance = red_pixel ? redVariance : blueVariance;
         float rawStdDev = sqrt(variance.x + variance.y * c2_ave);
-        float2 dv = (float2) (fabs(c2_top_left - c2_bottom_right), fabs(c2_top_right - c2_bottom_left));
-        float direction = 2 * atan2pi(dv.y, dv.x);
-        float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(dv));
+        float2 gradient = abs(read_imagef(gradientImage, imageCoordinates).xy);
+        float direction = 1 - 2 * atan2pi(gradient.y, gradient.x);
+        float gradient_threshold = smoothstep(rawStdDev, 4 * rawStdDev, length(gradient));
         // If the gradient is below threshold go flat
         float alpha = mix(0.5, direction, gradient_threshold);
 
@@ -362,6 +383,12 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
         float gc2_up3     = g_up3    - RAW(0, -3);
         float gc2_down3   = g_down3  - RAW(0, 3);
 
+        /*
+         *  TODO: this is a partial solution, compute g-c at all non green locations first (diagonally)
+         *  and subsequently interpolate directionally (horizontal and vertical) at the green locations.
+         *  See: Yan Niu "Low Cost Edge Sensing for High Quality Demosaicking."
+         */
+
         // Edges that are in strong highlights tend to exagerate the gradient
         float highlights_edge = 1 - smoothstep(0.25, 1.0, max(green, max(max(g_right3, g_left3),
                                                                          max(g_down3, g_up3))));
@@ -380,6 +407,78 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage, read_only image2d_t
 }
 #undef GREEN
 
+//#define RGB(i, j) read_imagef(rgbImageIn, (int2)(x + i, y + j)).xyz
+//
+//kernel void interpolateRedBlueAtGreen(read_only image2d_t rgbImageIn,
+//                                      write_only image2d_t rgbImageOut, int bayerPattern,
+//                                      float2 redVariance, float2 blueVariance) {
+//    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+//
+//    const int x = imageCoordinates.x;
+//    const int y = imageCoordinates.y;
+//
+//    const int2 r = bayerOffsets[bayerPattern][raw_red];
+//    const int2 b = bayerOffsets[bayerPattern][raw_blue];
+//
+//    const bool red_pixel = (r.x & 1) == (x & 1) && (r.y & 1) == (y & 1);
+//    const bool blue_pixel = (b.x & 1) == (x & 1) && (b.y & 1) == (y & 1);
+//    const bool red_line = (r.y & 1) == (y & 1);
+//
+//    float green = GREEN(0, 0);
+//    float c1, c2;
+//
+//    if (red_pixel || blue_pixel) {
+//        // Do nothing
+//    } else {
+//        // Green pixel locations
+//        float g_left    = GREEN(-1, 0);
+//        float g_right   = GREEN(1, 0);
+//        float g_up      = GREEN(0, -1);
+//        float g_down    = GREEN(0, 1);
+//
+//        float c1_left   = RAW(-1, 0);
+//        float c1_right  = RAW(1, 0);
+//        float c2_up     = RAW(0, -1);
+//        float c2_down   = RAW(0, 1);
+//
+//        float gc1_left   = g_left  - c1_left;
+//        float gc1_right  = g_right - c1_right;
+//        float gc2_up     = g_up    - c2_up;
+//        float gc2_down   = g_down  - c2_down;
+//
+//        float g_left3    = GREEN(-3, 0);
+//        float g_right3   = GREEN(3, 0);
+//        float g_up3      = GREEN(0, -3);
+//        float g_down3    = GREEN(0, 3);
+//
+//        float gc1_left3   = g_left3  - RAW(-3, 0);
+//        float gc1_right3  = g_right3 - RAW(3, 0);
+//        float gc2_up3     = g_up3    - RAW(0, -3);
+//        float gc2_down3   = g_down3  - RAW(0, 3);
+//
+//        /*
+//         *  TODO: this is a partial solution, compute g-c at all non green locations first (diagonally)
+//         *  and subsequently interpolate directionally (horizontal and vertical) at the green locations.
+//         *  See: Yan Niu "Low Cost Edge Sensing for High Quality Demosaicking."
+//         */
+//
+//        // Edges that are in strong highlights tend to exagerate the gradient
+//        float highlights_edge = 1 - smoothstep(0.25, 1.0, max(green, max(max(g_right3, g_left3),
+//                                                                         max(g_down3, g_up3))));
+//
+//        c1 = green - ((gc1_left + gc1_right) / 2 - highlights_edge * ((gc1_right3 - gc1_left) - (gc1_right - gc1_left3)) / 8);
+//        c2 = green - ((gc2_up + gc2_down) / 2 - highlights_edge * ((gc2_down3 - gc2_up) - (gc2_down - gc2_up3)) / 8);
+//
+//        // Limit the range of HF correction to something reasonable
+//        c1 = clamp(c1, min(c1_left, c1_right), max(c1_left, c1_right));
+//        c2 = clamp(c2, min(c2_up, c2_down), max(c2_up, c2_down));
+//    }
+//
+//    float3 output = red_line ? (float3)(c1, green, c2) : (float3)(c2, green, c1);
+//
+//    write_imagef(rgbImage, imageCoordinates, (float4)(clamp(output, 0.0, 1.0), 0));
+//}
+
 // Modified Malvar-He-Cutler algorithm - for reference only
 kernel void malvar(read_only image2d_t rawImage, write_only image2d_t rgbImage, int bayerPattern,
                    float2 redVariance, float2 greenVariance, float2 blueVariance) {
@@ -396,7 +495,7 @@ kernel void malvar(read_only image2d_t rawImage, write_only image2d_t rgbImage, 
     const bool red_line = (r.y & 1) == (y & 1);
 
     // Estimate gradient intensity and direction
-    float2 gradient = gaussFilteredAbsSobel3x3(rawImage, x, y);
+    float2 gradient = gaussFilteredSobel3x3(rawImage, x, y);
     // Gradient direction in [0..1]
     float direction = 2 * atan2pi(gradient.y, gradient.x);
 
@@ -603,30 +702,44 @@ kernel void blendHighlightsImage(read_only image2d_t inputImage, float clip, wri
     a1;                                                            \
 })
 
+#define readImage(image, pos)  read_imageh(image, pos).xy;
+
+kernel void medianFilterImage3x3x2(read_only image2d_t inputImage, write_only image2d_t denoisedImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    typedef half2 medianPixelType;
+
+    half2 median = fast_median3x3(inputImage, imageCoordinates);
+
+    write_imageh(denoisedImage, imageCoordinates, (half4) (median, 0, 0));
+}
+
+#undef readImage
+
 #define readImage(image, pos)  read_imageh(image, pos).xyz;
 
-kernel void medianFilterImage3x3(read_only image2d_t inputImage, write_only image2d_t denoisedImage) {
+kernel void medianFilterImage3x3x3(read_only image2d_t inputImage, write_only image2d_t filteredImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     typedef half3 medianPixelType;
 
     half3 median = fast_median3x3(inputImage, imageCoordinates);
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (median, 0));
+    write_imageh(filteredImage, imageCoordinates, (half4) (median, 0));
 }
 
 #undef readImage
 
 #define readImage(image, pos)  read_imageh(image, pos);
 
-kernel void medianFilterImage3x3x4(read_only image2d_t inputImage, write_only image2d_t denoisedImage) {
+kernel void medianFilterImage3x3x4(read_only image2d_t inputImage, write_only image2d_t filteredImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
     typedef half4 medianPixelType;
 
     half4 median = fast_median3x3(inputImage, imageCoordinates);
 
-    write_imageh(denoisedImage, imageCoordinates, median);
+    write_imageh(filteredImage, imageCoordinates, median);
 }
 
 #undef readImage
@@ -962,24 +1075,13 @@ kernel void transformImage(read_only image2d_t inputImage, write_only image2d_t 
     write_imagef(outputImage, imageCoordinates, (float4) (outputPixel, 0.0));
 }
 
-float2 signedGaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
-    // Average Sobel Filter on a 3x3 raw patch
-    float2 sum = 0;
-    for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-            sum += gaussianBlur3x3[j + 1][i + 1] * sobel(inputImage, x + i, y + j);
-        }
-    }
-    return sum;
-}
-
 half tunnel(half x, half y, half angle, half sigma) {
     half a = x * cos(angle) + y * sin(angle);
     return exp(-(a * a) / sigma);
 }
 
 kernel void denoiseImage(read_only image2d_t inputImage,
-                         read_only image2d_t inputImageLF,
+                         read_only image2d_t gradientImage,
                          sampler_t linear_sampler,
                          float3 var_a, float3 var_b,
                          float3 thresholdMultipliers,
@@ -987,20 +1089,12 @@ kernel void denoiseImage(read_only image2d_t inputImage,
                          write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    // Compute the luma's gradient on LF image
-    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(denoisedImage));
-    const float2 input_pos = (convert_float2(imageCoordinates) + 0.5) * inputNorm;
-    half inputPixelLF = read_imageh(inputImageLF, linear_sampler, input_pos).x;
-    half inputPixelLFLeft = read_imageh(inputImageLF, linear_sampler, input_pos - (float2)(inputNorm.x, 0)).x;
-    half inputPixelLFTop = read_imageh(inputImageLF, linear_sampler, input_pos - (float2)(0, inputNorm.y)).x;
-    half2 gradient = (layer < 4 ? 4 : 1) * (half2) (inputPixelLF - inputPixelLFLeft, inputPixelLF - inputPixelLFTop);
-
     const half3 inputYCC = read_imageh(inputImage, imageCoordinates).xyz;
 
     half3 sigma = convert_half3(sqrt(var_a + var_b * inputYCC.x));
-    half3 diffMultiplier = 1 / (sigma * sqrt(convert_half3(thresholdMultipliers)));
+    half3 diffMultiplier = 1 / (convert_half3(thresholdMultipliers) * sigma);
 
-//    float2 gradient = signedGaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
+    half2 gradient = read_imageh(gradientImage, imageCoordinates).xy;
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
@@ -1014,13 +1108,18 @@ kernel void denoiseImage(read_only image2d_t inputImage,
     for (int y = -size; y <= size; y++) {
         for (int x = -size; x <= size; x++) {
             half3 inputSampleYCC = read_imageh(inputImage, imageCoordinates + (int2)(x, y)).xyz;
+            half2 gradientSample = read_imageh(gradientImage, imageCoordinates + (int2)(x, y)).xy;
 
             half3 inputDiff = (inputSampleYCC - inputYCC) * diffMultiplier;
+            half2 gradientDiff = (gradientSample - gradient) / sigma.x;
 
-            half w = (half) mix(1, tunnel(x, y, angle, 0.25h), edge);
-            half lumaWeight = w * (1 - step(1 + (half) gradientBoost * (edge + flat), abs(inputDiff.x)));
+            half directionWeight = mix(1, tunnel(x, y, angle, 0.25h), edge);
+            half gradientWeight = 1 - smoothstep(0.5h, 2, length(gradientDiff));
+
+            half lumaWeight = 1 - step(1 + (half) gradientBoost * (edge + flat), abs(inputDiff.x));
             half chromaWeight = abs(x) <= 2 && abs(y) <= 2 ? 1 - step((half) chromaBoost, length(inputDiff)) : 0;
-            half3 sampleWeight = (half3) (lumaWeight, chromaWeight, chromaWeight);
+
+            half3 sampleWeight = (half3) (directionWeight * gradientWeight * lumaWeight, chromaWeight, chromaWeight);
 
             filtered_pixel += sampleWeight * inputSampleYCC;
             kernel_norm += sampleWeight;
@@ -1028,7 +1127,7 @@ kernel void denoiseImage(read_only image2d_t inputImage,
     }
     half3 denoisedPixel = filtered_pixel / kernel_norm;
 
-    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, edge));
+    write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, magnitude));
 }
 
 kernel void fuseFrames(read_only image2d_t inputImage,
@@ -1149,48 +1248,8 @@ kernel void denoiseImageGuided(read_only image2d_t inputImage, float3 var_a, flo
     write_imagef(denoisedImage, imageCoordinates, (float4) (denoisedPixel, 0.0));
 }
 
-//#define USE_LANCZOS_INTERPOLATION 1
-
-/*
- Lanczos interpolation retains more high frequency content in the upper pyramid layers
- */
-
-#if USE_LANCZOS_INTERPOLATION
-float lanczos2(float2 p) {
-    float x = length(p);
-    return x == 0 ? 0 : x < 2 ? sin(M_PI_F * x) * sin(M_PI_F * x / 2) / ((M_PI_F * x) * (M_PI_F * x / 2)) : 0;
-}
-
-float3 lanczosInterpolation(read_only image2d_t inputImage, const float2 input_pos, const float2 input_norm, sampler_t linear_sampler) {
-    float3 outputPixel = 0;
-    float norm = 0;
-    for (float y = -2; y <= 2; y += 1) {
-        for (float x = -2; x <= 2; x += 1) {
-            float k = lanczos2((float2)(x, y));
-            norm += k;
-            outputPixel += k * read_imagef(inputImage, linear_sampler, input_pos + (float2)(x, y) * input_norm).xyz;
-        }
-    }
-    outputPixel /= norm;
-    return outputPixel;
-}
-#endif
-
-kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
+kernel void downsampleImageXYZ(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
     const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
-#if USE_LANCZOS_INTERPOLATION
-    float3 outputPixel = 0;
-    float norm = 0;
-    for (int y = -2; y < 2; y++) {
-        for (int x = -2; x < 2; x++) {
-            float k = lanczos2((float2)(x, y) - 0.5);
-            norm += k;
-            outputPixel += k * read_imagef(inputImage, output_pos * 2 + (int2)(x, y)).xyz;
-        }
-    }
-    outputPixel /= norm;
-    write_imagef(outputImage, output_pos, (float4) (outputPixel, 0));
-#else
     const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
     const float2 input_pos = (convert_float2(output_pos) + 0.5) * input_norm;
 
@@ -1201,7 +1260,20 @@ kernel void downsampleImage(read_only image2d_t inputImage, write_only image2d_t
     outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x,  s.y)).xyz;
     outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x,  s.y)).xyz;
     write_imagef(outputImage, output_pos, (float4) (0.25 * outputPixel, 0));
-#endif
+}
+
+kernel void downsampleImageXY(read_only image2d_t inputImage, write_only image2d_t outputImage, sampler_t linear_sampler) {
+    const int2 output_pos = (int2) (get_global_id(0), get_global_id(1));
+    const float2 input_norm = 1.0 / convert_float2(get_image_dim(outputImage));
+    const float2 input_pos = (convert_float2(output_pos) + 0.5) * input_norm;
+
+    // Sub-Pixel Sampling Location
+    const float2 s = 0.5 * input_norm;
+    float2 outputPixel = read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x, -s.y)).xy;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x, -s.y)).xy;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)(-s.x,  s.y)).xy;
+    outputPixel +=       read_imagef(inputImage, linear_sampler, input_pos + (float2)( s.x,  s.y)).xy;
+    write_imagef(outputImage, output_pos, (float4) (0.25 * outputPixel, 0, 0));
 }
 
 float3 applyTransform(float3 value, Matrix3x3 *transform) {
@@ -1215,17 +1287,12 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
     const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
     const float2 input_pos = (convert_float2(output_pos) + 0.5) * inputNorm;
 
-    float3 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos).xyz;
+    float4 inputPixelDenoised0 = read_imagef(inputImageDenoised0, output_pos);
 
-#if USE_LANCZOS_INTERPOLATION
-    float3 inputPixel1 = lanczosInterpolation(inputImage1, input_pos, inputNorm, linear_sampler);
-    float3 inputPixelDenoised1 = lanczosInterpolation(inputImageDenoised1, input_pos, inputNorm, linear_sampler);
-#else
     float3 inputPixel1 = read_imagef(inputImage1, linear_sampler, input_pos).xyz;
     float3 inputPixelDenoised1 = read_imagef(inputImageDenoised1, linear_sampler, input_pos).xyz;
-#endif
 
-    float3 denoisedPixel = inputPixelDenoised0 - (inputPixel1 - inputPixelDenoised1);
+    float3 denoisedPixel = inputPixelDenoised0.xyz - (inputPixel1 - inputPixelDenoised1);
 
     if (sharpening > 1.0) {
         float dx = (read_imagef(inputImageDenoised1, linear_sampler, input_pos + (float2)(1, 0) * inputNorm).x -
@@ -1243,7 +1310,7 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
     // Sharpen all components
     denoisedPixel = mix(inputPixelDenoised1, denoisedPixel, sharpening);
 
-    write_imagef(outputImage, output_pos, (float4) (denoisedPixel, 0));
+    write_imagef(outputImage, output_pos, (float4) (denoisedPixel, inputPixelDenoised0.w));
 }
 
 kernel void reassembleFusedImage(read_only image2d_t inputImageDenoised0, read_only image2d_t inputImage1,
@@ -1367,7 +1434,7 @@ float4 denoiseRawRGBA(float4 rawVariance, image2d_t inputImage, int2 imageCoordi
 kernel void denoiseRawRGBAImage(read_only image2d_t inputImage, float4 rawVariance, write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
-    float4 denoisedPixel = denoiseRawRGBAPatch(rawVariance, inputImage, imageCoordinates);
+    float4 denoisedPixel = denoiseRawRGBA(rawVariance, inputImage, imageCoordinates);
 
     write_imagef(denoisedImage, imageCoordinates, denoisedPixel);
 }
