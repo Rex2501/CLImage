@@ -27,6 +27,7 @@ struct PyramidProcessor {
     typedef gls::cl_image_2d<gls::rgba_pixel_float> imageType;
     std::array<imageType::unique_ptr, levels-1> imagePyramid;
     std::array<gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr, levels-1> gradientPyramid;
+    std::array<imageType::unique_ptr, levels> subtractedImagePyramid;
     std::array<imageType::unique_ptr, levels> denoisedImagePyramid;
     std::array<imageType::unique_ptr, levels> fusionImagePyramid;
     std::array<imageType::unique_ptr, levels>* fusionBuffer[2];

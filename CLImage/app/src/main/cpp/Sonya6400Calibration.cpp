@@ -69,8 +69,8 @@ public:
         float lerp = std::lerp(0.125f, 2.0f, nlf_alpha);
         float lerp_c = 1;
 
-        float lmult[5] = { 1.0, 1.0, 0.5, 0.25, 0.125 };
-        float cmult[5] = { 1, 1, 1, 1, 1 };
+        float lmult[5] = { 0.5, 1, 0.5, 0.25, 0.125 };
+        float cmult[5] = { 1, 0.5, 0.5, 0.5, 0.25 };
 
         float chromaBoost = 8;
 
@@ -82,7 +82,7 @@ public:
                 .chroma = cmult[0] * lerp_c,
                 .chromaBoost = chromaBoost,
                 .gradientBoost = 8 * gradientBoost,
-                .sharpening = 1, // std::lerp(1.5f, 1.0f, nlf_alpha)
+                .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
             },
             {
                 .luma = lmult[1] * lerp,
@@ -95,21 +95,21 @@ public:
                 .luma = lmult[2] * lerp,
                 .chroma = cmult[2] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0,
+                .gradientBoost = gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[3] * lerp,
                 .chroma = cmult[3] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0,
+                .gradientBoost = gradientBoost,
                 .sharpening = 1
             },
             {
                 .luma = lmult[4] * lerp,
                 .chroma = cmult[4] * lerp_c,
                 .chromaBoost = chromaBoost,
-                .gradientBoost = 0,
+                .gradientBoost = gradientBoost,
                 .sharpening = 1
             }
         }};

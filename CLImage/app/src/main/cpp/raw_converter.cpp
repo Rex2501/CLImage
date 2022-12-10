@@ -186,13 +186,13 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
         despeckleRawRGBAImage(_glsContext, *rgbaRawImage, noiseModel->rawNlf.second, denoisedRgbaRawImage.get());
 
-        denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf.second, rgbaRawImage.get());
+        // denoiseRawRGBAImage(_glsContext, *denoisedRgbaRawImage, noiseModel->rawNlf.second, rgbaRawImage.get());
 
-        rawRGBAToBayer(_glsContext, *rgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
+        rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
     rawImageGradient(_glsContext, *clScaledRawImage, (rawVariance[0] + 2.0f * rawVariance[1] + rawVariance[2]) / 3.0f, clRawGradientImage.get());
-    // dumpGradientImage(*clRawGradientImage, rawVariance[1]);
+    // dumpGradientImage(*clRawGradientImage);
 
 //    malvar(_glsContext, *clScaledRawImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
 //           rawVariance[0], rawVariance[1], rawVariance[2]);
@@ -201,20 +201,6 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
     interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, *clRawGradientImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
                        rawVariance[0], rawVariance[2]);
-
-//    {
-//        gls::image<gls::luma_pixel> out(clLinearRGBImageA->width, clLinearRGBImageA->height);
-//        const auto convertedImage = clLinearRGBImageA->mapImage();
-//        out.apply([&convertedImage](gls::luma_pixel* p, int x, int y){
-//            const auto& ip = convertedImage[y][x];
-//            *p = gls::luma_pixel {
-//                (uint8_t) (255 * std::sqrt(std::clamp((float) ip.alpha, 0.0f, 1.0f)))
-//            };
-//        });
-//        clLinearRGBImageA->unmapImage(convertedImage);
-//        static int count = 1;
-//        out.write_png_file("/Users/fabio/whiteness" + std::to_string(count++) + ".png");
-//    }
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());

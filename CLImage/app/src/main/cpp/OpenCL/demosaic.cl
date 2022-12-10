@@ -1098,10 +1098,8 @@ kernel void denoiseImage(read_only image2d_t inputImage,
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
     half edge = smoothstep(4, 16, magnitude / sigma.x);
-    // TODO: make this a tunable parameter
-    half flat = 0.25 * (1 - smoothstep(0.25h, 1, magnitude / sigma.x));
 
-    const int size = gradientBoost > 1 ? 4 : 2;
+    const int size = gradientBoost > 0 ? 4 : 2;
 
     half3 filtered_pixel = 0;
     half3 kernel_norm = 0;
@@ -1114,10 +1112,10 @@ kernel void denoiseImage(read_only image2d_t inputImage,
             half2 gradientDiff = (gradientSample - gradient) / sigma.x;
 
             half directionWeight = mix(1, tunnel(x, y, angle, 0.25h), edge);
-            half gradientWeight = 1 - smoothstep(0.5h, 2, length(gradientDiff));
+            half gradientWeight = 1 - smoothstep(2, 8, length(gradientDiff));
 
-            half lumaWeight = 1 - step(1 + (half) gradientBoost * (edge + flat), abs(inputDiff.x));
-            half chromaWeight = abs(x) <= 2 && abs(y) <= 2 ? 1 - step((half) chromaBoost, length(inputDiff)) : 0;
+            half lumaWeight = 1 - step(1 + (half) gradientBoost * edge, abs(inputDiff.x));
+            half chromaWeight = 1 - step((half) chromaBoost, length(inputDiff));
 
             half3 sampleWeight = (half3) (directionWeight * gradientWeight * lumaWeight, chromaWeight, chromaWeight);
 
@@ -1309,6 +1307,7 @@ kernel void reassembleImage(read_only image2d_t inputImageDenoised0, read_only i
 
     // Sharpen all components
     denoisedPixel = mix(inputPixelDenoised1, denoisedPixel, sharpening);
+    denoisedPixel.x = max(denoisedPixel.x, 0.0);
 
     write_imagef(outputImage, output_pos, (float4) (denoisedPixel, inputPixelDenoised0.w));
 }
