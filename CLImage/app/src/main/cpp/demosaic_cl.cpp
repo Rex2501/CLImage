@@ -112,6 +112,7 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
 
 void malvar(gls::OpenCLContext* glsContext,
             const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
             gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
             BayerPattern bayerPattern, gls::Vector<2> redVariance,
             gls::Vector<2> greenVariance, gls::Vector<2> blueVariance) {
@@ -120,6 +121,7 @@ void malvar(gls::OpenCLContext* glsContext,
 
     // Bind the kernel parameters
     auto kernel = cl::KernelFunctor<cl::Image2D,  // rawImage
+                                    cl::Image2D,  // gradientImage
                                     cl::Image2D,  // rgbImage
                                     int,          // bayerPattern
                                     cl_float2,    // redVariance
@@ -129,7 +131,8 @@ void malvar(gls::OpenCLContext* glsContext,
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
-           rawImage.getImage2D(), rgbImage->getImage2D(), bayerPattern,
+           rawImage.getImage2D(), gradientImage.getImage2D(), rgbImage->getImage2D(),
+           bayerPattern,
            { redVariance[0], redVariance[1] },
            { greenVariance[0], greenVariance[1] },
            { blueVariance[0], blueVariance[1] });
@@ -243,34 +246,44 @@ void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName
                    gls::cl_image_2d<gls::luma_alpha_pixel_float>* outputImage);
 
 template <typename T>
-void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
-                     const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage) {
+void subtractNoiseImage(gls::OpenCLContext* glsContext,
+                        const gls::cl_image_2d<T>& inputImage,
+                        const gls::cl_image_2d<T>& inputImage1,
+                        const gls::cl_image_2d<T>& inputImageDenoised1,
+                        const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                        float luma_weight, float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
 
     // Bind the kernel parameters
-    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImageDenoised0
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
                                     cl::Image2D,  // inputImage1
                                     cl::Image2D,  // inputImageDenoised1
+                                    cl::Image2D,  // gradientImage
+                                    float,        // luma_weight
                                     float,        // sharpening
                                     cl_float2,    // nlf
                                     cl::Image2D,  // outputImage
                                     cl::Sampler   // linear_sampler
-                                    >(program, "reassembleImage");
+                                    >(program, "subtractNoiseImage");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImageDenoised0.getImage2D(), inputImage1.getImage2D(), inputImageDenoised1.getImage2D(),
-           sharpening, { nlf[0], nlf[1] }, outputImage->getImage2D(), linear_sampler);
+           inputImage.getImage2D(), inputImage1.getImage2D(),
+           inputImageDenoised1.getImage2D(), gradientImage.getImage2D(),
+           luma_weight, sharpening, { nlf[0], nlf[1] }, outputImage->getImage2D(), linear_sampler);
 }
 
 template
-void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised0,
-                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
-                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+void subtractNoiseImage(gls::OpenCLContext* glsContext,
+                        const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                        const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1,
+                        const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
+                        const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                        float luma_weight, float sharpening, const gls::Vector<2>& nlf,
+                        gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void transformImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
@@ -930,32 +943,36 @@ void clFuseFrames(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rg
 }
 
 template <typename T>
-void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
-                          const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                          gls::cl_image_2d<T>* outputImage) {
+void subtractNoiseFusedImage(gls::OpenCLContext* glsContext,
+                             const gls::cl_image_2d<T>& inputImage,
+                             const gls::cl_image_2d<T>& inputImage1,
+                             const gls::cl_image_2d<T>& inputImageDenoised1,
+                             gls::cl_image_2d<T>* outputImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
 
     // Bind the kernel parameters
-    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImageDenoised0
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
                                     cl::Image2D,  // inputImage1
                                     cl::Image2D,  // inputImageDenoised1
                                     cl::Image2D,  // outputImage
                                     cl::Sampler   // linear_sampler
-                                    >(program, "reassembleFusedImage");
+                                    >(program, "subtractNoiseFusedImage");
 
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(outputImage->width, outputImage->height),
-           inputImageDenoised0.getImage2D(), inputImage1.getImage2D(), inputImageDenoised1.getImage2D(),
+           inputImage.getImage2D(), inputImage1.getImage2D(), inputImageDenoised1.getImage2D(),
            outputImage->getImage2D(), linear_sampler);
 }
 
 template
-void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised0,
-                          const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
-                          gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+void subtractNoiseFusedImage(gls::OpenCLContext* glsContext,
+                             const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                             const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage1,
+                             const gls::cl_image_2d<gls::rgba_pixel_float>& inputImageDenoised1,
+                             gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 template <typename T>
 void clRescaleImage(gls::OpenCLContext* cLContext,

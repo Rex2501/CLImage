@@ -224,7 +224,7 @@ void demosaicFile(RawConverter* rawConverter, std::filesystem::path input_path) 
     // const auto rgb_image = demosaicRicohGRIII2DNG(rawConverter, input_path);
     // const auto rgb_image = demosaicLeicaQ2DNG(rawConverter, input_path);
     // rgb_image->write_jpeg_file((input_path.parent_path() /*/ "Processed" */ / input_path.stem()).string() + "_new_sharp_white.jpg", 100);
-    rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_c_ln_raw_denoise_f.png", /*skip_alpha=*/ true);
+    rgb_image->write_png_file((input_path.parent_path() /* / "Processed" */ / input_path.stem()).string() + "_rgb_c_ln_raw_denoise_g.png", /*skip_alpha=*/ true);
 }
 
 void demosaicDirectory(RawConverter* rawConverter, std::filesystem::path input_path) {

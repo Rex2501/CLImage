@@ -50,6 +50,7 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
 
 void malvar(gls::OpenCLContext* glsContext,
             const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+            const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
             gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
             BayerPattern bayerPattern, gls::Vector<2> redVariance,
             gls::Vector<2> greenVariance, gls::Vector<2> blueVariance);
@@ -70,14 +71,19 @@ void resampleImage(gls::OpenCLContext* glsContext, const std::string& kernelName
                    const gls::cl_image_2d<T>& inputImage, gls::cl_image_2d<T>* outputImage);
 
 template <typename T>
-void reassembleImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
-                     const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                     float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage);
+void subtractNoiseImage(gls::OpenCLContext* glsContext,
+                        const gls::cl_image_2d<T>& inputImageDenoised0,
+                        const gls::cl_image_2d<T>& inputImage1,
+                        const gls::cl_image_2d<T>& inputImageDenoised1,
+                        const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                        float luma_weight, float sharpening, const gls::Vector<2>& nlf, gls::cl_image_2d<T>* outputImage);
 
 template <typename T>
-void reassembleFusedImage(gls::OpenCLContext* glsContext, const gls::cl_image_2d<T>& inputImageDenoised0,
-                          const gls::cl_image_2d<T>& inputImage1, const gls::cl_image_2d<T>& inputImageDenoised1,
-                          gls::cl_image_2d<T>* outputImage);
+void subtractNoiseFusedImage(gls::OpenCLContext* glsContext,
+                             const gls::cl_image_2d<T>& inputImageDenoised0,
+                             const gls::cl_image_2d<T>& inputImage1,
+                             const gls::cl_image_2d<T>& inputImageDenoised1,
+                             gls::cl_image_2d<T>* outputImage);
 
 void transformImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,

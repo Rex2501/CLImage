@@ -59,6 +59,11 @@ void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& imag
 
 #endif  // DEBUG_PYRAMID
 
+// TODO: Make this a tunable
+static const constexpr float lumaDenoiseWeight[4] = {
+    1, 1, 1, 1
+};
+
 template <size_t levels>
 typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(gls::OpenCLContext* glsContext,
                                                                                 std::array<DenoiseParameters, levels>* denoiseParameters,
@@ -96,11 +101,14 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
             std::cout << "Reassembling layer " << i + 1 << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
 
             const auto np = YCbCrNLF {(*nlfParameters)[i].first * thresholdMultipliers[i], (*nlfParameters)[i].second * thresholdMultipliers[i]};
-            reassembleImage(glsContext, *denoiseInput,
-                            *(imagePyramid[i]),
-                            *(denoisedImagePyramid[i+1]),
-                            (*denoiseParameters)[i].sharpening, { np.first[0], np.second[0] },
-                            subtractedImagePyramid[i].get());
+            subtractNoiseImage(glsContext, *denoiseInput,
+                               *(imagePyramid[i]),
+                               *(denoisedImagePyramid[i+1]),
+                               *gradientInput,
+                               lumaDenoiseWeight[i],
+                               (*denoiseParameters)[i].sharpening,
+                               { np.first[0], np.second[0] },
+                               subtractedImagePyramid[i].get());
         }
 
         std::cout << "Denoising image level " << i << " with multipliers " << thresholdMultipliers[i] << std::endl;
@@ -167,18 +175,19 @@ void PyramidProcessor<levels>::fuseFrame(gls::OpenCLContext* glsContext,
             const auto& np = YCbCrNLF { (*nlfParameters)[i].first * m * m, (*nlfParameters)[i].second * m * m };
             const auto currentLayer = i > 0 ? imagePyramid[i - 1].get() : &image;
 
-            clFuseFrames(glsContext, *currentLayer, *previousFusedImagePyramid[i],
-                         np.first, np.second, fusedFrames, newFusedImagePyramid[i].get());
-        }
+            if (i < levels - 1) {
+                // Subtract the previous layer's noise from the current one
+                std::cout << "Reassembling layer " << i + 1 << " with sharpening: " << (*denoiseParameters)[i].sharpening << std::endl;
 
-        // Reassemble pyramyd from the bottom up
-        for (int i = levels - 2; i >= 0; i--) {
-            // Subtract the previous layer's noise from the current one
-            std::cout << "Reassembling Fused layer " << i << std::endl;
-            reassembleFusedImage(glsContext, *(newFusedImagePyramid[i]),
-                                 *(previousFusedImagePyramid[i+1]),
-                                 *(newFusedImagePyramid[i+1]),
-                                 newFusedImagePyramid[i].get());
+                // TODO: The reference image should be the first frame and not be the fused pyramid
+                subtractNoiseFusedImage(glsContext, *currentLayer,
+                                        *(previousFusedImagePyramid[i+1]),
+                                        *(newFusedImagePyramid[i+1]),
+                                        subtractedImagePyramid[i].get());
+            }
+
+            clFuseFrames(glsContext, *subtractedImagePyramid[i], *previousFusedImagePyramid[i],
+                         np.first, np.second, fusedFrames, newFusedImagePyramid[i].get());
         }
     }
     fusedFrames++;

@@ -39,7 +39,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
         pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
 
         // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
-        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/HDR_L_0.png");
+        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/HDR_L_0b.png");
         clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
 }
@@ -140,7 +140,7 @@ void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& imag
     });
     image.unmapImage(image_cpu);
     static int count = 1;
-    out.write_png_file("/Users/fabio/raw_gradient_sgn_" + std::to_string(count++) + ".png");
+    out.write_png_file("/Users/fabio/raw_gradient_sgn_5_fine_" + std::to_string(count++) + ".png");
 }
 
 gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
@@ -194,7 +194,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
     rawImageGradient(_glsContext, *clScaledRawImage, (rawVariance[0] + 2.0f * rawVariance[1] + rawVariance[2]) / 3.0f, clRawGradientImage.get());
     // dumpGradientImage(*clRawGradientImage);
 
-//    malvar(_glsContext, *clScaledRawImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
+//    malvar(_glsContext, *clScaledRawImage, *clRawGradientImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
 //           rawVariance[0], rawVariance[1], rawVariance[2]);
 
     interpolateGreen(_glsContext, *clScaledRawImage, *clRawGradientImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
@@ -242,7 +242,7 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::denoise(const gls::cl_ima
 
         const auto grainAmount = 1 + 3 * smoothstep(4e-4, 6e-4, lumaVariance[1]);
 
-        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise, grainAmount * lumaVariance, clLinearRGBImageB.get());
+        blueNoiseImage(_glsContext, *clDenoisedImage, *clBlueNoise, 2 * grainAmount * lumaVariance, clLinearRGBImageB.get());
         clDenoisedImage = clLinearRGBImageB.get();
     }
 
