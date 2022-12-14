@@ -29,7 +29,10 @@ struct PyramidProcessor {
     std::array<gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr, levels-1> gradientPyramid;
     std::array<imageType::unique_ptr, levels> subtractedImagePyramid;
     std::array<imageType::unique_ptr, levels> denoisedImagePyramid;
-    std::array<imageType::unique_ptr, levels> fusionImagePyramid;
+    std::array<imageType::unique_ptr, levels> fusionImagePyramidA;
+    std::array<imageType::unique_ptr, levels> fusionImagePyramidB;
+    std::array<imageType::unique_ptr, levels> fusionReferenceImagePyramid;
+    std::array<gls::cl_image_2d<gls::luma_alpha_pixel_float>::unique_ptr, levels> fusionReferenceGradientPyramid;
     std::array<imageType::unique_ptr, levels>* fusionBuffer[2];
 
     PyramidProcessor(gls::OpenCLContext* glsContext, int width, int height);
@@ -41,7 +44,10 @@ struct PyramidProcessor {
                        float exposure_multiplier, bool calibrateFromImage = false);
 
     void fuseFrame(gls::OpenCLContext* glsContext, std::array<DenoiseParameters, levels>* denoiseParameters,
-                   const imageType& image, std::array<YCbCrNLF, levels>* nlfParameters,
+                   const imageType& image,
+                   const gls::Matrix<3, 3>& homography,
+                   const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                   std::array<YCbCrNLF, levels>* nlfParameters,
                    float exposure_multiplier, bool calibrateFromImage = false);
 
     imageType* getFusedImage(gls::OpenCLContext* glsContext);

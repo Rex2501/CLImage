@@ -44,19 +44,6 @@ std::vector<std::filesystem::path> parseDirectory(const std::string& dir) {
     return std::vector<std::filesystem::path>(directory_listing.begin(), directory_listing.end());
 }
 
-template <typename T>
-gls::image<float> asGrayscaleFloat(const gls::image<T>& image) {
-    gls::image<float> grayscale(image.width, image.height);
-
-    // Convert to grayscale and normalize values in [0..1]
-    grayscale.apply([&](float *p, int x, int y) {
-        const auto& pIn = image[y][x];
-        *p = std::clamp((pIn.red * 0.299 + pIn.green * 0.587 + pIn.blue * 0.114) / 255.0, 0.0, 1.0);
-    });
-
-    return grayscale;
-}
-
 gls::cl_image_2d<gls::rgba_pixel_float>* runPipeline(gls::OpenCLContext* glsContext, RawConverter* rawConverter, const std::filesystem::path& input_path, std::unique_ptr<DemosaicParameters>* demosaicParameters) {
     gls::tiff_metadata dng_metadata, exif_metadata;
     const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
@@ -91,8 +78,6 @@ int main(int argc, const char * argv[]) {
     std::unique_ptr<DemosaicParameters> demosaicParameters = nullptr;
     auto reference_image_rgb = runPipeline(&glsContext, &rawConverter, reference_image_path.string(), &demosaicParameters);
 
-    const auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
-
     gls::cl_image_2d<float> cl_reference_image(glsContext.clContext(), reference_image_rgb->width, reference_image_rgb->height);
     convertToGrayscale(&glsContext, *reference_image_rgb, &cl_reference_image, *demosaicParameters);
 
@@ -107,10 +92,13 @@ int main(int argc, const char * argv[]) {
 
     cl_reference_image.unmapImage(reference_image);
 
-    // Convert linear image to YCbCr for denoising
+    // Convert linear image to YCbCr for fusion
+    const auto cam_to_ycbcr = cam_ycbcr(demosaicParameters->rgb_cam);
     transformImage(&glsContext, *reference_image_rgb, reference_image_rgb, cam_to_ycbcr);
 
-    rawConverter.fuseFrame(*reference_image_rgb, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+    // The identity homography is not really used here as this is the first image
+    rawConverter.fuseFrame(*reference_image_rgb, gls::Matrix<3, 3>::identity(),
+                           demosaicParameters.get(), /*calibrateFromImage=*/ false);
 
     int fused_images = 1;
     for (const auto& image_path : std::span(&input_files[1], &input_files[input_files.size()])) {
@@ -147,18 +135,18 @@ int main(int argc, const char * argv[]) {
 
         std::vector<int> inliers;
         const auto homography = gls::RANSAC(matchpoints, /*threshold=*/ 1, /*max_iterations=*/ 2000, &inliers);
-
         std::cout << "Homography:\n" << homography << std::endl;
 
-        gls::cl_image_2d<gls::rgba_pixel_float> registered_image(glsContext.clContext(), image.width, image.height);
-        gls::clRegisterImage(&glsContext, *image_rgb, &registered_image, homography);
+        // Convert to YCbCr for fusion
+        transformImage(&glsContext, *image_rgb, image_rgb, cam_to_ycbcr);
 
-        transformImage(&glsContext, registered_image, &registered_image, cam_to_ycbcr);
-        rawConverter.fuseFrame(registered_image, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+        // Fuse the image with the rest applying the homography we just found
+        rawConverter.fuseFrame(*image_rgb, homography, demosaicParameters.get(), /*calibrateFromImage=*/ false);
 
         fused_images++;
     }
 
+    // Save result
     {
         const auto cl_result_image = rawConverter.getFusedImage();
         const auto denoisedImage = rawConverter.denoise(*cl_result_image, demosaicParameters.get(), /*calibrateFromImage=*/ true);
@@ -172,24 +160,6 @@ int main(int argc, const char * argv[]) {
 
         result_image->write_png_file(reference_image_path.parent_path() / "fused_NTB.png");
     }
-
-//    {
-//        reference_image_rgb = runPipeline(&glsContext, &rawConverter, reference_image_path.string(), &demosaicParameters);
-//
-//        // Convert linear image to YCbCr for denoising
-//        transformImage(&glsContext, *reference_image_rgb, reference_image_rgb, cam_to_ycbcr);
-//
-//        const auto denoisedImage = rawConverter.denoise(*reference_image_rgb, demosaicParameters.get(), /*calibrateFromImage=*/ true);
-//
-//        // Convert result back to camera RGB
-//        const auto normalized_ycbcr_to_cam = inverse(cam_to_ycbcr) * demosaicParameters->exposure_multiplier;
-//        transformImage(&glsContext, *denoisedImage, denoisedImage, normalized_ycbcr_to_cam);
-//
-//        const auto sRGBImage = rawConverter.postProcess(*denoisedImage, *demosaicParameters);
-//        const auto result_image = RawConverter::convertToRGBImage(*sRGBImage);
-//
-//        result_image->write_png_file(reference_image_path.parent_path() / "reference_denoised.png");
-//    }
 
     return 0;
 }

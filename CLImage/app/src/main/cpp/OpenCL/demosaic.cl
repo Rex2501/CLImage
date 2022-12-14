@@ -1150,36 +1150,60 @@ kernel void denoiseImage(read_only image2d_t inputImage,
     write_imageh(denoisedImage, imageCoordinates, (half4) (denoisedPixel, magnitude));
 }
 
-kernel void fuseFrames(read_only image2d_t inputImage,
+typedef struct transform {
+    float matrix[3][3];
+} transform;
+
+float2 applyHomography(const transform* homography, float2 p) {
+    float u = homography->matrix[0][0] * p.x + homography->matrix[0][1] * p.y + homography->matrix[0][2];
+    float v = homography->matrix[1][0] * p.x + homography->matrix[1][1] * p.y + homography->matrix[1][2];
+    float w = homography->matrix[2][0] * p.x + homography->matrix[2][1] * p.y + homography->matrix[2][2];
+    return (float2) (u / w, v / w);
+}
+
+kernel void fuseFrames(read_only image2d_t referenceImage,
+                       read_only image2d_t gradientImage,
+                       read_only image2d_t inputImage,
                        read_only image2d_t fusedInputImage,
+                       const transform homography,
+                       sampler_t linear_sampler,
                        float3 var_a, float3 var_b, int fusedFrames,
                        write_only image2d_t fusedOutputImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    const float2 input_norm = 1.0 / convert_float2(get_image_dim(fusedOutputImage));
 
-    float3 referencePixel = read_imagef(fusedInputImage, imageCoordinates).xyz;
+    half3 referencePixel = read_imageh(referenceImage, imageCoordinates).xyz;
+    half3 sigma = convert_half3(sqrt(var_a + var_b * referencePixel.x));
 
-    float3 sigma = sqrt(var_a + var_b * referencePixel.x);
+    half2 gradient = read_imageh(gradientImage, imageCoordinates).xy;
+    half angle = atan2(gradient.y, gradient.x);
+    half magnitude = length(gradient);
+    half edge = smoothstep(1, 4, magnitude / sigma.x);
 
-    float outWeight = 0;
-    float3 outSum = 0;
+    half outWeight = 0;
+    half3 outSum = 0;
     for (int y = -2; y <= 2; y++) {
         for (int x = -2; x <= 2; x++) {
-            float3 newPixel = read_imagef(inputImage, imageCoordinates + (int2)(x, y)).xyz;
+            half directionWeight = mix(1, tunnel(x, y, angle, 0.25h), edge);
 
-            float weight = 1 - step(1.0, length((referencePixel - newPixel) / sigma));
-            float3 outputPixel = weight * newPixel;
+            float2 pt = applyHomography(&homography, (float2) (imageCoordinates.x + x, imageCoordinates.y + y));
+            half3 newPixel = read_imageh(inputImage, linear_sampler, (pt + 0.5) * input_norm).xyz;
 
-            outWeight += weight;
+            half weight = 1 - smoothstep(0.5h, 2.0h, (1 - 0.75h * edge) * length((referencePixel - newPixel) / sigma));
+            half3 outputPixel = directionWeight * weight * newPixel;
+
+            outWeight += directionWeight * weight;
             outSum += outputPixel;
         }
     }
     outSum /= max(outWeight, 1);
 
-    float weight = min(outWeight, 1.0);
+    half weight = min(outWeight, 1.0);
 
-    float3 outputPixel = (weight * outSum + (fusedFrames + 1 - weight) * referencePixel) / (fusedFrames + 1);
+    half3 fusedPixel = read_imageh(fusedInputImage, imageCoordinates).xyz;
+    half3 outputPixel = (weight * outSum + (fusedFrames + 1 - weight) * fusedPixel) / (fusedFrames + 1);
 
-    write_imagef(fusedOutputImage, imageCoordinates, (float4) (outputPixel, 0));
+    write_imageh(fusedOutputImage, imageCoordinates, (half4) (outputPixel, 0));
 }
 
 float3 denoiseLumaChromaGuided(float3 var_a, float3 var_b, image2d_t inputImage, int2 imageCoordinates) {
@@ -2041,10 +2065,6 @@ void CatmullRomInterpolation(read_only image2d_t src, write_only image2d_t dst, 
 
     write_imagef(dst, dst_coord, clamp(result, 0.0f, 1.0f));
 }
-
-typedef struct transform {
-    float matrix[3][3];
-} transform;
 
 kernel void rescaleImage(read_only image2d_t inputImage,
                          write_only image2d_t outputImage,

@@ -914,29 +914,42 @@ RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls:
     );
 }
 
-void clFuseFrames(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+void clFuseFrames(gls::OpenCLContext* glsContext,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& referenceImage,
+                  const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& previousFusedImage,
+                  const gls::Matrix<3, 3>& homography,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b, int fusedFrames,
                   gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage) {
     // Load the shader source
     const auto program = glsContext->loadProgram("demosaic");
 
     // Bind the kernel parameters
-    auto kernel = cl::KernelFunctor<cl::Image2D,  // inputImage
-                                    cl::Image2D,  // inputFusedImage
-                                    cl_float3,    // var_a
-                                    cl_float3,    // var_b
-                                    int,          // fusedFrames
-                                    cl::Image2D   // outputFusedImage
+    auto kernel = cl::KernelFunctor<cl::Image2D,        // referenceImage
+                                    cl::Image2D,        // gradientImage
+                                    cl::Image2D,        // inputImage
+                                    cl::Image2D,        // inputFusedImage
+                                    gls::Matrix<3, 3>,  // homography
+                                    cl::Sampler,        // linear_sampler
+                                    cl_float3,          // var_a
+                                    cl_float3,          // var_b
+                                    int,                // fusedFrames
+                                    cl::Image2D         // outputFusedImage
                                     >(program, "fuseFrames");
 
     cl_float3 cl_var_a = { var_a[0], var_a[1], var_a[2] };
     cl_float3 cl_var_b = { var_b[0], var_b[1], var_b[2] };
 
+    const auto linear_sampler = cl::Sampler(glsContext->clContext(), true, CL_ADDRESS_CLAMP_TO_EDGE, CL_FILTER_LINEAR);
+
     // Schedule the kernel on the GPU
     kernel(gls::OpenCLContext::buildEnqueueArgs(newFusedImage->width, newFusedImage->height),
+           referenceImage.getImage2D(),
+           gradientImage.getImage2D(),
            inputImage.getImage2D(),
            previousFusedImage.getImage2D(),
+           homography, linear_sampler,
            cl_var_a, cl_var_b,
            fusedFrames,
            newFusedImage->getImage2D());

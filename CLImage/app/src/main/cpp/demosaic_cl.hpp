@@ -176,8 +176,11 @@ YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<
 RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, float exposure_multiplier, BayerPattern bayerPattern);
 
 void clFuseFrames(gls::OpenCLContext* glsContext,
+                  const gls::cl_image_2d<gls::rgba_pixel_float>& referenceImage,
+                  const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                   const gls::cl_image_2d<gls::rgba_pixel_float>& previousFusedImage,
+                  const gls::Matrix<3, 3>& homography,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b, int fusedFrames,
                   gls::cl_image_2d<gls::rgba_pixel_float>* newFusedImage);
 

@@ -120,7 +120,8 @@ public:
     gls::cl_image_2d<gls::rgba_pixel_float>* denoise(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
                                                      DemosaicParameters* demosaicParameters, bool calibrateFromImage);
 
-    void fuseFrame(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage, DemosaicParameters* demosaicParameters, bool calibrateFromImage);
+    void fuseFrame(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage, const gls::Matrix<3, 3>& homography,
+                   DemosaicParameters* demosaicParameters, bool calibrateFromImage);
 
     gls::cl_image_2d<gls::rgba_pixel_float>* getFusedImage();
 
