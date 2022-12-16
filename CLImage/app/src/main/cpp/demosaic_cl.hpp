@@ -111,7 +111,7 @@ void denoiseImage(gls::OpenCLContext* glsContext,
                   const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
                   const gls::Vector<3>& var_a, const gls::Vector<3>& var_b,
                   const gls::Vector<3> thresholdMultipliers,
-                  float chromaBoost, float gradientBoost, int layer,
+                  float chromaBoost, float gradientBoost, float gradientThreshold,
                   gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void denoiseImageGuided(gls::OpenCLContext* glsContext,

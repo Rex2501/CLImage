@@ -41,6 +41,7 @@ typedef struct DenoiseParameters {
     float chroma = 1.0;
     float chromaBoost = 1.0;
     float gradientBoost = 0.0;
+    float gradientThreshold = 1.0;
     float sharpening = 1.0;
 } DenoiseParameters;
 

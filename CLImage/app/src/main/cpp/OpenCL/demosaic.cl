@@ -1104,10 +1104,8 @@ half tunnel(half x, half y, half angle, half sigma) {
 
 kernel void denoiseImage(read_only image2d_t inputImage,
                          read_only image2d_t gradientImage,
-                         sampler_t linear_sampler,
-                         float3 var_a, float3 var_b,
-                         float3 thresholdMultipliers,
-                         float chromaBoost, float gradientBoost, int layer,
+                         float3 var_a, float3 var_b, float3 thresholdMultipliers,
+                         float chromaBoost, float gradientBoost, float gradientThreshold,
                          write_only image2d_t denoisedImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
 
@@ -1119,7 +1117,7 @@ kernel void denoiseImage(read_only image2d_t inputImage,
     half2 gradient = read_imageh(gradientImage, imageCoordinates).xy;
     half angle = atan2(gradient.y, gradient.x);
     half magnitude = length(gradient);
-    half edge = smoothstep(4, 16, magnitude / sigma.x);
+    half edge = smoothstep(4, 16, gradientThreshold * magnitude / sigma.x);
 
     const int size = gradientBoost > 0 ? 4 : 2;
 

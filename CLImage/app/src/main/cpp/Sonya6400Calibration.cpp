@@ -75,6 +75,7 @@ public:
         float chromaBoost = 8;
 
         float gradientBoost = smoothstep(0.3, 0.8, nlf_alpha);
+        float gradientThreshold = 1 + 0.5 * smoothstep(0.3, 0.8, nlf_alpha);
 
         std::array<DenoiseParameters, 5> denoiseParameters = {{
             {
@@ -82,6 +83,7 @@ public:
                 .chroma = cmult[0] * lerp_c,
                 .chromaBoost = chromaBoost,
                 .gradientBoost = 8 * gradientBoost,
+                .gradientThreshold = gradientThreshold,
                 .sharpening = std::lerp(1.5f, 1.0f, nlf_alpha)
             },
             {

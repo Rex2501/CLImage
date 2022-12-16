@@ -116,7 +116,7 @@ typename PyramidProcessor<levels>::imageType* PyramidProcessor<levels>::denoise(
         // Denoise current layer
         denoiseImage(glsContext, i < levels - 1 ? *(subtractedImagePyramid[i]) :  *denoiseInput, *gradientInput,
                      (*nlfParameters)[i].first, (*nlfParameters)[i].second, thresholdMultipliers[i],
-                     (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, i,
+                     (*denoiseParameters)[i].chromaBoost, (*denoiseParameters)[i].gradientBoost, (*denoiseParameters)[i].gradientThreshold,
                      denoisedImagePyramid[i].get());
     }
 
