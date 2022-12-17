@@ -199,8 +199,13 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
 
     interpolateGreen(_glsContext, *clScaledRawImage, *clRawGradientImage, clGreenImage.get(), demosaicParameters->bayerPattern, rawVariance[1]);
 
-    interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage, *clRawGradientImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,
-                       rawVariance[0], rawVariance[2]);
+    interpolateRedBlue(_glsContext, *clScaledRawImage, *clGreenImage,
+                       *clRawGradientImage, clLinearRGBImageA.get(),
+                       demosaicParameters->bayerPattern, rawVariance[0], rawVariance[2]);
+
+    interpolateRedBlueAtGreen(_glsContext, *clLinearRGBImageA,
+                              *clRawGradientImage, clLinearRGBImageA.get(),
+                              demosaicParameters->bayerPattern, rawVariance[0], rawVariance[2]);
 
     // Recover clipped highlights
     blendHighlightsImage(_glsContext, *clLinearRGBImageA, /*clip=*/ 1.0, clLinearRGBImageA.get());

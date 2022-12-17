@@ -170,7 +170,7 @@ float2 gaussFilteredSobel3x3(read_only image2d_t inputImage, int x, int y) {
 }
 
 float2 gaussFilteredSobel5x5(read_only image2d_t inputImage, int x, int y) {
-    // Average Sobel Filter on a 3x3 raw patch
+    // Average Sobel Filter on a 5x5 raw patch
     float2 sum = 0;
     float2 absSum = 0;
     for (int j = -2; j <= 2; j++) {
@@ -182,11 +182,8 @@ float2 gaussFilteredSobel5x5(read_only image2d_t inputImage, int x, int y) {
     }
     sum /= 4;
     absSum /= 4;
-
-    float2 highGradient = smoothstep(0.01, 0.1, sum);
-
     // return sum;
-    return mix(copysign(absSum, sum), sum, highGradient);
+    return copysign(absSum, sum);
 }
 
 kernel void rawImageGradient(read_only image2d_t inputImage, float2 rawVariance, write_only image2d_t gradientImage) {
@@ -428,77 +425,100 @@ kernel void interpolateRedBlue(read_only image2d_t rawImage,
 }
 #undef GREEN
 
-//#define RGB(i, j) read_imagef(rgbImageIn, (int2)(x + i, y + j)).xyz
-//
-//kernel void interpolateRedBlueAtGreen(read_only image2d_t rgbImageIn,
-//                                      write_only image2d_t rgbImageOut, int bayerPattern,
-//                                      float2 redVariance, float2 blueVariance) {
-//    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-//
-//    const int x = imageCoordinates.x;
-//    const int y = imageCoordinates.y;
-//
-//    const int2 r = bayerOffsets[bayerPattern][raw_red];
-//    const int2 b = bayerOffsets[bayerPattern][raw_blue];
-//
-//    const bool red_pixel = (r.x & 1) == (x & 1) && (r.y & 1) == (y & 1);
-//    const bool blue_pixel = (b.x & 1) == (x & 1) && (b.y & 1) == (y & 1);
-//    const bool red_line = (r.y & 1) == (y & 1);
-//
-//    float green = GREEN(0, 0);
-//    float c1, c2;
-//
-//    if (red_pixel || blue_pixel) {
-//        // Do nothing
-//    } else {
-//        // Green pixel locations
-//        float g_left    = GREEN(-1, 0);
-//        float g_right   = GREEN(1, 0);
-//        float g_up      = GREEN(0, -1);
-//        float g_down    = GREEN(0, 1);
-//
-//        float c1_left   = RAW(-1, 0);
-//        float c1_right  = RAW(1, 0);
-//        float c2_up     = RAW(0, -1);
-//        float c2_down   = RAW(0, 1);
-//
-//        float gc1_left   = g_left  - c1_left;
-//        float gc1_right  = g_right - c1_right;
-//        float gc2_up     = g_up    - c2_up;
-//        float gc2_down   = g_down  - c2_down;
-//
-//        float g_left3    = GREEN(-3, 0);
-//        float g_right3   = GREEN(3, 0);
-//        float g_up3      = GREEN(0, -3);
-//        float g_down3    = GREEN(0, 3);
-//
-//        float gc1_left3   = g_left3  - RAW(-3, 0);
-//        float gc1_right3  = g_right3 - RAW(3, 0);
-//        float gc2_up3     = g_up3    - RAW(0, -3);
-//        float gc2_down3   = g_down3  - RAW(0, 3);
-//
-//        /*
-//         *  TODO: this is a partial solution, compute g-c at all non green locations first (diagonally)
-//         *  and subsequently interpolate directionally (horizontal and vertical) at the green locations.
-//         *  See: Yan Niu "Low Cost Edge Sensing for High Quality Demosaicking."
-//         */
-//
-//        // Edges that are in strong highlights tend to exagerate the gradient
-//        float highlights_edge = 1 - smoothstep(0.25, 1.0, max(green, max(max(g_right3, g_left3),
-//                                                                         max(g_down3, g_up3))));
-//
-//        c1 = green - ((gc1_left + gc1_right) / 2 - highlights_edge * ((gc1_right3 - gc1_left) - (gc1_right - gc1_left3)) / 8);
-//        c2 = green - ((gc2_up + gc2_down) / 2 - highlights_edge * ((gc2_down3 - gc2_up) - (gc2_down - gc2_up3)) / 8);
-//
-//        // Limit the range of HF correction to something reasonable
-//        c1 = clamp(c1, min(c1_left, c1_right), max(c1_left, c1_right));
-//        c2 = clamp(c2, min(c2_up, c2_down), max(c2_up, c2_down));
-//    }
-//
-//    float3 output = red_line ? (float3)(c1, green, c2) : (float3)(c2, green, c1);
-//
-//    write_imagef(rgbImage, imageCoordinates, (float4)(clamp(output, 0.0, 1.0), 0));
-//}
+#define RGB(i, j) read_imagef(rgbImageIn, (int2)(x + i, y + j)).xyz
+
+kernel void interpolateRedBlueAtGreen(read_only image2d_t rgbImageIn,
+                                      read_only image2d_t gradientImage,
+                                      write_only image2d_t rgbImageOut,
+                                      int bayerPattern, float2 redVariance, float2 blueVariance) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    const int x = imageCoordinates.x;
+    const int y = imageCoordinates.y;
+
+    const int2 r = bayerOffsets[bayerPattern][raw_red];
+    const int2 b = bayerOffsets[bayerPattern][raw_blue];
+
+    const bool red_pixel = (r.x & 1) == (x & 1) && (r.y & 1) == (y & 1);
+    const bool blue_pixel = (b.x & 1) == (x & 1) && (b.y & 1) == (y & 1);
+
+    float3 rgb = RGB(0, 0);
+
+    if (red_pixel || blue_pixel) {
+        // Do nothing
+    } else {
+        // Green pixel locations
+        float3 rgb_left     = RGB(-1, 0);
+        float3 rgb_right    = RGB(1, 0);
+        float3 rgb_up       = RGB(0, -1);
+        float3 rgb_down     = RGB(0, 1);
+
+        float red_ave       = (rgb_left.x + rgb_right.x + rgb_up.x + rgb_down.x) / 4;
+        float blue_ave      = (rgb_left.z + rgb_right.z + rgb_up.z + rgb_down.z) / 4;
+
+        float gred_left      = rgb_left.y  - rgb_left.x;
+        float gred_right     = rgb_right.y - rgb_right.x;
+        float gred_up        = rgb_up.y    - rgb_up.x;
+        float gred_down      = rgb_down.y  - rgb_down.x;
+
+        float gblue_left     = rgb_left.y  - rgb_left.z;
+        float gblue_right    = rgb_right.y - rgb_right.z;
+        float gblue_up       = rgb_up.y    - rgb_up.z;
+        float gblue_down     = rgb_down.y  - rgb_down.z;
+
+        float3 rgb_left3    = RGB(-3, 0);
+        float3 rgb_right3   = RGB(3, 0);
+        float3 rgb_up3      = RGB(0, -3);
+        float3 rgb_down3    = RGB(0, 3);
+
+        float gred_left3     = rgb_left3.y  - rgb_left3.x;
+        float gred_right3    = rgb_right3.y - rgb_right3.x;
+        float gred_up3       = rgb_up3.y    - rgb_up3.x;
+        float gred_down3     = rgb_down3.y  - rgb_down3.x;
+
+        float gblue_left3    = rgb_left3.y  - rgb_left3.z;
+        float gblue_right3   = rgb_right3.y - rgb_right3.z;
+        float gblue_up3      = rgb_up3.y    - rgb_up3.z;
+        float gblue_down3    = rgb_down3.y  - rgb_down3.z;
+
+        // Gradient direction in [0..1]
+        float2 gradient = abs(read_imagef(gradientImage, imageCoordinates).xy);
+        float direction = 2 * atan2pi(gradient.y, gradient.x);
+
+        float redStdDev = sqrt(redVariance.x + redVariance.y * red_ave);
+        float redGradient_threshold = smoothstep(redStdDev, 4 * redStdDev, length(gradient));
+
+        float blueStdDev = sqrt(blueVariance.x + blueVariance.y * blue_ave);
+        float blueGradient_threshold = smoothstep(blueStdDev, 4 * blueStdDev, length(gradient));
+
+        // If the gradient is below threshold go flat
+        float redAlpha = mix(0.5, direction, redGradient_threshold);
+        float blueAlpha = mix(0.5, direction, blueGradient_threshold);
+
+        // Edges that are in strong highlights tend to exagerate the gradient
+        float highlights_edge = 1 - smoothstep(0.25, 1.0, max(rgb.y, max(max(rgb_right.y, rgb_left.y),
+                                                                         max(rgb_down.y, rgb_up.y))));
+
+        float red = rgb.y - mix((gred_up + gred_down) / 2 - highlights_edge * ((gred_down3 - gred_up) - (gred_down - gred_up3)) / 8,
+                                (gred_left + gred_right) / 2 - highlights_edge * ((gred_right3 - gred_left) - (gred_right - gred_left3)) / 8,
+                                redAlpha);
+
+        float blue = rgb.y - mix((gblue_up + gblue_down) / 2 - highlights_edge * ((gblue_down3 - gblue_up) - (gblue_down - gblue_up3)) / 8,
+                                 (gblue_left + gblue_right) / 2 - highlights_edge * ((gblue_right3 - gblue_left) - (gblue_right - gblue_left3)) / 8,
+                                 blueAlpha);
+
+        // Limit the range of HF correction to something reasonable
+        float red_min = min(min(rgb_left.x, rgb_right.x), min(rgb_up.x, rgb_down.x));
+        float red_max = max(max(rgb_left.x, rgb_right.x), max(rgb_up.x, rgb_down.x));
+        rgb.x = clamp(red, red_min, red_max);
+
+        float blue_min = min(min(rgb_left.z, rgb_right.z), min(rgb_up.z, rgb_down.z));
+        float blue_max = max(max(rgb_left.z, rgb_right.z), max(rgb_up.z, rgb_down.z));
+        rgb.z = clamp(blue, blue_min, blue_max);
+    }
+
+    write_imagef(rgbImageOut, imageCoordinates, (float4)(rgb, 0));
+}
 
 // Modified Malvar-He-Cutler algorithm - for reference only
 kernel void malvar(read_only image2d_t rawImage, read_only image2d_t gradientImage,

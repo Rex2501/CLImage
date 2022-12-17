@@ -110,6 +110,30 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
            { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
 }
 
+void interpolateRedBlueAtGreen(gls::OpenCLContext* glsContext,
+                               const gls::cl_image_2d<gls::rgba_pixel_float>& rgbImageIn,
+                               const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
+                               gls::cl_image_2d<gls::rgba_pixel_float>* rgbImageOut,
+                               BayerPattern bayerPattern, gls::Vector<2> redVariance, gls::Vector<2> blueVariance) {
+    // Load the shader source
+    const auto program = glsContext->loadProgram("demosaic");
+
+    // Bind the kernel parameters
+    auto kernel = cl::KernelFunctor<cl::Image2D,  // rgbImageIn
+                                    cl::Image2D,  // gradientImage
+                                    cl::Image2D,  // rgbImageOut
+                                    int,          // bayerPattern
+                                    cl_float2,    // redVariance
+                                    cl_float2     // blueVariance
+                                    >(program, "interpolateRedBlueAtGreen");
+
+    // Schedule the kernel on the GPU
+    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImageOut->width, rgbImageOut->height),
+           rgbImageIn.getImage2D(), gradientImage.getImage2D(),
+           rgbImageOut->getImage2D(), bayerPattern,
+           { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
+}
+
 void malvar(gls::OpenCLContext* glsContext,
             const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
             const gls::cl_image_2d<gls::luma_alpha_pixel_float>& gradientImage,
