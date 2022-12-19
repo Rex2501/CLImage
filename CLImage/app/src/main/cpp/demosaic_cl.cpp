@@ -104,7 +104,7 @@ void interpolateRedBlue(gls::OpenCLContext* glsContext,
                                     >(program, "interpolateRedBlue");
 
     // Schedule the kernel on the GPU
-    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width, rgbImage->height),
+    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImage->width / 2, rgbImage->height / 2),
            rawImage.getImage2D(), greenImage.getImage2D(), gradientImage.getImage2D(),
            rgbImage->getImage2D(), bayerPattern,
            { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
@@ -128,7 +128,7 @@ void interpolateRedBlueAtGreen(gls::OpenCLContext* glsContext,
                                     >(program, "interpolateRedBlueAtGreen");
 
     // Schedule the kernel on the GPU
-    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImageOut->width, rgbImageOut->height),
+    kernel(gls::OpenCLContext::buildEnqueueArgs(rgbImageOut->width / 2, rgbImageOut->height / 2),
            rgbImageIn.getImage2D(), gradientImage.getImage2D(),
            rgbImageOut->getImage2D(), bayerPattern,
            { redVariance[0], redVariance[1] }, { blueVariance[0], blueVariance[1] });
