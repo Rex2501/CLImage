@@ -33,7 +33,7 @@ class cl_image : public basic_image<T> {
     static inline cl::ImageFormat ImageFormat() {
         static_assert(T::channels == 1 || T::channels == 2 || T::channels == 4);
         static_assert(std::is_same<typename T::value_type, float>::value ||
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+#if USE_FP16_FLOATS && !(__APPLE__ && __x86_64__)
                       std::is_same<typename T::value_type, gls::float16_t>::value ||
 #endif
                       std::is_same<typename T::value_type, uint8_t>::value ||
@@ -43,7 +43,7 @@ class cl_image : public basic_image<T> {
 
         cl_channel_order order = T::channels == 1 ? CL_R : T::channels == 2 ? CL_RG : CL_RGBA;
         cl_channel_type type = std::is_same<typename T::value_type, float>::value ? CL_FLOAT :
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+#if USE_FP16_FLOATS && !(__APPLE__ && __x86_64__)
                                std::is_same<typename T::value_type, gls::float16_t>::value ? CL_HALF_FLOAT :
 #endif
                                std::is_same<typename T::value_type, uint8_t>::value ? CL_UNORM_INT8 :
@@ -72,7 +72,7 @@ inline cl::ImageFormat cl_image<std::array<float, 4>>::ImageFormat() {
     return cl::ImageFormat(CL_RGBA, CL_FLOAT);
 }
 
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+#if USE_FP16_FLOATS && !(__APPLE__ && __x86_64__)
 template <>
 inline cl::ImageFormat cl_image<gls::float16_t>::ImageFormat() {
     return cl::ImageFormat(CL_R, CL_HALF_FLOAT);

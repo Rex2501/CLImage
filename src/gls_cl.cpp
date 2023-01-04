@@ -163,7 +163,7 @@ void OpenCLContext::handleProgramException(const cl::BuildError& e) {
 // NOTE: using -cl-fast-relaxed-math actually reduces precision on macOS, it also doesn't seem to increase performance
 
 #ifdef __APPLE__
-static const char* cl_options = "-cl-std=CL1.2 -Werror -cl-single-precision-constant";
+static const char* cl_options = "-cl-std=CL1.2 -cl-single-precision-constant";
 #else
 static const char* cl_options = "-cl-std=CL2.0 -Werror -cl-single-precision-constant";
 #endif
@@ -178,7 +178,7 @@ cl::Program OpenCLContext::loadProgram(const std::string& programName, const std
         cl::Context context = clContext();
         cl::Device device = cl::Device::getDefault();
 
-#if (defined(__ANDROID__) && defined(NDEBUG)) || (defined(__APPLE__) && !defined(TARGET_CPU_ARM64) && !defined(DEBUG))
+#if (defined(__ANDROID__) && defined(NDEBUG)) || (defined(__APPLE__) && !defined(__aarch64__))
         std::vector<unsigned char> binary = OpenCLBinary(programName + ".o");
 
         if (!binary.empty()) {

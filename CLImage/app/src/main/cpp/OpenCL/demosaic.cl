@@ -15,12 +15,18 @@
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
-//#define half float
-//#define half2 float2
-//#define half3 float3
-//#define half4 float4
-//#define read_imageh read_imagef
-//#define write_imageh write_imagef
+#ifndef cl_khr_fp16
+#define half float
+#define half2 float2
+#define half3 float3
+#define half4 float4
+#define read_imageh read_imagef
+#define write_imageh write_imagef
+#define HALF_MAX MAXFLOAT
+#define convert_half2(val)    (val)
+#define convert_half3(val)    (val)
+#define convert_half4(val)    (val)
+#endif
 
 //#define LENS_SHADING true
 //#define LENS_SHADING_GAIN 1
@@ -59,6 +65,10 @@ constant const int2 bayerOffsets[4][4] = {
       t * t * (3 - 2 * t); })
 
 #endif
+
+#undef min
+#undef max
+#undef abs
 
 // Apple's half float fail to compile with the system's min/max functions
 
@@ -138,7 +148,7 @@ kernel void scaleRawData(read_only image2d_t rawImage, write_only image2d_t scal
     for (int c = 0; c < 4; c++) {
         int2 o = bayerOffsets[bayerPattern][c];
         write_imagef(scaledRawImage, imageCoordinates + (int2) (o.x, o.y),
-                     max(scaleMul[c] * (read_imagef(rawImage, imageCoordinates + (int2) (o.x, o.y)).x - blackLevel), 0.0));
+                     max(scaleMul[c] * (read_imagef(rawImage, imageCoordinates + (int2) (o.x, o.y)).x - blackLevel), 0.0f));
     }
 }
 
@@ -633,18 +643,18 @@ kernel void fastDebayer(read_only image2d_t rawImage, write_only image2d_t rgbIm
 
 #define M_SQRT3_F 1.7320508f
 
-kernel void blendHighlightsImage(read_only image2d_t inputImage, float clip, write_only image2d_t outputImage) {
-    constant float3 trans[3] = {
-        {         1,          1, 1 },
-        { M_SQRT3_F, -M_SQRT3_F, 0 },
-        {        -1,         -1, 2 },
-    };
-    constant float3 itrans[3] = {
-        { 1,  M_SQRT3_F / 2, -0.5 },
-        { 1, -M_SQRT3_F / 2, -0.5 },
-        { 1,              0,  1   },
-    };
+constant float3 trans[3] = {
+    {         1,          1, 1 },
+    { M_SQRT3_F, -M_SQRT3_F, 0 },
+    {        -1,         -1, 2 },
+};
+constant float3 itrans[3] = {
+    { 1,  M_SQRT3_F / 2, -0.5 },
+    { 1, -M_SQRT3_F / 2, -0.5 },
+    { 1,              0,  1   },
+};
 
+kernel void blendHighlightsImage(read_only image2d_t inputImage, float clip, write_only image2d_t outputImage) {
     const int2 imageCoordinates = (int2)(get_global_id(0), get_global_id(1));
 
     float3 pixel = read_imagef(inputImage, imageCoordinates).xyz;
@@ -1117,7 +1127,7 @@ kernel void denoiseImage(read_only image2d_t inputImage,
             half3 inputDiff = (inputSampleYCC - inputYCC) * diffMultiplier;
             half2 gradientDiff = (gradientSample - gradient) / sigma.x;
 
-            half directionWeight = mix(1, tunnel(x, y, angle, 0.25h), edge);
+            half directionWeight = mix(1, tunnel(x, y, angle, (half) 0.25), edge);
             half gradientWeight = 1 - smoothstep(2, 8, length(gradientDiff));
 
             half lumaWeight = 1 - step(1 + (half) gradientBoost * edge, abs(inputDiff.x));
@@ -1168,12 +1178,12 @@ kernel void fuseFrames(read_only image2d_t referenceImage,
     half3 outSum = 0;
     for (int y = -2; y <= 2; y++) {
         for (int x = -2; x <= 2; x++) {
-            half directionWeight = mix(1, tunnel(x, y, angle, 0.25h), edge);
+            half directionWeight = mix(1, tunnel(x, y, angle, (half) 0.25), edge);
 
             float2 pt = applyHomography(&homography, (float2) (imageCoordinates.x + x, imageCoordinates.y + y));
             half3 newPixel = read_imageh(inputImage, linear_sampler, (pt + 0.5) * input_norm).xyz;
 
-            half weight = 1 - smoothstep(0.5h, 2.0h, (1 - 0.75h * edge) * length((referencePixel - newPixel) / sigma));
+            half weight = 1 - smoothstep((half) 0.5, (half) 2.0, (1 - (half) 0.75 * edge) * length((referencePixel - newPixel) / sigma));
             half3 outputPixel = directionWeight * weight * newPixel;
 
             outWeight += directionWeight * weight;
@@ -1421,7 +1431,7 @@ float4 denoiseRawRGBAPatch(float4 rawVariance, image2d_t inputImage, int2 imageC
     for (int y = -2; y <= 2; y++) {
         for (int x = -2; x <= 2; x++) {
             float4 diff = diffPatch(inputImage, imageCoordinates + (int2)(x, y), patch) / sigma;
-            float4 sampleWeight = gaussianBlur5x5[y + 2][x + 2] * (1 - step(1, diff));
+            float4 sampleWeight = gaussianBlur5x5[y + 2][x + 2] * (1 - step(1.0, diff));
             float4 inputSample = read_imagef(inputImage, imageCoordinates + (int2)(x, y));
 
             filtered_pixel += sampleWeight * inputSample;
@@ -1650,19 +1660,19 @@ float4 denoiseRawRGBAGuidedCov(float4 eps, image2d_t inputImage, int2 imageCoord
                      a_r.y * input.x + a_g.y * input.w + a_b.y * input.z + b.y);
 }
 
+constant float sobelX[3][3] = {
+    { -1, -2, -1 },
+    {  0,  0,  0 },
+    {  1,  2,  1 },
+};
+constant float sobelY[3][3] = {
+    { -1,  0,  1 },
+    { -2,  0,  2 },
+    { -1,  0,  1 },
+};
+
 kernel void sobelFilterImage(read_only image2d_t inputImage, write_only image2d_t outputImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-
-    constant float sobelX[3][3] = {
-        { -1, -2, -1 },
-        {  0,  0,  0 },
-        {  1,  2,  1 },
-    };
-    constant float sobelY[3][3] = {
-        { -1,  0,  1 },
-        { -2,  0,  2 },
-        { -1,  0,  1 },
-    };
 
     float3 valueX = 0;
     float3 valueY = 0;
@@ -1694,14 +1704,14 @@ kernel void desaturateEdges(read_only image2d_t inputImage, write_only image2d_t
     write_imagef(outputImage, imageCoordinates, (float4) (pixel.x, desaturate * pixel.yz, 0));
 }
 
+constant float laplacian[3][3] = {
+    {  1, -2,  1 },
+    { -2,  4, -2 },
+    {  1, -2,  1 },
+};
+
 kernel void laplacianFilterImage(read_only image2d_t inputImage, write_only image2d_t outputImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
-
-    constant float laplacian[3][3] = {
-        {  1, -2,  1 },
-        { -2,  4, -2 },
-        {  1, -2,  1 },
-    };
 
     float3 value = 0;
     for (int y = 0; y < 3; y++) {
@@ -1735,7 +1745,7 @@ kernel void noiseStatistics(read_only image2d_t inputImage, write_only image2d_t
     write_imagef(outputImage, imageCoordinates, (float4) (mean.x, var));
 }
 
-float4 readRAWQuad(read_only image2d_t rawImage, int2 imageCoordinates, constant const int2 offsets[4]) {
+float4 readRAWQuad(read_only image2d_t rawImage, int2 imageCoordinates, constant const int2 *offsets) {
     const int2 r = offsets[raw_red];
     const int2 g = offsets[raw_green];
     const int2 b = offsets[raw_blue];
@@ -1856,7 +1866,7 @@ kernel void blueNoiseImage(read_only image2d_t inputImage,
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
 
-kernel void sampledConvolution(read_only image2d_t inputImage, int samples, constant float weights[][3], write_only image2d_t outputImage, sampler_t linear_sampler) {
+kernel void sampledConvolution(read_only image2d_t inputImage, int samples, constant const float *weights, write_only image2d_t outputImage, sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
 
@@ -1864,8 +1874,8 @@ kernel void sampledConvolution(read_only image2d_t inputImage, int samples, cons
     float3 sum = 0;
     float norm = 0;
     for (int i = 0; i < samples; i++) {
-        float w = weights[i][0];
-        sum += w * read_imagef(inputImage, linear_sampler, inputPos + ((float2) (weights[i][1], weights[i][2]) + 0.5) * inputNorm).xyz;
+        float w = weights[3 * i + 0];
+        sum += w * read_imagef(inputImage, linear_sampler, inputPos + ((float2) (weights[3 * i + 1], weights[3 * i + 2]) + 0.5) * inputNorm).xyz;
         norm += w;
     }
     write_imagef(outputImage, imageCoordinates, (float4) (sum / norm, 0));
@@ -1903,11 +1913,11 @@ float __attribute__((overloadable)) sigmoid(float x, float s) {
 // TODO: it would be nice to have separate control on highlights and shhadows contrast
 
 float3 __attribute__((overloadable)) toneCurve(float3 x, float s) {
-    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0.0, s)) / (sigmoid(1.0, s) - sigmoid(0.0, s));
 }
 
 float __attribute__((overloadable)) toneCurve(float x, float s) {
-    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0, s)) / (sigmoid(1, s) - sigmoid(0, s));
+    return (sigmoid(native_powr(0.95 * x, 0.5), s) - sigmoid(0.0, s)) / (sigmoid(1.0, s) - sigmoid(0.0, s));
 }
 
 float3 saturationBoost(float3 value, float saturation) {

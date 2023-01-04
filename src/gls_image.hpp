@@ -32,10 +32,10 @@
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #define __TRUE_LINUX__
-#endif
-
-#ifndef __TRUE_LINUX__ //On Android and Apple
+#else
+#if !defined(__x86_64__)
 #define USE_FP16_FLOATS true
+#endif
 #endif
 
 namespace gls {
@@ -145,7 +145,7 @@ typedef basic_pixel<luma_alpha_type<float>> pixel_fp32_2;
 typedef basic_pixel<rgb_type<float>> pixel_fp32_3;
 typedef basic_pixel<rgba_type<float>> pixel_fp32_4;
 
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+#if USE_FP16_FLOATS && !(__APPLE__ && __x86_64__)
 typedef __fp16 float16_t;
 typedef basic_pixel<luma_type<float16_t>> luma_pixel_fp16;
 typedef basic_pixel<luma_alpha_type<float16_t>> luma_alpha_pixel_fp16;
@@ -153,7 +153,7 @@ typedef basic_pixel<rgb_type<float16_t>> rgb_pixel_fp16;
 typedef basic_pixel<rgba_type<float16_t>> rgba_pixel_fp16;
 #endif
 
-#if USE_FP16_FLOATS && !(__APPLE__ && TARGET_CPU_X86_64)
+#if USE_FP16_FLOATS && !(__APPLE__ && __x86_64__)
 typedef float16_t float_type;
 #else
 typedef float float_type;

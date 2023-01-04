@@ -29,7 +29,7 @@ float integralRectangle(float topRight, float topLeft, float bottomRight, float 
  NOTE: calcHaarPatternDx and calcHaarPatternDy have been hand optimized to avoid loading data from repeated offsets,
        and the redundant offsets themselves have been removed from the SurfHF struct.
  */
-float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
+float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant int8 *dp, float w) {
     float r02 = read_imagef(inputImage, p + dp[0].lo.lo).x;
     float r07 = read_imagef(inputImage, p + dp[0].lo.hi).x;
     float r32 = read_imagef(inputImage, p + dp[0].hi.lo).x;
@@ -44,7 +44,7 @@ float calcHaarPatternDx(read_only image2d_t inputImage, const int2 p, constant i
     return w * (integralRectangle(r97, r92, r07, r02) - 3 * integralRectangle(r67, r62, r37, r32));
 }
 
-float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 dp[], float w) {
+float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant int8 *dp, float w) {
     float r20 = read_imagef(inputImage, p + dp[0].lo.lo).x;
     float r23 = read_imagef(inputImage, p + dp[0].lo.hi).x;
     float r26 = read_imagef(inputImage, p + dp[1].lo.lo).x;
@@ -58,7 +58,7 @@ float calcHaarPatternDy(read_only image2d_t inputImage, const int2 p, constant i
     return w * (integralRectangle(r79, r70, r29, r20) - 3 * integralRectangle(r76, r73, r26, r23));
 }
 
-float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 dp[4], float w) {
+float calcHaarPatternDxy(read_only image2d_t inputImage, const int2 p, constant int8 *dp, float w) {
     const float w4[4] = { w, -w, -w, w };
     float d = 0;
 #pragma unroll
@@ -81,7 +81,7 @@ kernel void calcDetAndTrace(read_only image2d_t sumImage,
                             int sampleStep,
                             float2 w,
                             int2 margin,
-                            constant SurfHF surfHFData[1]) {
+                            constant SurfHF *surfHFData) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
@@ -106,7 +106,7 @@ kernel void calcDetAndTrace4(read_only image2d_t sumImage,
                              int sampleStep,
                              float8 w,
                              int4 margin,
-                             constant SurfHF surfHFData[4]) {
+                             constant SurfHF *surfHFData) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const int2 p = imageCoordinates * sampleStep;
 
@@ -365,9 +365,9 @@ typedef struct DMatch {
 
 #define MATCH_BLOCK_SIZE 24
 
-kernel void matchKeyPoints(global const float4 descriptor1[],
+kernel void matchKeyPoints(global const float4 *descriptor1,
                            int descriptor1_stride,
-                           global const float4 descriptor2[],
+                           global const float4 *descriptor2,
                            int descriptor2_stride,
                            int descriptor2_height,
                            global DMatch* matchedPoints) {
