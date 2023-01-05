@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifdef cl_khr_fp16
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
-
-#ifndef cl_khr_fp16
+#else
 #define half float
 #define half2 float2
 #define half3 float3
@@ -66,11 +66,11 @@ constant const int2 bayerOffsets[4][4] = {
 
 #endif
 
+// Apple's half float fail to compile with the system's min/max functions
+
 #undef min
 #undef max
 #undef abs
-
-// Apple's half float fail to compile with the system's min/max functions
 
 #define min(a, b) ({__typeof__(a) _a = (a); \
     __typeof__(b) _b = (b); \
