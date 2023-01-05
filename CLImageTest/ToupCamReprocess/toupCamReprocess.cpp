@@ -12,6 +12,9 @@
 #include <ctime>
 
 #include "demosaic.hpp"
+#include "raw_converter.hpp"
+#include "CameraCalibration.hpp"
+
 #include "gls_image.hpp"
 #include "gls_tiff_metadata.hpp"
 
@@ -131,7 +134,48 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     raw_data->write_dng_file(dng_file, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
 }
 
-void processDirectory(std::filesystem::path input_path) {
+gls::image<gls::rgb_pixel>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data) {
+    /*
+     The sensor data is rotated by 180 degrees (upside down) and flipped (mirrored)
+     We save the sensor data in stright up form and apply the same rotation to the
+     CFA pattern, i.e.: GRBG -> BGGR
+     */
+
+    rotate180AndFlipHorizontal(raw_data);
+
+    std::vector<float> color_matrix = { 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 };
+    std::vector<float> as_shot_neutral = { 1 / 1.8930, 1.0000, 1 / 1.7007 };
+
+    gls::tiff_metadata dng_metadata, exif_metadata;
+
+    // Basic DNG image interpretation metadata
+    dng_metadata.insert({ TIFFTAG_COLORMATRIX1, color_matrix });
+    dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
+
+    dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
+    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
+    dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
+    dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
+
+    // Basic EXIF metadata
+    const auto ISO = 100; // Provide the actual ISO informations
+    exif_metadata.insert({ EXIFTAG_ISOSPEEDRATINGS, std::vector<uint16_t>{ (uint16_t) ISO } });
+
+    return demosaicSonya6400RawImage(rawConverter, &dng_metadata, &exif_metadata, *raw_data);
+}
+
+void raw_png_to_rgb_png(RawConverter* rawConverter, const std::filesystem::path& input_path, const std::filesystem::path& output_path) {
+    const std::string filename = input_path.filename().stem();
+    std::cout << "Processing file: " << filename << std::endl;
+
+    const auto raw_data = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
+
+    const auto rgbImage = demosaic_raw_data(rawConverter, raw_data.get());
+
+    rgbImage->write_png_file(output_path);
+}
+
+void processDirectory(std::filesystem::path input_path, std::filesystem::path output_path) {
     std::cout << "Processing Directory: " << input_path.filename() << std::endl;
 
     auto input_dir = std::filesystem::directory_entry(input_path).is_directory() ? input_path : input_path.parent_path();
@@ -140,27 +184,49 @@ void processDirectory(std::filesystem::path input_path) {
               std::back_inserter(directory_listing));
     std::sort(directory_listing.begin(), directory_listing.end());
 
-    for (const auto& input_path : directory_listing) {
-        if (input_path.filename().string().starts_with(".")) {
-            continue;
-        }
+    if (!directory_listing.empty()) {
+        gls::OpenCLContext glsContext("");
+        RawConverter rawConverter(&glsContext);
 
-        if (std::filesystem::directory_entry(input_path).is_regular_file()) {
-            const auto extension = input_path.extension();
-            if ((extension != ".png" && extension != ".PNG")) {
+        for (const auto& directory_entry : directory_listing) {
+            if (directory_entry.filename().string().starts_with(".")) {
                 continue;
             }
-            raw_png_to_dng(input_path);
-        } else if (std::filesystem::directory_entry(input_path).is_directory()) {
-            processDirectory(input_path);
+
+            if (std::filesystem::directory_entry(directory_entry).is_regular_file()) {
+                const auto extension = directory_entry.extension();
+                if ((extension != ".png" && extension != ".PNG")) {
+                    continue;
+                }
+
+                // raw_png_to_dng(directory_entry);
+
+                const auto filename = directory_entry.filename().stem().string();
+                const auto output_file = output_path / (filename + "_rgb.png");
+
+                std::cout << "Converting " << directory_entry << " to " << output_file << std::endl;
+
+                if (!exists(status(output_path))) {
+                    create_directory(output_path);
+                }
+
+                raw_png_to_rgb_png(&rawConverter, directory_entry, output_path / (filename + "_rgb.png"));
+            } else if (std::filesystem::directory_entry(directory_entry).is_directory()) {
+                processDirectory(directory_entry, output_path / directory_entry.filename());
+            }
         }
     }
 }
 
 int main(int argc, const char * argv[]) {
+    if (argc != 3) {
+        std::cerr << "Please provide an input path and an output path." << std::endl;
+        return -1;
+    }
     const auto input_path = std::filesystem::path(argv[1]);
+    const auto output_path = std::filesystem::path(argv[2]);
 
-    processDirectory(input_path);
+    processDirectory(input_path, output_path);
 
     return 0;
 }

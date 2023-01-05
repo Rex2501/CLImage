@@ -182,18 +182,25 @@ void calibrateSonya6400(RawConverter* rawConverter, const std::filesystem::path&
     calibration.calibrate(rawConverter, input_dir);
 }
 
+gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawConverter,
+                                                                 gls::tiff_metadata* dng_metadata,
+                                                                 gls::tiff_metadata* exif_metadata,
+                                                                 const gls::image<gls::luma_pixel_16>& inputImage) {
+    Sonya6400Calibration calibration;
+    auto demosaicParameters = calibration.getDemosaicParameters(inputImage, dng_metadata, exif_metadata);
+
+    unpackDNGMetadata(inputImage, dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ false, nullptr, false);
+
+    const auto demosaicedImage = rawConverter->runPipeline(inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+
+    return RawConverter::convertToRGBImage(*demosaicedImage);
+}
+
 gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     gls::tiff_metadata dng_metadata, exif_metadata;
     const auto inputImage = gls::image<gls::luma_pixel_16>::read_dng_file(input_path.string(), &dng_metadata, &exif_metadata);
 
-    Sonya6400Calibration calibration;
-    auto demosaicParameters = calibration.getDemosaicParameters(*inputImage, &dng_metadata, &exif_metadata);
-
-    unpackDNGMetadata(*inputImage, &dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ false, nullptr, false);
-
-    const auto demosaicedImage = rawConverter->runPipeline(*inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
-
-    return RawConverter::convertToRGBImage(*demosaicedImage);
+    return demosaicSonya6400RawImage(rawConverter, &dng_metadata, &exif_metadata, *inputImage);
 }
 
 // --- NLFData ---
