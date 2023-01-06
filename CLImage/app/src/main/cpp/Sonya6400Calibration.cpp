@@ -182,10 +182,11 @@ void calibrateSonya6400(RawConverter* rawConverter, const std::filesystem::path&
     calibration.calibrate(rawConverter, input_dir);
 }
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawConverter,
-                                                                 gls::tiff_metadata* dng_metadata,
-                                                                 gls::tiff_metadata* exif_metadata,
-                                                                 const gls::image<gls::luma_pixel_16>& inputImage) {
+template <typename T>
+typename gls::image<T>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawConverter,
+                                                             gls::tiff_metadata* dng_metadata,
+                                                             gls::tiff_metadata* exif_metadata,
+                                                             const gls::image<gls::luma_pixel_16>& inputImage) {
     Sonya6400Calibration calibration;
     auto demosaicParameters = calibration.getDemosaicParameters(inputImage, dng_metadata, exif_metadata);
 
@@ -193,8 +194,20 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400RawImage(RawConverter* r
 
     const auto demosaicedImage = rawConverter->runPipeline(inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
 
-    return RawConverter::convertToRGBImage(*demosaicedImage);
+    return RawConverter::convertToRGBImage<T>(*demosaicedImage);
 }
+
+template
+typename gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400RawImage<gls::rgb_pixel>(RawConverter* rawConverter,
+                                                                                          gls::tiff_metadata* dng_metadata,
+                                                                                          gls::tiff_metadata* exif_metadata,
+                                                                                          const gls::image<gls::luma_pixel_16>& inputImage);
+
+template
+typename gls::image<gls::rgb_pixel_16>::unique_ptr demosaicSonya6400RawImage<gls::rgb_pixel_16>(RawConverter* rawConverter,
+                                                                                                gls::tiff_metadata* dng_metadata,
+                                                                                                gls::tiff_metadata* exif_metadata,
+                                                                                                const gls::image<gls::luma_pixel_16>& inputImage);
 
 gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawConverter, const std::filesystem::path& input_path) {
     gls::tiff_metadata dng_metadata, exif_metadata;

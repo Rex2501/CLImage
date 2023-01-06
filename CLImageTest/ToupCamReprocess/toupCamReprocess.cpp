@@ -134,7 +134,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     raw_data->write_dng_file(dng_file, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
 }
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data) {
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data) {
     /*
      The sensor data is rotated by 180 degrees (upside down) and flipped (mirrored)
      We save the sensor data in stright up form and apply the same rotation to the
@@ -161,7 +161,7 @@ gls::image<gls::rgb_pixel>::unique_ptr demosaic_raw_data(RawConverter* rawConver
     const auto ISO = 100; // Provide the actual ISO informations
     exif_metadata.insert({ EXIFTAG_ISOSPEEDRATINGS, std::vector<uint16_t>{ (uint16_t) ISO } });
 
-    return demosaicSonya6400RawImage(rawConverter, &dng_metadata, &exif_metadata, *raw_data);
+    return demosaicSonya6400RawImage<gls::rgb_pixel_16>(rawConverter, &dng_metadata, &exif_metadata, *raw_data);
 }
 
 void raw_png_to_rgb_png(RawConverter* rawConverter, const std::filesystem::path& input_path, const std::filesystem::path& output_path) {

@@ -84,7 +84,7 @@ class RawConverter {
     gls::cl_image_2d<gls::luma_pixel_float>::unique_ptr clGreenImage;
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clLinearRGBImageA;
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clLinearRGBImageB;
-    gls::cl_image_2d<gls::rgba_pixel>::unique_ptr clsRGBImage;
+    gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clsRGBImage;
 
     std::unique_ptr<PyramidProcessor<5>> pyramidProcessor;
 
@@ -97,7 +97,7 @@ class RawConverter {
 
     // Fast (half resolution) RawConverter textures
     gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clFastLinearRGBImage;
-    gls::cl_image_2d<gls::rgba_pixel>::unique_ptr clsFastRGBImage;
+    gls::cl_image_2d<gls::rgba_pixel_float>::unique_ptr clsFastRGBImage;
 
     void allocateTextures(gls::OpenCLContext* glsContext, int width, int height);
     void allocateHighNoiseTextures(gls::OpenCLContext* glsContext, int width, int height);
@@ -112,8 +112,8 @@ public:
         return _glsContext;
     }
 
-    gls::cl_image_2d<gls::rgba_pixel>* runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                   DemosaicParameters* demosaicParameters, bool calibrateFromImage = false);
+    gls::cl_image_2d<gls::rgba_pixel_float>* runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                         DemosaicParameters* demosaicParameters, bool calibrateFromImage = false);
 
     gls::cl_image_2d<gls::rgba_pixel_float>* demosaic(const gls::image<gls::luma_pixel_16>& rawImage,
                                                       DemosaicParameters* demosaicParameters, bool calibrateFromImage);
@@ -126,13 +126,14 @@ public:
 
     gls::cl_image_2d<gls::rgba_pixel_float>* getFusedImage();
 
-    gls::cl_image_2d<gls::rgba_pixel>* postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                                                   const DemosaicParameters& demosaicParameters);
+    gls::cl_image_2d<gls::rgba_pixel_float>* postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                         const DemosaicParameters& demosaicParameters);
 
-    gls::cl_image_2d<gls::rgba_pixel>* runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                       const DemosaicParameters& demosaicParameters);
+    gls::cl_image_2d<gls::rgba_pixel_float>* runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                             const DemosaicParameters& demosaicParameters);
 
-    static gls::image<gls::rgb_pixel>::unique_ptr convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel>& clRGBAImage);
+    template <typename T = gls::rgb_pixel>
+    static typename gls::image<T>::unique_ptr convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel_float>& clRGBAImage);
 };
 
 #endif /* raw_converter_hpp */

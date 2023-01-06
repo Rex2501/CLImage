@@ -16,6 +16,7 @@
 #include "raw_converter.hpp"
 
 #include <iomanip>
+#include <limits>
 
 #include "gls_logging.h"
 #include "demosaic.hpp"
@@ -34,7 +35,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
         clGreenImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
         clLinearRGBImageA = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
         clLinearRGBImageB = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
-        clsRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, width, height);
+        clsRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
 
         pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
 
@@ -64,7 +65,7 @@ void RawConverter::allocateFastDemosaicTextures(gls::OpenCLContext* glsContext, 
         clRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(clContext, width, height);
         clScaledRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
         clFastLinearRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
-        clsFastRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel>>(clContext, width/2, height/2);
+        clsFastRGBImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width/2, height/2);
     }
 }
 
@@ -266,15 +267,15 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::getFusedImage() {
     return pyramidProcessor->getFusedImage(_glsContext);
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                                                             const DemosaicParameters& demosaicParameters) {
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::postProcess(const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
+                                                                   const DemosaicParameters& demosaicParameters) {
     convertTosRGB(_glsContext, inputImage, localToneMapping->getMask(), clsRGBImage.get(), demosaicParameters);
 
     return clsRGBImage.get();
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                             DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::runPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                                   DemosaicParameters* demosaicParameters, bool calibrateFromImage) {
     auto t_start = std::chrono::high_resolution_clock::now();
 
     // --- Image Demosaicing ---
@@ -310,8 +311,8 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runPipeline(const gls::image<gl
     return sRGBImage;
 }
 
-gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
-                                                                 const DemosaicParameters& demosaicParameters) {
+gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::runFastPipeline(const gls::image<gls::luma_pixel_16>& rawImage,
+                                                                       const DemosaicParameters& demosaicParameters) {
     allocateFastDemosaicTextures(_glsContext, rawImage.width, rawImage.height);
 
     LOG_INFO(TAG) << "Begin Fast Demosaicing (GPU)..." << std::endl;
@@ -333,7 +334,7 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runFastPipeline(const gls::imag
 
     // --- Image Post Processing ---
 
-    convertTosRGB(_glsContext, *clFastLinearRGBImage,localToneMapping->getMask(), clsFastRGBImage.get(), demosaicParameters);
+    convertTosRGB(_glsContext, *clFastLinearRGBImage, localToneMapping->getMask(), clsFastRGBImage.get(), demosaicParameters);
 
     cl::CommandQueue queue = cl::CommandQueue::getDefault();
     queue.finish();
@@ -345,15 +346,28 @@ gls::cl_image_2d<gls::rgba_pixel>* RawConverter::runFastPipeline(const gls::imag
     return clsFastRGBImage.get();
 }
 
-/*static*/ gls::image<gls::rgb_pixel>::unique_ptr RawConverter::convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel>& clRGBAImage) {
-    auto rgbImage = std::make_unique<gls::image<gls::rgb_pixel>>(clRGBAImage.width, clRGBAImage.height);
+template <typename T>
+/*static*/ typename gls::image<T>::unique_ptr RawConverter::convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel_float>& clRGBAImage) {
+    const constexpr auto scale = std::numeric_limits<typename T::value_type>::max();
+
+    auto rgbImage = std::make_unique<gls::image<T>>(clRGBAImage.width, clRGBAImage.height);
     auto rgbaImage = clRGBAImage.mapImage();
     for (int y = 0; y < clRGBAImage.height; y++) {
         for (int x = 0; x < clRGBAImage.width; x++) {
             const auto& p = rgbaImage[y][x];
-            (*rgbImage)[y][x] = { p.red, p.green, p.blue };
+            (*rgbImage)[y][x] = {
+                (uint8_t) (scale * p.red),
+                (uint8_t) (scale * p.green),
+                (uint8_t) (scale * p.blue)
+            };
         }
     }
     clRGBAImage.unmapImage(rgbaImage);
     return rgbImage;
 }
+
+template
+gls::image<gls::rgb_pixel>::unique_ptr RawConverter::convertToRGBImage(const gls::cl_image_2d<gls::rgba_pixel_float>& clRGBAImage);
+
+template
+gls::image<gls::rgb_pixel_16>::unique_ptr RawConverter::convertToRGBImage<gls::rgb_pixel_16>(const gls::cl_image_2d<gls::rgba_pixel_float>& clRGBAImage);

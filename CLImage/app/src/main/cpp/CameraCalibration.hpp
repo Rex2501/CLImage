@@ -101,10 +101,11 @@ void calibrateCanonEOSRP(RawConverter* rawConverter, const std::filesystem::path
 gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400DNG(RawConverter* rawConverter, const std::filesystem::path& input_path);
 void calibrateSonya6400(RawConverter* rawConverter, const std::filesystem::path& input_dir);
 
-gls::image<gls::rgb_pixel>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawConverter,
-                                                                 gls::tiff_metadata* dng_metadata,
-                                                                 gls::tiff_metadata* exif_metadata,
-                                                                 const gls::image<gls::luma_pixel_16>& inputImage);
+template <typename T = gls::rgb_pixel>
+typename gls::image<T>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawConverter,
+                                                             gls::tiff_metadata* dng_metadata,
+                                                             gls::tiff_metadata* exif_metadata,
+                                                             const gls::image<gls::luma_pixel_16>& inputImage);
 
 void calibrateRicohGRIII(RawConverter* rawConverter, const std::filesystem::path& input_dir);
 gls::image<gls::rgb_pixel>::unique_ptr demosaicRicohGRIII2DNG(RawConverter* rawConverter, const std::filesystem::path& input_path);

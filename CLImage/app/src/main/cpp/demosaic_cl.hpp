@@ -99,7 +99,7 @@ void transformImage(gls::OpenCLContext* glsContext,
 void convertTosRGB(gls::OpenCLContext* glsContext,
                    const gls::cl_image_2d<gls::rgba_pixel_float>& linearImage,
                    const gls::cl_image_2d<gls::luma_pixel_float>& ltmMaskImage,
-                   gls::cl_image_2d<gls::rgba_pixel>* rgbImage,
+                   gls::cl_image_2d<gls::rgba_pixel_float>* rgbImage,
                    const DemosaicParameters& demosaicParameters);
 
 void convertToGrayscale(gls::OpenCLContext* glsContext,
