@@ -356,9 +356,9 @@ template <typename T>
         for (int x = 0; x < clRGBAImage.width; x++) {
             const auto& p = rgbaImage[y][x];
             (*rgbImage)[y][x] = {
-                (uint8_t) (scale * p.red),
-                (uint8_t) (scale * p.green),
-                (uint8_t) (scale * p.blue)
+                (typename T::value_type) (scale * p.red),
+                (typename T::value_type) (scale * p.green),
+                (typename T::value_type) (scale * p.blue)
             };
         }
     }

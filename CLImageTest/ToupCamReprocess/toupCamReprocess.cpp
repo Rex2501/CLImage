@@ -19,27 +19,11 @@
 #include "gls_tiff_metadata.hpp"
 
 void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
-        }
-    }
-
     for (int x = 0; x < inputImage->width; x++) {
         for (int y = 0; y < inputImage->height / 2; y++) {
             const auto t = (*inputImage)[y][x];
             (*inputImage)[y][x] = (*inputImage)[inputImage->height - 1 - y][x];
             (*inputImage)[inputImage->height - 1 - y][x] = t;
-        }
-    }
-
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
         }
     }
 }
