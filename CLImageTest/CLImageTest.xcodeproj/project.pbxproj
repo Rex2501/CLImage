@@ -544,8 +544,9 @@
 			buildConfigurationList = E556BE4329146B83009FA1E9 /* Build configuration list for PBXNativeTarget "ToupCamReprocess" */;
 			buildPhases = (
 				E556BE3B29146B83009FA1E9 /* Sources */,
-				E556BE3C29146B83009FA1E9 /* Frameworks */,
 				E556BE3D29146B83009FA1E9 /* CopyFiles */,
+				E56BB497296C9BBC0062F618 /* ShellScript */,
+				E556BE3C29146B83009FA1E9 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -671,6 +672,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "cd \"${BUILT_PRODUCTS_DIR}\"\nmkdir OpenCLBinaries\ncd OpenCL\n/System/Library/Frameworks/OpenCL.framework/Libraries/Openclc -Werror -cl-fast-relaxed-math -cl-single-precision-constant -v -c -arch gpu_64 -emit-llvm *.cl\nmv *.o ../OpenCLBinaries\n";
+		};
+		E56BB497296C9BBC0062F618 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cd \"${BUILT_PRODUCTS_DIR}\"\nmkdir OpenCLBinaries\ncd OpenCL\n/System/Library/Frameworks/OpenCL.framework/Libraries/Openclc -Werror -cl-fast-relaxed-math -cl-single-precision-constant -v -c -arch gpu_64 -emit-llvm *.cl\nmv *.o ../OpenCLBinaries\n\n";
 		};
 		E5AD625327616DC30055F712 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
