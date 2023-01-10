@@ -19,6 +19,14 @@
 #include "gls_tiff_metadata.hpp"
 
 void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
+    for (int y = 0; y < inputImage->height; y++) {
+        for (int x = 0; x < inputImage->width / 2; x++) {
+            const auto t = (*inputImage)[y][x];
+            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
+            (*inputImage)[y][inputImage->width - 1 - x] = t;
+        }
+    }
+
     for (int x = 0; x < inputImage->width; x++) {
         for (int y = 0; y < inputImage->height / 2; y++) {
             const auto t = (*inputImage)[y][x];
@@ -26,10 +34,18 @@ void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
             (*inputImage)[inputImage->height - 1 - y][x] = t;
         }
     }
+
+    for (int y = 0; y < inputImage->height; y++) {
+        for (int x = 0; x < inputImage->width / 2; x++) {
+            const auto t = (*inputImage)[y][x];
+            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
+            (*inputImage)[y][inputImage->width - 1 - x] = t;
+        }
+    }
 }
 
 std::tuple<std::string, float, uint32_t> parse_filename(const std::string& filename) {
-    const std::regex filename_regex("\([0-9]+\)_\([0-9]+\)_\([0-9]+\)");
+    const std::regex filename_regex("\([0-9]+\)_\([0-9]+\)_\([0-9]+\)_\([0-9]+\)_\([0-9]+\)_\([a-zA-Z]+[0-9]+\)");
     std::smatch regex_match;
     if (std::regex_match(filename, regex_match, filename_regex)) {
         const time_t time = static_cast<time_t>(std::atoll(regex_match[1].str().c_str())) / 1000000000;
@@ -118,7 +134,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     raw_data->write_dng_file(dng_file, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
 }
 
-gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data) {
+gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data, int ISO) {
     /*
      The sensor data is rotated by 180 degrees (upside down) and flipped (mirrored)
      We save the sensor data in stright up form and apply the same rotation to the
@@ -142,7 +158,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 
     // Basic EXIF metadata
-    const auto ISO = 100; // Provide the actual ISO informations
+    // const auto ISO = 100; // Provide the actual ISO informations
     exif_metadata.insert({ EXIFTAG_ISOSPEEDRATINGS, std::vector<uint16_t>{ (uint16_t) ISO } });
 
     return demosaicSonya6400RawImage<gls::rgb_pixel_16>(rawConverter, &dng_metadata, &exif_metadata, *raw_data);
@@ -152,9 +168,21 @@ void raw_png_to_rgb_png(RawConverter* rawConverter, const std::filesystem::path&
     const std::string filename = input_path.filename().stem();
     std::cout << "Processing file: " << filename << std::endl;
 
+    // Decode actual ISO value from file name
+    int ISO = 100;
+//    try {
+//        const auto basic_metadata = parse_filename(filename);
+//
+//        const auto timestamp = std::get<0>(basic_metadata);
+//        const auto exposure_time = std::get<1>(basic_metadata);
+//        ISO = std::get<2>(basic_metadata);
+//    } catch (std::exception e) {
+//        std::cerr << "Error: " << e.what() << std::endl;
+//    }
+
     const auto raw_data = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
-    const auto rgbImage = demosaic_raw_data(rawConverter, raw_data.get());
+    const auto rgbImage = demosaic_raw_data(rawConverter, raw_data.get(), ISO);
 
     rgbImage->write_png_file(output_path);
 }
@@ -177,6 +205,10 @@ void processDirectory(std::filesystem::path input_path, std::filesystem::path ou
                 continue;
             }
 
+            if (!exists(status(output_path))) {
+                create_directory(output_path);
+            }
+
             if (std::filesystem::directory_entry(directory_entry).is_regular_file()) {
                 const auto extension = directory_entry.extension();
                 if ((extension != ".png" && extension != ".PNG")) {
@@ -189,10 +221,6 @@ void processDirectory(std::filesystem::path input_path, std::filesystem::path ou
                 const auto output_file = output_path / (filename + "_rgb.png");
 
                 std::cout << "Converting " << directory_entry << " to " << output_file << std::endl;
-
-                if (!exists(status(output_path))) {
-                    create_directory(output_path);
-                }
 
                 raw_png_to_rgb_png(&rawConverter, directory_entry, output_path / (filename + "_rgb.png"));
             } else if (std::filesystem::directory_entry(directory_entry).is_directory()) {

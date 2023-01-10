@@ -190,7 +190,7 @@ typename gls::image<T>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawCo
     Sonya6400Calibration calibration;
     auto demosaicParameters = calibration.getDemosaicParameters(inputImage, dng_metadata, exif_metadata);
 
-    unpackDNGMetadata(inputImage, dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ false, nullptr, false);
+    unpackDNGMetadata(inputImage, dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ true, nullptr, false);
 
     const auto demosaicedImage = rawConverter->runPipeline(inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
 
