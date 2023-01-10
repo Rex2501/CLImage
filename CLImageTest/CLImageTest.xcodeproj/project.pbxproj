@@ -78,6 +78,8 @@
 		E556BE542915AE8A009FA1E9 /* demosaic_utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2525282DB504003305E9 /* demosaic_utils.cpp */; };
 		E556BE552915AEF4009FA1E9 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E50D2531282DB5BB003305E9 /* ThreadPool.cpp */; };
 		E5653EB2296796860072E554 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
+		E5653EBA296CEDCC0072E554 /* assets in Copy Files */ = {isa = PBXBuildFile; fileRef = E5653EB7296CED960072E554 /* assets */; };
+		E5653EBB296CEDE50072E554 /* assets in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5653EB7296CED960072E554 /* assets */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -174,6 +176,7 @@
 			dstSubfolderSpec = 16;
 			files = (
 				E5653EB2296796860072E554 /* OpenCL in CopyFiles */,
+				E5653EBB296CEDE50072E554 /* assets in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,6 +198,7 @@
 			dstSubfolderSpec = 16;
 			files = (
 				E5E9EA8928B8D8230079A5C0 /* OpenCL in Copy Files */,
+				E5653EBA296CEDCC0072E554 /* assets in Copy Files */,
 			);
 			name = "Copy Files";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -252,6 +256,7 @@
 		E556BE3F29146B83009FA1E9 /* ToupCamReprocess */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ToupCamReprocess; sourceTree = BUILT_PRODUCTS_DIR; };
 		E556BE4129146B83009FA1E9 /* toupCamReprocess.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = toupCamReprocess.cpp; sourceTree = "<group>"; };
 		E556BE4629146B87009FA1E9 /* ToupCamReprocessRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ToupCamReprocessRelease.entitlements; sourceTree = "<group>"; };
+		E5653EB7296CED960072E554 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../CLImage/app/src/main/assets; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -418,6 +423,7 @@
 			isa = PBXGroup;
 			children = (
 				E5AD623E27616ABB0055F712 /* CLImageTest */,
+				E5653EB7296CED960072E554 /* assets */,
 				E5E9EA8F28B8D86E0079A5C0 /* ImageRegistration */,
 				E5470DAE2900C017003C0B18 /* PyramidFusion */,
 				E556BE4029146B83009FA1E9 /* ToupCamReprocess */,

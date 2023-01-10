@@ -40,7 +40,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
         pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
 
         // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
-        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("/Users/fabio/work/CLImage/CLImage/app/src/main/assets/HDR_L_0b.png");
+        const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("assets/HDR_L_0b.png");
         clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
 }

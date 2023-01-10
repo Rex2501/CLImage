@@ -57,11 +57,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/CNNDataSet_RGB/20221201_DF2K_GLS30A_Anamorphic_1_0_flipud_ISO400max-ObsCrop"
+            argument = "/Users/fabio/work/2022-12-29_AppleCapturesFullSet/Captures"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "/Users/fabio/work/CNNDataSet_RGB/Processed"
+            argument = "/Users/fabio/work/2022-12-29_AppleCapturesFullSet/Processed"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
