@@ -32,8 +32,11 @@ void scaleRawData(gls::OpenCLContext* glsContext,
 
 void rawImageGradient(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
-                      gls::Vector<2> rawVariance,
                       gls::cl_image_2d<gls::luma_alpha_pixel_float>* gradientImage);
+
+void rawImageSobel(gls::OpenCLContext* glsContext,
+                   const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                   gls::cl_image_2d<gls::rgba_pixel_float>* gradientImage);
 
 void interpolateGreen(gls::OpenCLContext* glsContext,
                       const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
@@ -162,9 +165,14 @@ void despeckleRawRGBAImage(gls::OpenCLContext* glsContext,
                            gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
 
 void gaussianBlurImage(gls::OpenCLContext* glsContext,
-                       const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,
-                       float radius,
+                       const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage, float radius,
                        gls::cl_image_2d<gls::rgba_pixel_float>* outputImage);
+
+void gaussianBlurSobelImage(gls::OpenCLContext* glsContext,
+                            const gls::cl_image_2d<gls::luma_pixel_float>& rawImage,
+                            const gls::cl_image_2d<gls::rgba_pixel_float>& sobelImage,
+                            std::array<float, 2> rawNoiseModel, float radius1, float radius2,
+                            gls::cl_image_2d<gls::luma_alpha_pixel_float>* outputImage);
 
 void blueNoiseImage(gls::OpenCLContext* glsContext,
                     const gls::cl_image_2d<gls::rgba_pixel_float>& inputImage,

@@ -132,9 +132,9 @@ public:
             },
             .ltmParameters = {
                 .eps = 0.01,
-                .shadows = 0.8,
-                .highlights = 1.5,
-                .detail = { 1, 1.0, 1.3 }
+                .shadows = 1.0, // 0.8,
+                .highlights = 1.0, // 1.5,
+                .detail = { 1, 1.2, 2.0 }
             }
         };
     }
@@ -193,6 +193,9 @@ typename gls::image<T>::unique_ptr demosaicSonya6400RawImage(RawConverter* rawCo
     unpackDNGMetadata(inputImage, dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ true, nullptr, false);
 
     const auto demosaicedImage = rawConverter->runPipeline(inputImage, demosaicParameters.get(), /*calibrateFromImage=*/ false);
+
+//    gls::cl_image_2d<gls::rgba_pixel_float> unsquishedImage(rawConverter->getContext()->clContext(), demosaicedImage->width, demosaicedImage->height * 1.2);
+//    clRescaleImage(rawConverter->getContext(), *demosaicedImage, &unsquishedImage);
 
     return RawConverter::convertToRGBImage<T>(*demosaicedImage);
 }

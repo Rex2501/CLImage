@@ -31,6 +31,7 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
     if (!clRawImage || clRawImage->width != width || clRawImage->height != height) {
         clRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(clContext, width, height);
         clScaledRawImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
+        clRawSobelImage = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
         clRawGradientImage = std::make_unique<gls::cl_image_2d<gls::luma_alpha_pixel_float>>(clContext, width, height);
         clGreenImage = std::make_unique<gls::cl_image_2d<gls::luma_pixel_float>>(clContext, width, height);
         clLinearRGBImageA = std::make_unique<gls::cl_image_2d<gls::rgba_pixel_float>>(clContext, width, height);
@@ -39,7 +40,6 @@ void RawConverter::allocateTextures(gls::OpenCLContext* glsContext, int width, i
 
         pyramidProcessor = std::make_unique<PyramidProcessor<5>>(glsContext, width, height);
 
-        // TODO: where do we keep the blue noise texture asset? Maybe generate this dynamically?
         const auto blueNoise = gls::image<gls::luma_pixel_16>::read_png_file("assets/HDR_L_0b.png");
         clBlueNoise = std::make_unique<gls::cl_image_2d<gls::luma_pixel_16>>(_glsContext->clContext(), *blueNoise);
     }
@@ -192,7 +192,8 @@ gls::cl_image_2d<gls::rgba_pixel_float>* RawConverter::demosaic(const gls::image
         rawRGBAToBayer(_glsContext, *denoisedRgbaRawImage, clScaledRawImage.get(), demosaicParameters->bayerPattern);
     }
 
-    rawImageGradient(_glsContext, *clScaledRawImage, (rawVariance[0] + 2.0f * rawVariance[1] + rawVariance[2]) / 3.0f, clRawGradientImage.get());
+    rawImageSobel(_glsContext, *clScaledRawImage, clRawSobelImage.get());
+    gaussianBlurSobelImage(_glsContext, *clScaledRawImage, *clRawSobelImage, rawVariance[1], 1.5, 4.5, clRawGradientImage.get());
     // dumpGradientImage(*clRawGradientImage);
 
 //    malvar(_glsContext, *clScaledRawImage, *clRawGradientImage, clLinearRGBImageA.get(), demosaicParameters->bayerPattern,

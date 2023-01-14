@@ -196,11 +196,18 @@ float2 gaussFilteredSobel5x5(read_only image2d_t inputImage, int x, int y) {
     return copysign(absSum, sum);
 }
 
-kernel void rawImageGradient(read_only image2d_t inputImage, float2 rawVariance, write_only image2d_t gradientImage) {
+kernel void rawImageGradient(read_only image2d_t inputImage, write_only image2d_t gradientImage) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     float2 gradient = gaussFilteredSobel3x3(inputImage, imageCoordinates.x, imageCoordinates.y);
 
     write_imagef(gradientImage, imageCoordinates, (float4) (gradient, 0, 0));
+}
+
+kernel void rawImageSobel(read_only image2d_t inputImage, write_only image2d_t gradientImage) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+    float2 gradient = sobel(inputImage, imageCoordinates.x, imageCoordinates.y);
+
+    write_imagef(gradientImage, imageCoordinates, (float4) (gradient, abs(gradient)));
 }
 
 // Modified Hamilton-Adams green channel interpolation
@@ -274,8 +281,9 @@ kernel void interpolateGreen(read_only image2d_t rawImage,
                                         : mix(direction, 1, smoothstep((1 - 0.45), (1 - 0.3), direction));
         }
 
+        // TODO: Doesn't seem like a good idea, maybe for high noise images?
         // If the gradient is below threshold interpolate against the grain
-        direction = mix(1 - direction, direction, gradient_threshold);
+        // direction = mix(1 - direction, direction, gradient_threshold);
 
         // Estimate the degree of correlation between channels to drive the amount of HF extraction
         const float cmin = min(c_xy, min(g_ave, c2_ave));
@@ -1866,7 +1874,7 @@ kernel void blueNoiseImage(read_only image2d_t inputImage,
     write_imagef(outputImage, imageCoordinates, (float4) (result, 0));
 }
 
-kernel void sampledConvolution(read_only image2d_t inputImage, int samples, constant const float *weights, write_only image2d_t outputImage, sampler_t linear_sampler) {
+kernel void sampledConvolutionImage(read_only image2d_t inputImage, int samples, constant const float *weights, write_only image2d_t outputImage, sampler_t linear_sampler) {
     const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
     const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
 
@@ -1879,6 +1887,41 @@ kernel void sampledConvolution(read_only image2d_t inputImage, int samples, cons
         norm += w;
     }
     write_imagef(outputImage, imageCoordinates, (float4) (sum / norm, 0));
+}
+
+float4 sampledConvolution(read_only image2d_t inputImage, int2 imageCoordinates,
+                          float2 inputNorm, sampler_t linear_sampler,
+                          int samples, constant float *weights) {
+    const float2 inputPos = convert_float2(imageCoordinates) * inputNorm;
+
+    float4 sum = 0;
+    float norm = 0;
+    for (int i = 0; i < samples; i++) {
+        float w = weights[3 * i + 0];
+        sum += w * read_imagef(inputImage, linear_sampler, inputPos + ((float2) (weights[3 * i + 1], weights[3 * i + 2]) + 0.5) * inputNorm);
+        norm += w;
+    }
+    return sum / norm;
+}
+
+kernel void sampledConvolutionSobel(read_only image2d_t rawImage,
+                                    read_only image2d_t sobelImage,
+                                    int samples1, constant float *weights1,
+                                    int samples2, constant float *weights2,
+                                    float2 rawVariance,
+                                    write_only image2d_t outputImage,
+                                    sampler_t linear_sampler) {
+    const int2 imageCoordinates = (int2) (get_global_id(0), get_global_id(1));
+
+    const float2 inputNorm = 1.0 / convert_float2(get_image_dim(outputImage));
+    float4 result = sampledConvolution(sobelImage, imageCoordinates, inputNorm, linear_sampler, samples1, weights1);
+
+    float sigma = sqrt(rawVariance.x + rawVariance.y * read_imagef(rawImage, imageCoordinates).x);
+    if (length(result.xy) < 4 * sigma) {
+        result = sampledConvolution(sobelImage, imageCoordinates, inputNorm, linear_sampler, samples2, weights2);
+    }
+
+    write_imagef(outputImage, imageCoordinates, (float4)(copysign(result.zw, result.xy), 0, 0));
 }
 
 float3 sharpen(float3 pixel_value, float amount, float radius, image2d_t inputImage, int2 imageCoordinates) {
