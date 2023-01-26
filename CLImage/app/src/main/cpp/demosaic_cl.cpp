@@ -15,7 +15,10 @@
 
 #include "demosaic.hpp"
 
+#include <float.h>
 #include <iomanip>
+
+#include "rtl/RTL.hpp"
 
 #include "gls_cl.hpp"
 #include "gls_cl_image.hpp"
@@ -884,6 +887,82 @@ YCbCrNLF MeasureYCbCrNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<
     );
 }
 
+template <typename T>
+struct sample {
+    const T mean;
+    const T var;
+};
+
+template <typename T>
+struct line_model {
+    T a;
+    T b;
+};
+
+template <typename T>
+struct ImageVectorPairAdapter {
+    ImageVectorPairAdapter(const gls::image<T>& mean,
+                           const gls::image<T>& var) : _mean(mean), _var(var) {
+        assert(mean.pixels().size() == var.pixels().size());
+    }
+
+    const gls::image<T>& _mean;
+    const gls::image<T>& _var;
+
+    const sample<T> operator[] (size_t index) const {
+        return sample<T> { _mean.pixels()[index], _var.pixels()[index] };
+    }
+
+    size_t size() const {
+        return _mean.pixels().size();
+    }
+};
+
+typedef ImageVectorPairAdapter<gls::rgba_pixel_float> RGBAImageVectorPairAdapter;
+
+gls::Vector<4> toVector(const gls::rgba_pixel_float& p) {
+    return gls::Vector<4> { p[0], p[1], p[2], p[3] };
+}
+
+gls::Vector<3> toVector(const gls::rgb_pixel_float& p) {
+    return gls::Vector<3> { p[0], p[1], p[2] };
+}
+
+class RGBALineEstimator : virtual public RTL::Estimator<line_model<gls::Vector<4>>, sample<gls::rgba_pixel_float>, RGBAImageVectorPairAdapter > {
+   public:
+    virtual line_model<gls::Vector<4>> ComputeModel(const RGBAImageVectorPairAdapter& data, const std::set<int>& samples) {
+        gls::Vector<4> s_x = gls::Vector<4>::zeros();
+        gls::Vector<4> s_y = gls::Vector<4>::zeros();
+        gls::Vector<4> s_xx = gls::Vector<4>::zeros();
+        gls::Vector<4> s_xy = gls::Vector<4>::zeros();
+        float N = 0;
+
+        for (auto itr = samples.begin(); itr != samples.end(); itr++) {
+            const sample<gls::rgba_pixel_float> p = data[*itr];
+
+            gls::Vector<4> m = toVector(p.mean);
+            gls::Vector<4> v = toVector(p.var);
+
+            s_x += m;
+            s_y += v;
+            s_xx += m * m;
+            s_xy += m * v;
+            N++;
+        }
+        // Linear regression on pixel statistics to extract a linear noise model: nlf = A + B * Y
+        auto nlfB = (N * s_xy - s_x * s_y) / (N * s_xx - s_x * s_x);
+        auto nlfA = (s_y - nlfB * s_x) / N;
+
+        return line_model<gls::Vector<4>> { nlfA, nlfB };
+    }
+
+    virtual float ComputeError(const line_model<gls::Vector<4>>& model, const sample<gls::rgba_pixel_float>& sample) {
+        const auto diff = toVector(sample.var) - (model.a + model.b * toVector(sample.mean));
+
+        return sqrt(dot(diff, diff));
+    }
+};
+
 RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls::luma_pixel_float>& rawImage, float exposure_multiplier, BayerPattern bayerPattern) {
     gls::cl_image_2d<gls::rgba_pixel_float> meanImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
     gls::cl_image_2d<gls::rgba_pixel_float> varImage(glsContext->clContext(), rawImage.width / 2, rawImage.height / 2);
@@ -892,6 +971,29 @@ RawNLF MeasureRawNLF(gls::OpenCLContext* glsContext, const gls::cl_image_2d<gls:
 
     const auto meanImageCpu = meanImage.mapImage();
     const auto varImageCpu = varImage.mapImage();
+
+    const bool use_ransac = false;
+    if (use_ransac) {
+        RGBALineEstimator estimator;
+        RTL::RANSAC<line_model<gls::Vector<4>>, sample<gls::rgba_pixel_float>, RGBAImageVectorPairAdapter> ransac(&estimator);
+        ransac.SetParamThreshold(1e-6);
+        ransac.SetParamIteration(100);
+
+        const auto imageVectorPairAdapter = RGBAImageVectorPairAdapter(meanImageCpu, varImageCpu);
+
+        line_model<gls::Vector<4>> model;
+        float loss = ransac.FindBest(model, imageVectorPairAdapter, (int) imageVectorPairAdapter.size(), 2);
+
+        model.a = max(model.a, 1e-8f);
+        model.b = max(model.b, 1e-8f);
+
+        std::cout << "Estimated line model a: " << std::setprecision(4) << std::scientific << model.a << ", b: " << model.b << " with loss " << loss << std::endl;
+
+        return std::pair (
+            gls::Vector<4> { (float) model.a[0], (float) model.a[1], (float) model.a[2], (float) model.a[3] }, // A values
+            gls::Vector<4> { (float) model.b[0], (float) model.b[1], (float) model.b[2], (float) model.b[3] }  // B values
+        );
+    }
 
     // Only consider pixels with variance lower than the expected noise value
     double varianceMax = 0.001;
