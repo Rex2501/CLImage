@@ -80,6 +80,14 @@
 		E5653EB2296796860072E554 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
 		E5653EBA296CEDCC0072E554 /* assets in Copy Files */ = {isa = PBXBuildFile; fileRef = E5653EB7296CED960072E554 /* assets */; };
 		E5653EBB296CEDE50072E554 /* assets in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5653EB7296CED960072E554 /* assets */; };
+		E5653ECA298202D50072E554 /* monitorCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5653EC9298202D50072E554 /* monitorCalibration.cpp */; };
+		E5653ED32982FA260072E554 /* gls_image_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6275276174FC0055F712 /* gls_image_jpeg.cpp */; };
+		E5653ED42982FA260072E554 /* gls_image_png.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD6277276174FC0055F712 /* gls_image_png.cpp */; };
+		E5653ED52982FA260072E554 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E51AACE527E1548400E99B58 /* gls_image_tiff.cpp */; };
+		E5653ED62982FA260072E554 /* gls_tiff_metadata.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB799A27ED59C0008B3D30 /* gls_tiff_metadata.cpp */; };
+		E5653ED72982FA260072E554 /* gls_dng_lossless_jpeg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A027F159A7008B3D30 /* gls_dng_lossless_jpeg.cpp */; };
+		E5653ED82982FA260072E554 /* gls_color_science.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A327F21A44008B3D30 /* gls_color_science.cpp */; };
+		E5653ED92982FB040072E554 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD628C276178580055F712 /* OpenCL.framework */; };
 		E5A5B64E284E785000C1A4BD /* CanonEOSRPCalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */; };
 		E5A5B650284EFD6C00C1A4BD /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */; };
 		E5A5B652284F038600C1A4BD /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */; };
@@ -102,6 +110,10 @@
 		E5AD6283276174FC0055F712 /* gls_logging.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AD627E276174FC0055F712 /* gls_logging.cpp */; };
 		E5AD628D276178580055F712 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD628C276178580055F712 /* OpenCL.framework */; };
 		E5AD6294276179630055F712 /* OpenCL in Copy Files */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
+		E5DAA10D2982FD9300810A5B /* libjpeg.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624B27616D7E0055F712 /* libjpeg.dylib */; };
+		E5DAA1102982FD9600810A5B /* libpng.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624927616D7E0055F712 /* libpng.dylib */; };
+		E5DAA1122982FD9A00810A5B /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5AD624A27616D7E0055F712 /* libz.dylib */; };
+		E5DAA1142982FD9F00810A5B /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
 		E5DC9B6027DFBA9300399222 /* libtiff.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5DC9B5F27DFBA9300399222 /* libtiff.dylib */; };
 		E5E9EA8928B8D8230079A5C0 /* OpenCL in Copy Files */ = {isa = PBXBuildFile; fileRef = E5AD628B276176BB0055F712 /* OpenCL */; };
 		E5E9EA9528B8D9030079A5C0 /* gls_linalg.hpp in Sources */ = {isa = PBXBuildFile; fileRef = E5AB79A927F2E9E8008B3D30 /* gls_linalg.hpp */; };
@@ -180,6 +192,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5653EC5298202D50072E554 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		E5AD623A27616ABA0055F712 /* Copy Files */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 12;
@@ -257,6 +278,13 @@
 		E556BE4129146B83009FA1E9 /* toupCamReprocess.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = toupCamReprocess.cpp; sourceTree = "<group>"; };
 		E556BE4629146B87009FA1E9 /* ToupCamReprocessRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ToupCamReprocessRelease.entitlements; sourceTree = "<group>"; };
 		E5653EB7296CED960072E554 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../CLImage/app/src/main/assets; sourceTree = "<group>"; };
+		E5653EC7298202D50072E554 /* MonitorCalibration */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MonitorCalibration; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5653EC9298202D50072E554 /* monitorCalibration.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = monitorCalibration.cpp; sourceTree = "<group>"; };
+		E5653EDE2982FB2E0072E554 /* MonitorCalibrationRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonitorCalibrationRelease.entitlements; sourceTree = "<group>"; };
+		E595B0FE2982FCFA00B6D854 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/arm_64/libpng.dylib; sourceTree = "<group>"; };
+		E595B0FF2982FCFA00B6D854 /* libjpeg.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjpeg.dylib; path = CLImageTest/libs/arm_64/libjpeg.dylib; sourceTree = "<group>"; };
+		E595B1002982FCFA00B6D854 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/arm_64/libz.dylib; sourceTree = "<group>"; };
+		E595B1012982FCFA00B6D854 /* libtiff.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtiff.dylib; path = CLImageTest/libs/arm_64/libtiff.dylib; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -332,6 +360,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5653EC4298202D50072E554 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5DAA10D2982FD9300810A5B /* libjpeg.dylib in Frameworks */,
+				E5DAA1142982FD9F00810A5B /* libtiff.dylib in Frameworks */,
+				E5DAA1122982FD9A00810A5B /* libz.dylib in Frameworks */,
+				E5DAA1102982FD9600810A5B /* libpng.dylib in Frameworks */,
+				E5653ED92982FB040072E554 /* OpenCL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5AD623927616ABA0055F712 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -375,6 +415,15 @@
 				E556BE4129146B83009FA1E9 /* toupCamReprocess.cpp */,
 			);
 			path = ToupCamReprocess;
+			sourceTree = "<group>";
+		};
+		E5653EC8298202D50072E554 /* MonitorCalibration */ = {
+			isa = PBXGroup;
+			children = (
+				E5653EDE2982FB2E0072E554 /* MonitorCalibrationRelease.entitlements */,
+				E5653EC9298202D50072E554 /* monitorCalibration.cpp */,
+			);
+			path = MonitorCalibration;
 			sourceTree = "<group>";
 		};
 		E5AB797E27EAD0B9008B3D30 /* App */ = {
@@ -427,6 +476,7 @@
 				E5E9EA8F28B8D86E0079A5C0 /* ImageRegistration */,
 				E5470DAE2900C017003C0B18 /* PyramidFusion */,
 				E556BE4029146B83009FA1E9 /* ToupCamReprocess */,
+				E5653EC8298202D50072E554 /* MonitorCalibration */,
 				E5AD623D27616ABA0055F712 /* Products */,
 				E5AD624627616C8B0055F712 /* Frameworks */,
 			);
@@ -440,6 +490,7 @@
 				E5E9EA8E28B8D86E0079A5C0 /* ImageRegistration */,
 				E5470DAD2900C016003C0B18 /* PyramidFusion */,
 				E556BE3F29146B83009FA1E9 /* ToupCamReprocess */,
+				E5653EC7298202D50072E554 /* MonitorCalibration */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -459,6 +510,10 @@
 		E5AD624627616C8B0055F712 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				E595B0FF2982FCFA00B6D854 /* libjpeg.dylib */,
+				E595B0FE2982FCFA00B6D854 /* libpng.dylib */,
+				E595B1012982FCFA00B6D854 /* libtiff.dylib */,
+				E595B1002982FCFA00B6D854 /* libz.dylib */,
 				E5AD628C276178580055F712 /* OpenCL.framework */,
 				E5AD624B27616D7E0055F712 /* libjpeg.dylib */,
 				E5AD624927616D7E0055F712 /* libpng.dylib */,
@@ -563,6 +618,23 @@
 			productReference = E556BE3F29146B83009FA1E9 /* ToupCamReprocess */;
 			productType = "com.apple.product-type.tool";
 		};
+		E5653EC6298202D50072E554 /* MonitorCalibration */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5653ECB298202D50072E554 /* Build configuration list for PBXNativeTarget "MonitorCalibration" */;
+			buildPhases = (
+				E5653EC3298202D50072E554 /* Sources */,
+				E5653EC4298202D50072E554 /* Frameworks */,
+				E5653EC5298202D50072E554 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MonitorCalibration;
+			productName = MonitorCalibration;
+			productReference = E5653EC7298202D50072E554 /* MonitorCalibration */;
+			productType = "com.apple.product-type.tool";
+		};
 		E5AD623B27616ABA0055F712 /* CLImageTest */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E5AD624327616ABB0055F712 /* Build configuration list for PBXNativeTarget "CLImageTest" */;
@@ -614,6 +686,9 @@
 					E556BE3E29146B83009FA1E9 = {
 						CreatedOnToolsVersion = 14.1;
 					};
+					E5653EC6298202D50072E554 = {
+						CreatedOnToolsVersion = 14.2;
+					};
 					E5AD623B27616ABA0055F712 = {
 						CreatedOnToolsVersion = 13.2;
 					};
@@ -640,6 +715,7 @@
 				E5E9EA8D28B8D86E0079A5C0 /* ImageRegistration */,
 				E5470DAC2900C016003C0B18 /* PyramidFusion */,
 				E556BE3E29146B83009FA1E9 /* ToupCamReprocess */,
+				E5653EC6298202D50072E554 /* MonitorCalibration */,
 			);
 		};
 /* End PBXProject section */
@@ -802,6 +878,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E5653EC3298202D50072E554 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5653ED32982FA260072E554 /* gls_image_jpeg.cpp in Sources */,
+				E5653ED42982FA260072E554 /* gls_image_png.cpp in Sources */,
+				E5653ED52982FA260072E554 /* gls_image_tiff.cpp in Sources */,
+				E5653ED62982FA260072E554 /* gls_tiff_metadata.cpp in Sources */,
+				E5653ED72982FA260072E554 /* gls_dng_lossless_jpeg.cpp in Sources */,
+				E5653ED82982FA260072E554 /* gls_color_science.cpp in Sources */,
+				E5653ECA298202D50072E554 /* monitorCalibration.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E5AD623827616ABA0055F712 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -956,6 +1046,42 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.6;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		E5653ECC298202D50072E554 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/CLImageTest/libs",
+					"$(PROJECT_DIR)/CLImageTest/libs/arm_64",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		E5653ECD298202D50072E554 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MonitorCalibration/MonitorCalibrationRelease.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/CLImageTest/libs",
+					"$(PROJECT_DIR)/CLImageTest/libs/arm_64",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Release;
 		};
@@ -1175,6 +1301,15 @@
 			buildConfigurations = (
 				E556BE4429146B83009FA1E9 /* Debug */,
 				E556BE4529146B83009FA1E9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5653ECB298202D50072E554 /* Build configuration list for PBXNativeTarget "MonitorCalibration" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5653ECC298202D50072E554 /* Debug */,
+				E5653ECD298202D50072E554 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

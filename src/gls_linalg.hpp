@@ -61,6 +61,14 @@ struct Vector : public std::array<value_type, N> {
         std::copy(list.begin(), list.end(), this->begin());
     }
 
+    template <typename T>
+    Vector(const std::array<T, N>& v) {
+        assert(v.size() == N);
+        for (int i = 0; i < N; i++) {
+            (*this)[i] = v[i];
+        }
+    }
+
     template<size_t P, size_t Q>
     requires (P * Q == N)
     Vector(const Matrix<P, Q>& m) {

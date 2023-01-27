@@ -116,6 +116,13 @@ struct basic_pixel : public T {
     basic_pixel(value_type _v[channels]) { std::copy(&_v[0], &_v[channels], this->v.begin()); }
     basic_pixel(const std::array<value_type, channels>& _v) { std::copy(_v.begin(), _v.end(), this->v.begin()); }
 
+    template <typename T2>
+    basic_pixel(const std::array<T2, channels>& _v) {
+        for (int i = 0; i < channels; i++) {
+            this->v[i] = _v[i];
+        }
+    }
+
     basic_pixel(std::initializer_list<value_type> list) {
         assert(list.size() == channels);
         std::copy(list.begin(), list.end(), this->v.begin());
