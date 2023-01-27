@@ -173,20 +173,14 @@ int main(int argc, const char * argv[]) {
         const uint8_t green8 = p->green >> 8;
         const uint8_t blue8 = p->blue >> 8;
 
-//        const float red_ratio = inv_lut[red8].red / (p->red / 256.0f);
-//        const float green_ratio = inv_lut[green8].green / (p->green / 256.0f);
-//        const float blue_ratio = inv_lut[blue8].blue / (p->blue / 256.0f);
-//
-//        *p = {
-//            (uint16_t) std::clamp(p->red * red_ratio, 0.0f, (float) 0xffff),
-//            (uint16_t) std::clamp(p->green * green_ratio, 0.0f, (float) 0xffff),
-//            (uint16_t) std::clamp(p->blue * blue_ratio, 0.0f, (float) 0xffff)
-//        };
+        const float red_ratio = inv_lut[red8].red / (p->red / 256.0f);
+        const float green_ratio = inv_lut[green8].green / (p->green / 256.0f);
+        const float blue_ratio = inv_lut[blue8].blue / (p->blue / 256.0f);
 
         *p = {
-            (uint16_t) (inv_lut[red8].red << 8),
-            (uint16_t) (inv_lut[green8].green << 8),
-            (uint16_t) (inv_lut[blue8].blue << 8)
+            (uint16_t) (red8 > 0 ? std::clamp(p->red * red_ratio, 0.0f, (float) 0xffff) : inv_lut[red8].red << 8),
+            (uint16_t) (green8 > 0 ? std::clamp(p->green * green_ratio, 0.0f, (float) 0xffff) : inv_lut[green8].green << 8),
+            (uint16_t) (blue8 > 0 ? std::clamp(p->blue * blue_ratio, 0.0f, (float) 0xffff) : inv_lut[blue8].blue << 8)
         };
     });
 

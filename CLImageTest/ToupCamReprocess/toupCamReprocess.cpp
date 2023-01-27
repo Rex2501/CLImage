@@ -18,23 +18,7 @@
 #include "gls_image.hpp"
 #include "gls_tiff_metadata.hpp"
 
-void rotate180AndFlipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
-        }
-    }
-
-    for (int x = 0; x < inputImage->width; x++) {
-        for (int y = 0; y < inputImage->height / 2; y++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[inputImage->height - 1 - y][x];
-            (*inputImage)[inputImage->height - 1 - y][x] = t;
-        }
-    }
-
+void flipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
     for (int y = 0; y < inputImage->height; y++) {
         for (int x = 0; x < inputImage->width / 2; x++) {
             const auto t = (*inputImage)[y][x];
@@ -80,7 +64,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
      CFA pattern, i.e.: GRBG -> BGGR
      */
 
-    rotate180AndFlipHorizontal(raw_data.get());
+    flipHorizontal(raw_data.get());
 
 #if 0 // Use Gretag Machbeth Cart Coordinates
     // const auto gmb_position = gls::rectangle { 2538, 314, 868, 485 };
@@ -119,7 +103,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
 
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
-    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
+    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 0, 1, 1, 2 } });
     dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 
@@ -141,7 +125,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
      CFA pattern, i.e.: GRBG -> BGGR
      */
 
-    rotate180AndFlipHorizontal(raw_data);
+    flipHorizontal(raw_data);
 
     std::vector<float> color_matrix = { 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 };
     std::vector<float> as_shot_neutral = { 1 / 1.8930, 1.0000, 1 / 1.7007 };
@@ -153,7 +137,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
     dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
 
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
-    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
+    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 0, 1, 1, 2 } });
     dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 

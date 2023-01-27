@@ -56,11 +56,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/2023-01-13_Calibration/raw_data/2023-01-13_greyscale_calibration_captures/2"
+            argument = "/Users/fabio/work/2023-01-13_Calibration/raw_data/"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/2023-01-13_greyscale_calibration_captures/2"
+            argument = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
