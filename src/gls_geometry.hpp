@@ -25,14 +25,14 @@ struct basic_point {
     T x;
     T y;
     
-    basic_point(T _x, T _y) : x(_x), y(_y) {}
-    basic_point() { }
+    constexpr basic_point(T _x, T _y) : x(_x), y(_y) {}
+    constexpr basic_point() { }
     
-    bool operator == (const basic_point& other) const {
+    constexpr bool operator == (const basic_point& other) const {
         return x == other.x && y == other.y;
     }
     
-    basic_point<T> operator + (const T& value) const {
+    constexpr basic_point<T> operator + (const T& value) const {
         basic_point<T> result = {
             x + value,
             y + value
@@ -46,7 +46,7 @@ struct basic_point {
         return *this;
     }
     
-    basic_point<T> operator - (const T& value) const {
+    constexpr basic_point<T> operator - (const T& value) const {
         basic_point<T> result = {
             x - value,
             y - value
@@ -60,7 +60,7 @@ struct basic_point {
         return *this;
     }
     
-    basic_point<T> operator * (const T& value) const {
+    constexpr basic_point<T> operator * (const T& value) const {
         basic_point<T> result = {
             x * value,
             y * value
@@ -74,7 +74,7 @@ struct basic_point {
         return *this;
     }
     
-    basic_point<T> operator / (const T& value) const {
+    constexpr basic_point<T> operator / (const T& value) const {
         basic_point<T> result = {
             x / value,
             y / value
@@ -88,7 +88,7 @@ struct basic_point {
         return *this;
     }
 
-    basic_point<T> operator + (const basic_point<T>& other) const {
+    constexpr basic_point<T> operator + (const basic_point<T>& other) const {
         basic_point<T> result = {
             x + other.x,
             y + other.y
@@ -102,7 +102,7 @@ struct basic_point {
         return *this;
     }
 
-    basic_point<T> operator - (const basic_point<T>& other) const {
+    constexpr basic_point<T> operator - (const basic_point<T>& other) const {
         basic_point<T> result = {
             x - other.x,
             y - other.y
@@ -118,10 +118,10 @@ struct basic_point {
 
     // Cast to a 2D Vector of any type TV
     template <typename TV>
-    operator gls::Vector<2, TV>() const { return { (TV) x, (TV) y}; }
+    constexpr operator gls::Vector<2, TV>() const { return { (TV) x, (TV) y}; }
 
     template <typename T2>
-    operator basic_point<T2>() const {
+    constexpr operator basic_point<T2>() const {
         return { (T2) x, (T2) y };
     }
 };
@@ -133,12 +133,12 @@ inline std::ostream& operator<<(std::ostream& os, const basic_point<value_type>&
 }
 
 template <typename T>
-bool operator == (const basic_point<T>& a, const basic_point<T>& b) {
+constexpr bool operator == (const basic_point<T>& a, const basic_point<T>& b) {
     return a.x == b.x && a.y == b.y;
 }
 
 template <typename T>
-basic_point<T> applyHomography(const basic_point<T>& p, const gls::Matrix<3, 3, T>& H) {
+constexpr basic_point<T> applyHomography(const basic_point<T>& p, const gls::Matrix<3, 3, T>& H) {
     gls::Vector<3, T> pv = { p.x, p.y, 1 };
     const auto op = H * pv;
     return { op[0] / op[2], op[1] / op[2] };
@@ -149,14 +149,14 @@ struct basic_size {
     T width;
     T height;
     
-    basic_size(T _width, T _height) : width(_width), height(_height) {}
-    basic_size() { }
+    constexpr basic_size(T _width, T _height) : width(_width), height(_height) {}
+    constexpr basic_size() { }
     
-    bool operator == (const basic_size& other) const {
+    constexpr bool operator == (const basic_size& other) const {
         return width == other.width && height == other.height;
     }
     
-    basic_size<T> operator + (const T& value) const {
+    constexpr basic_size<T> operator + (const T& value) const {
         basic_size<T> result = {
             width + value,
             height + value
@@ -170,7 +170,7 @@ struct basic_size {
         return *this;
     }
     
-    basic_size<T> operator - (const T& value) const {
+    constexpr basic_size<T> operator - (const T& value) const {
         basic_size<T> result = {
             width - value,
             height - value
@@ -184,7 +184,7 @@ struct basic_size {
         return *this;
     }
     
-    basic_size<T> operator * (const T& value) const {
+    constexpr basic_size<T> operator * (const T& value) const {
         basic_size<T> result = {
             width * value,
             height * value
@@ -198,7 +198,7 @@ struct basic_size {
         return *this;
     }
     
-    basic_size<T> operator / (const T& value) const {
+    constexpr basic_size<T> operator / (const T& value) const {
         basic_size<T> result = {
             width / value,
             height / value
@@ -213,27 +213,28 @@ struct basic_size {
     }};
 
 template <typename T>
-bool operator == (const basic_size<T>& a, const basic_size<T>& b) {
+constexpr bool operator == (const basic_size<T>& a, const basic_size<T>& b) {
     return a.width == b.width && a.height == b.height;
 }
 
 template <typename T>
 struct basic_rectangle : public basic_point<T>, basic_size<T> {
-    basic_rectangle(basic_point<T> _origin, basic_size<T> _dimensions) : basic_point<T>(_origin), basic_size<T>(_dimensions) {}
-    basic_rectangle(T _x, T _y, T _width, T _height) : basic_point<T>(_x, _y), basic_size<T>(_width, _height) {}
-    basic_rectangle() { }
+    constexpr basic_rectangle(basic_point<T> _origin, basic_size<T> _dimensions) : basic_point<T>(_origin), basic_size<T>(_dimensions) {}
+    constexpr basic_rectangle(basic_point<T> p1, basic_point<T> p2) : basic_point<T>(std::min(p1.x, p2.x), std::min(p1.y, p2.y)), basic_size<T>(std::abs(p1.x - p2.x), std::abs(p1.y - p2.y)) {}
+    constexpr basic_rectangle(T _x, T _y, T _width, T _height) : basic_point<T>(_x, _y), basic_size<T>(_width, _height) {}
+    constexpr basic_rectangle() { }
     
-    bool contains(const gls::basic_point<T> p) const {
+    constexpr bool contains(const gls::basic_point<T> p) const {
         return p.x >= basic_point<T>::x && p.y >= basic_point<T>::y && p.x < basic_point<T>::x + basic_size<T>::width && p.y < basic_point<T>::y + basic_size<T>::height;
     }
     
-    bool operator == (const basic_rectangle& other) const {
+    constexpr bool operator == (const basic_rectangle& other) const {
         return this->x == other.x && this->y == other.y && this->width == other.width && this->height == other.height;
     }
 };
 
 template <typename T>
-bool operator == (const basic_rectangle<T>& a, const basic_rectangle<T>& b) {
+constexpr bool operator == (const basic_rectangle<T>& a, const basic_rectangle<T>& b) {
     return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
 }
 
@@ -247,7 +248,7 @@ typedef basic_rectangle<int> rectangle;
 
 template<>
 struct std::hash<gls::size> {
-    std::size_t operator()(gls::size const& r) const noexcept {
+    constexpr std::size_t operator()(gls::size const& r) const noexcept {
         return r.width ^ r.height;
     }
 };
@@ -255,7 +256,7 @@ struct std::hash<gls::size> {
 
 template<>
 struct std::hash<gls::point> {
-    std::size_t operator()(gls::point const& p) const noexcept {
+    constexpr std::size_t operator()(gls::point const& p) const noexcept {
         return p.x + p.y;
     }
 };
