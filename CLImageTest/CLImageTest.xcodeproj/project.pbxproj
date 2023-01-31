@@ -280,7 +280,6 @@
 		E5653EB7296CED960072E554 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../CLImage/app/src/main/assets; sourceTree = "<group>"; };
 		E5653EC7298202D50072E554 /* MonitorCalibration */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MonitorCalibration; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5653EC9298202D50072E554 /* monitorCalibration.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = monitorCalibration.cpp; sourceTree = "<group>"; };
-		E5653EDE2982FB2E0072E554 /* MonitorCalibrationRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonitorCalibrationRelease.entitlements; sourceTree = "<group>"; };
 		E595B0FE2982FCFA00B6D854 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/arm_64/libpng.dylib; sourceTree = "<group>"; };
 		E595B0FF2982FCFA00B6D854 /* libjpeg.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjpeg.dylib; path = CLImageTest/libs/arm_64/libjpeg.dylib; sourceTree = "<group>"; };
 		E595B1002982FCFA00B6D854 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/arm_64/libz.dylib; sourceTree = "<group>"; };
@@ -420,7 +419,6 @@
 		E5653EC8298202D50072E554 /* MonitorCalibration */ = {
 			isa = PBXGroup;
 			children = (
-				E5653EDE2982FB2E0072E554 /* MonitorCalibrationRelease.entitlements */,
 				E5653EC9298202D50072E554 /* monitorCalibration.cpp */,
 			);
 			path = MonitorCalibration;
