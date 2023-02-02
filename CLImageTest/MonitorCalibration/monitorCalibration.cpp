@@ -14,26 +14,75 @@
 
 #include "gls_image.hpp"
 
-struct monitor_response {
-    gls::point coordinates;
-    std::array<gls::rgb_pixel_16, 256> data;
+struct MonitorResponse {
+    gls::point location = { -1, -1 };
+    std::array<gls::rgb_pixel_16, 256> response_lut;
+    std::array<gls::rgb_pixel_16, 256> inverse_response_lut;
+
+    void sampleImageAt(const gls::image<gls::rgb_pixel_16>& inputImage, const gls::point& p, const int pixelLevel) {
+        if (location != gls::point { -1, -1 }) {
+            assert(location == p);
+        } else {
+            location = p;
+        }
+
+        gls::Vector<3> pixelValue = gls::Vector<3>::zeros();
+        for (int y = -2; y <= 2; y++) {
+            for (int x = -2; x <= 2; x++) {
+                pixelValue += gls::Vector<3>(inputImage[p.y + y][p.x + x].v);
+            }
+        }
+        pixelValue /= 25.0f;
+        response_lut[pixelLevel] = pixelValue / 256.0f;
+    }
+
+    void ensureMonotonic() {
+        // Make sure lookup table data is monotonic
+        gls::rgb_pixel_16 last_value = response_lut[255];
+        for (int i = 254; i >= 0; i--) {
+            for (int c = 0; c < 3; c++) {
+                if (response_lut[i][c] > last_value[c]) {
+                    response_lut[i][c] = last_value[c];
+                } else {
+                    last_value[c] = response_lut[i][c];
+                }
+            }
+        }
+    }
+
+    gls::rgb_pixel_16 lookup(const gls::rgb_pixel_16& val) const {
+        gls::rgb_pixel_16 result;
+        for (int c = 0; c < 3; c++) {
+            const uint8_t val8 = val[c] >> 8;
+
+            if (val8 > 0) {
+                // For input values greater than the minimum LUT value, interpolate the 8 bit LUT entry over 16 bit data
+                const float ratio = inverse_response_lut[val8][c] / (val[c] / 256.0f);
+                result[c] = std::clamp(val[c] * ratio, 0.0f, (float) 0xffff);
+            } else {
+                // Oterwise just use the value from the LUT
+                result[c] = inverse_response_lut[val8][c] << 8;
+            }
+        }
+        return result;
+    }
+
+    MonitorResponse() {
+        std::memset(response_lut.data(), 0, sizeof(response_lut));
+        std::memset(inverse_response_lut.data(), 0, sizeof(inverse_response_lut));
+    }
 };
 
-//std::array<gls::rectangle, 9> monitorCordinates = {
-//    {
-//        { 161,   204,    1626,   720 },
-//        { 2210,  215,    1561,   696 },
-//        { 4176,  201,    1622,   681 },
-//        { 162,   1359,   1621,   707 },
-//        { 2204,  1357,   1567,   706 },
-//        { 4159,  1338,   1635,   720 },
-//        { 153,   2531,   1630,   701 },
-//        { 2200,  2520,   1554,   700 },
-//        { 4168,  2530,   1623,   713 }
-//    }
-//};
+// const constexpr gls::size calibration_grid = {3, 3};
+// typedef std::array<std::array<MonitorResponse, calibration_grid.width>, calibration_grid.height> MonitorCalibration;
 
-std::array<gls::rectangle, 9> monitorCordinates = {
+template <int Width, int Height>
+struct MonitorCalibration : public std::array<std::array<MonitorResponse, Width>, Height> {
+
+};
+
+const constexpr int monitors = 9;
+std::array<gls::rectangle, monitors> monitorCordinates = {
     {
         { 113,  187,    1637,   716 },
         { 2160, 194,    1566,   704 },
@@ -61,54 +110,33 @@ void cantParseFile(const std::filesystem::path& p) {
     std::cerr << "Couldn't read calibration file: " << p.string() << std::endl;
 }
 
-gls::rgb_pixel_16 lookup(const std::array<gls::rgb_pixel_16, 256>& lut, const gls::rgb_pixel_16& val) {
-    gls::rgb_pixel_16 result;
-    for (int c = 0; c < 3; c++) {
-        const uint8_t val8 = val[c] >> 8;
-
-        if (val8 > 0) {
-            // For input values greater than the minimum LUT value, interpolate the 8 bit LUT entry over 16 bit data
-            const float ratio = lut[val8][c] / (val[c] / 256.0f);
-            result[c] = std::clamp(val[c] * ratio, 0.0f, (float) 0xffff);
-        } else {
-            // Oterwise just use the value from the LUT
-            result[c] = lut[val8][c] << 8;
-        }
-    }
-    return result;
-}
-
-const constexpr gls::size calibration_grid = {3, 3};
-typedef std::array<std::array<monitor_response, calibration_grid.width>, calibration_grid.height> monitor_calibration;
-
 // Efficiently apply inverse transfer function to captured data to recover the original color values
 
 void applyCalibration(gls::image<gls::rgb_pixel_16>* inputImage,
-                      const std::array<monitor_calibration, 9>& calibration_data,
-                      const std::array<std::array<std::array<std::array<gls::rgb_pixel_16, 256>, 3>, 3>, 9>& inv_lut_grid) {
-    for (int m = 0; m < calibration_data.size(); m++) {
+                      const std::array<MonitorCalibration<3, 3>, monitors>& calibration_data) {
+    for (const auto& monitor_calibration : calibration_data) {
         // Iterate over monitors
-        for (int cg_y = 0; cg_y < calibration_grid.height - 1; cg_y++) {
-            for (int cg_x = 0; cg_x < calibration_grid.width - 1; cg_x++) {
+        for (int cg_y = 0; cg_y < monitor_calibration.size() - 1; cg_y++) {
+            for (int cg_x = 0; cg_x < monitor_calibration[cg_y].size() - 1; cg_x++) {
                 // Iterate over calibration grid coordinates
-                const gls::rectangle quadrant(calibration_data[m][cg_y][cg_x].coordinates,
-                                              calibration_data[m][cg_y+1][cg_x+1].coordinates);
+                const gls::rectangle quadrant(monitor_calibration[cg_y][cg_x].location,
+                                              monitor_calibration[cg_y+1][cg_x+1].location);
 
                 // LUTs at the corners of this quad
-                const auto& lut00 = inv_lut_grid[m][cg_y][cg_x];
-                const auto& lut01 = inv_lut_grid[m][cg_y][cg_x + 1];
-                const auto& lut10 = inv_lut_grid[m][cg_y + 1][cg_x];
-                const auto& lut11 = inv_lut_grid[m][cg_y + 1][cg_x + 1];
+                const auto& lut00 = monitor_calibration[cg_y][cg_x];
+                const auto& lut01 = monitor_calibration[cg_y][cg_x + 1];
+                const auto& lut10 = monitor_calibration[cg_y + 1][cg_x];
+                const auto& lut11 = monitor_calibration[cg_y + 1][cg_x + 1];
 
                 // Apply inverse LUT to the sub-image identified by this quadrant
                 gls::image<gls::rgb_pixel_16>(inputImage, quadrant).apply([&quadrant, &lut00, &lut01, &lut10, &lut11](gls::rgb_pixel_16* p, int x, int y) {
                     float wx = x / (float) quadrant.width;
                     float wy = y / (float) quadrant.height;
 
-                    const auto& p00 = lookup(lut00, *p);
-                    const auto& p10 = lookup(lut01, *p);
-                    const auto& p01 = lookup(lut10, *p);
-                    const auto& p11 = lookup(lut11, *p);
+                    const auto& p00 = lut00.lookup(*p);
+                    const auto& p10 = lut01.lookup(*p);
+                    const auto& p01 = lut10.lookup(*p);
+                    const auto& p11 = lut11.lookup(*p);
 
                     *p = lerp(lerp(p00, p10, wx),
                               lerp(p01, p11, wx), wy);
@@ -127,9 +155,11 @@ int main(int argc, const char * argv[]) {
 
     const auto monitor_calibration_file = input_dir / "MonitorCalibration.dat";
 
-    std::array<monitor_calibration, 9> calibration_data;
+    std::array<MonitorCalibration<3, 3>, monitors> calibration_data;
 
     if (!exists(status(monitor_calibration_file))) {
+        // If we don't have a calibration file, go through the calibration images and create one
+
         std::vector<std::filesystem::path> directory_listing;
         std::copy(std::filesystem::directory_iterator(input_dir), std::filesystem::directory_iterator(),
                   std::back_inserter(directory_listing));
@@ -164,22 +194,14 @@ int main(int argc, const char * argv[]) {
 
                 const auto inputImage = gls::image<gls::rgb_pixel_16>::read_png_file(input_path.string());
 
-                for (int m = 0; m < monitorCordinates.size(); m++) {
+                assert(monitorCordinates.size() == calibration_data.size());
+
+                for (int m = 0; m < calibration_data.size(); m++) {
                     const auto calibration_coordinates = computeCalibrationCoordinates(monitorCordinates[m]);
 
-                    for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
-                        for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
-                            const auto& p = calibration_data[m][cg_y][cg_x].coordinates = calibration_coordinates[cg_y][cg_x];
-                            auto& lut = calibration_data[m][cg_y][cg_x].data;
-
-                            gls::Vector<3> pixelValue = gls::Vector<3>::zeros();
-                            for (int y = -2; y <= 2; y++) {
-                                for (int x = -2; x <= 2; x++) {
-                                    pixelValue += gls::Vector<3>((*inputImage)[p.y + y][p.x + x].v);
-                                }
-                            }
-                            pixelValue /= 25.0f;
-                            lut[pixelLevel] = pixelValue / 256.0f;
+                    for (int cg_y = 0; cg_y < calibration_data[m].size(); cg_y++) {
+                        for (int cg_x = 0; cg_x < calibration_data[m][cg_y].size(); cg_x++) {
+                            calibration_data[m][cg_y][cg_x].sampleImageAt(*inputImage, calibration_coordinates[cg_y][cg_x], pixelLevel);
                         }
                     }
                 }
@@ -187,69 +209,50 @@ int main(int argc, const char * argv[]) {
         }
 
         // Make sure lookup table data is monotonic
-        for (int m = 0; m < calibration_data.size(); m++) {
-            for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
-                for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
-                    auto& lut = calibration_data[m][cg_y][cg_x].data;
-                    gls::rgb_pixel_16 last_value = lut[255];
-                    for (int i = 254; i >= 0; i--) {
-                        for (int c = 0; c < 3; c++) {
-                            if (lut[i][c] > last_value[c]) {
-                                lut[i][c] = last_value[c];
-                            } else {
-                                last_value[c] = lut[i][c];
-                            }
-                        }
-                    }
+        for (auto& monitor_calibration : calibration_data) {
+            for (auto& calibration_row : monitor_calibration) {
+                for (auto& calibration_entry : calibration_row) {
+                    calibration_entry.ensureMonotonic();
                 }
             }
         }
 
         // Save monitor calibration data to file
-        std::fstream monitor_calibration { monitor_calibration_file, monitor_calibration.out };
+        std::fstream monitor_calibration_stream { monitor_calibration_file, std::fstream::out };
 
-        // monitor_calibration << monitor_grid.width << " " << monitor_grid.height << std::endl;
-        for (int m = 0; m < calibration_data.size(); m++) {
-            monitor_calibration << m << std::endl;
+        for (const auto& monitor_calibration : calibration_data) {
+            for (const auto& calibration_row : monitor_calibration) {
+                for (const auto& calibration_entry : calibration_row) {
+                    monitor_calibration_stream << calibration_entry.location.x << " " << calibration_entry.location.y << std::endl;
 
-            // monitor_calibration << calibration_grid.width << " " << calibration_grid.height << std::endl;
-            for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
-                for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
-                    monitor_calibration << calibration_data[m][cg_y][cg_x].coordinates.x << " " << calibration_data[m][cg_y][cg_x].coordinates.y << std::endl;
-
-                    const auto& lut = calibration_data[m][cg_y][cg_x].data;
+                    const auto& lut = calibration_entry.response_lut;
                     for (int i = 0; i < 256; i++) {
-                        monitor_calibration << i << " " << lut[i].red << " " << lut[i].green << " " << lut[i].blue << std::endl;
+                        monitor_calibration_stream << i << " " << lut[i].red << " " << lut[i].green << " " << lut[i].blue << std::endl;
                     }
                 }
             }
         }
     } else {
-        std::ifstream monitor_calibration { monitor_calibration_file, std::ios::in };
+        // Parse and load calibration data from file
 
-        for (int m = 0; m < calibration_data.size(); m++) {
-            int monitor;
-            monitor_calibration >> monitor;
-            if (monitor != m ) {
-                cantParseFile(monitor_calibration_file);
-                return -1;
-            }
+        std::ifstream monitor_calibration_stream { monitor_calibration_file, std::ios::in };
 
-            for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
-                for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
-                    std::cout << "Reading grid element " << cg_x << ", " << cg_y << std::endl;
+        for (auto& monitor_calibration : calibration_data) {
+            for (auto& calibration_row : monitor_calibration) {
+                for (auto& calibration_entry : calibration_row) {
+                    // std::cout << "Reading grid element " << cg_x << ", " << cg_y << std::endl;
 
-                    if (!(monitor_calibration >> calibration_data[m][cg_y][cg_x].coordinates.x >> calibration_data[m][cg_y][cg_x].coordinates.y)) {
+                    if (!(monitor_calibration_stream >> calibration_entry.location.x >> calibration_entry.location.y)) {
                         cantParseFile(monitor_calibration_file);
                         return -1;
                     }
 
-                    auto& lut = calibration_data[m][cg_y][cg_x].data;
+                    auto& lut = calibration_entry.response_lut;
 
                     int index = 0, last_index = -1;
                     int red, green, blue;
                     for (int i = 0; i < 256; i++) {
-                        if (monitor_calibration >> index >> red >> green >> blue) {
+                        if (monitor_calibration_stream >> index >> red >> green >> blue) {
                             // Perform some input data validation
                             if ((index != last_index + 1) || (red < 0 || red > 255) || (green < 0 || green > 255) || (blue < 0 || blue > 255)) {
                                 cantParseFile(monitor_calibration_file);
@@ -269,16 +272,11 @@ int main(int argc, const char * argv[]) {
     }
 
     // Build inverse transfer function to linearize the display+camera response
-    std::array<std::array<std::array<std::array<gls::rgb_pixel_16, 256>, 3>, 3>, 9> inv_lut_grid;
-    std::memset(inv_lut_grid.data(), 0, sizeof(inv_lut_grid));
-
-    for (int m = 0; m < calibration_data.size(); m++) {
-        for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
-            for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
-                std::cout << "Computing inverse LUT at " << cg_x << ", " << cg_y << std::endl;
-
-                const auto& lut = calibration_data[m][cg_y][cg_x].data;
-                auto& inv_lut = inv_lut_grid[m][cg_y][cg_x];
+    for (auto& monitor_calibration : calibration_data) {
+        for (auto& calibration_row : monitor_calibration) {
+            for (auto& calibration_entry : calibration_row) {
+                const auto& lut = calibration_entry.response_lut;
+                auto& inv_lut = calibration_entry.inverse_response_lut;
 
                 // Pretty print display+camera transfer function
                 for (int i = 0; i < 256; i++) {
@@ -336,7 +334,7 @@ int main(int argc, const char * argv[]) {
 
     auto inputImage = gls::image<gls::rgb_pixel_16>::read_png_file(input);
 
-    applyCalibration(inputImage.get(), calibration_data, inv_lut_grid);
+    applyCalibration(inputImage.get(), calibration_data);
 
     // Write out transformed image
 
