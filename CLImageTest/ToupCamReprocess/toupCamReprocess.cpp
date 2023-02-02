@@ -46,15 +46,15 @@ std::tuple<std::string, float, uint32_t> parse_filename(const std::string& filen
     throw std::domain_error("Can't parse filename.");
 }
 
-void raw_png_to_dng(const std::filesystem::path& input_path) {
+void raw_png_to_dng(const std::filesystem::path& input_path, const std::filesystem::path& output_path) {
     const std::string filename = input_path.filename().stem();
     std::cout << "Processing file: " << filename << std::endl;
 
-    const auto basic_metadata = parse_filename(filename);
-
-    const auto timestamp = std::get<0>(basic_metadata);
-    const auto exposure_time = std::get<1>(basic_metadata);
-    const auto ISO = std::get<2>(basic_metadata);
+//    const auto basic_metadata = parse_filename(filename);
+//
+//    const auto timestamp = std::get<0>(basic_metadata);
+//    const auto exposure_time = std::get<1>(basic_metadata);
+//    const auto ISO = std::get<2>(basic_metadata);
 
     const auto raw_data = gls::image<gls::luma_pixel_16>::read_png_file(input_path.string());
 
@@ -66,15 +66,16 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
 
     flipHorizontal(raw_data.get());
 
-#if 0 // Use Gretag Machbeth Cart Coordinates
+#if 1 // Use Gretag Machbeth Cart Coordinates
     // const auto gmb_position = gls::rectangle { 2538, 314, 868, 485 };
 
-    const auto gmb_position = gls::rectangle { 4944, 1698, 909, 489 };
+    // const auto gmb_position = gls::rectangle { 2602, 1806, 1270, 698 };
+    const auto gmb_position = gls::rectangle { 2230, 1325, 1451, 734 };
 
     gls::Vector<3> pre_mul;
     gls::Matrix<3, 3> cam_xyz;
     estimateRawParameters(*raw_data, &cam_xyz, &pre_mul, 0.0, (float) 0xffff, BayerPattern::bggr, gmb_position, false);
-    std::cout << "cam_xyz:\n" << cam_xyz << "\npre_mul: " << pre_mul[1] / pre_mul << std::endl;
+    std::cout << "cam_xyz:\n" << std::setprecision(4) << std::fixed << cam_xyz << "\npre_mul: " << pre_mul[1] / pre_mul << std::endl;
 
     const auto cam_xyz_span = cam_xyz.span();
     std::vector<float> color_matrix(cam_xyz_span.begin(), cam_xyz_span.end());
@@ -90,8 +91,8 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
 //    std::vector<float> color_matrix = { 1.9283, -0.8810, -0.1134, -0.0432, 0.8803, 0.1629, -0.0006, 0.1300, 0.3198 };
 //    std::vector<float> as_shot_neutral = { 1 / 1.2273, 1.0000, 1 / 2.1288 };
 
-    std::vector<float> color_matrix = { 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 };
-    std::vector<float> as_shot_neutral = { 1 / 1.8930, 1.0000, 1 / 1.7007 };
+    std::vector<float> color_matrix = { -0.0464, 0.1647, 0.4386, -0.1981, 1.0289, 0.1692, 1.6550, -0.7677, -0.1457 };
+    std::vector<float> as_shot_neutral = { 0.5836, 1.0000, 0.6310 };
 #endif
 
     gls::tiff_metadata dng_metadata, exif_metadata;
@@ -103,19 +104,19 @@ void raw_png_to_dng(const std::filesystem::path& input_path) {
     dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
 
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
-    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 0, 1, 1, 2 } });
+    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
     dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 
     // Basic EXIF metadata
+    int ISO = 100;
     exif_metadata.insert({ EXIFTAG_RECOMMENDEDEXPOSUREINDEX, (uint32_t) ISO });
     exif_metadata.insert({ EXIFTAG_ISOSPEEDRATINGS, std::vector<uint16_t>{ (uint16_t) ISO } });
-    exif_metadata.insert({ EXIFTAG_DATETIMEORIGINAL, timestamp});
-    exif_metadata.insert({ EXIFTAG_DATETIMEDIGITIZED, timestamp});
-    exif_metadata.insert({ EXIFTAG_EXPOSURETIME, exposure_time});
+//    exif_metadata.insert({ EXIFTAG_DATETIMEORIGINAL, timestamp});
+//    exif_metadata.insert({ EXIFTAG_DATETIMEDIGITIZED, timestamp});
+//    exif_metadata.insert({ EXIFTAG_EXPOSURETIME, exposure_time});
 
-    auto dng_file = (input_path.parent_path() / input_path.stem()).string() + "_b.dng";
-    raw_data->write_dng_file(dng_file, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
+    raw_data->write_dng_file(output_path, /*compression=*/ gls::JPEG, &dng_metadata, &exif_metadata);
 }
 
 gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawConverter, gls::image<gls::luma_pixel_16>* raw_data, int ISO) {
@@ -127,8 +128,13 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
 
     flipHorizontal(raw_data);
 
-    std::vector<float> color_matrix = { 1.2594, -0.5333, -0.1138, -0.1404, 0.9717, 0.1688, 0.0342, 0.0969, 0.4330 };
-    std::vector<float> as_shot_neutral = { 1 / 1.8930, 1.0000, 1 / 1.7007 };
+    // Gretag Macbeth Target
+//    std::vector<float> color_matrix = { -0.0464, 0.1647, 0.4386, -0.1981, 1.0289, 0.1692, 1.6550, -0.7677, -0.1457 };
+//    std::vector<float> as_shot_neutral = { 0.5836, 1.0000, 0.6310 };
+
+    // Gretag Macbeth Display Image
+    std::vector<float> color_matrix = { -0.0948, 0.2733, 0.4269, -0.3695, 1.2338, 0.1358, 0.8290, 0.0158, -0.0703 };
+    std::vector<float> as_shot_neutral = { 0.6290, 1.0000, 0.7058 };
 
     gls::tiff_metadata dng_metadata, exif_metadata;
 
@@ -137,7 +143,7 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
     dng_metadata.insert({ TIFFTAG_ASSHOTNEUTRAL, as_shot_neutral });
 
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
-    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 0, 1, 1, 2 } });
+    dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
     dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 
@@ -207,6 +213,7 @@ void processDirectory(std::filesystem::path input_path, std::filesystem::path ou
                 std::cout << "Converting " << directory_entry << " to " << output_file << std::endl;
 
                 raw_png_to_rgb_png(&rawConverter, directory_entry, output_path / (filename + "_rgb.png"));
+                // raw_png_to_dng(directory_entry, output_path / (filename + ".dng"));
             } else if (std::filesystem::directory_entry(directory_entry).is_directory()) {
                 processDirectory(directory_entry, output_path / directory_entry.filename());
             }
