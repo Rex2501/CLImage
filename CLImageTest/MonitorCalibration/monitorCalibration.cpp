@@ -49,60 +49,6 @@ std::array<gls::rectangle, 9> monitorCordinates = {
 
 constexpr const int inset = 10;
 
-gls::point constrain(const gls::point& p, const gls::rectangle r) {
-    return { std::clamp(p.x, r.x, r.x + r.width), std::clamp(p.y, r.y, r.y + r.height) };
-}
-
-std::vector<gls::point> sampleGrid() {
-    std::vector<gls::point> result;
-    result.reserve(9 * monitorCordinates.size());
-
-    for (const auto r : monitorCordinates) {
-        result.push_back({ r.x + inset,             r.y + inset });
-        result.push_back({ r.x + inset,             r.y + r.height / 2 });
-        result.push_back({ r.x + inset,             r.y + r.height - inset });
-        result.push_back({ r.x + r.width / 2,       r.y + inset });
-        result.push_back({ r.x + r.width / 2,       r.y + r.height / 2 });
-        result.push_back({ r.x + r.width / 2,       r.y + r.height - inset });
-        result.push_back({ r.x + r.width - inset,   r.y + inset });
-        result.push_back({ r.x + r.width - inset,   r.y + r.height / 2 });
-        result.push_back({ r.x + r.width - inset,   r.y + r.height - inset });
-    }
-    return result;
-}
-
-std::pair<std::array<std::array<gls::point, 2>, 2>, std::pair<float, float>> pointToQuad(const gls::point& p) {
-    for (const auto r : monitorCordinates) {
-        if (r.contains(p)) {
-            const auto p_inset = constrain(p, { r.x + inset, r.y + inset, r.x + r.width - inset, r.y + r.height - inset } );
-            const auto p_off = p_inset - gls::point { r.x, r.y };
-            const auto quadtant_size = gls::size { r.width / 3, r.height / 3 };
-            const auto quadrant = gls::point { p_off.x % quadtant_size.width, p_off.y % quadtant_size.height };
-            return {
-                {{
-                    quadrant,
-                    quadrant + gls::point { quadtant_size.width, 0 },
-                    quadrant + gls::point { 0, quadtant_size.height },
-                    quadrant + gls::point { quadtant_size.width, quadtant_size.height }
-                }},
-                {
-                    (p_off.x - quadrant.x) / (float) quadtant_size.width,
-                    (p_off.y - quadrant.y) / (float) quadtant_size.height
-                }
-            };
-        }
-    }
-    return {
-        {{
-            gls::point { 0, 0 },
-            gls::point { 0, 0 },
-            gls::point { 0, 0 },
-            gls::point { 0, 0 }
-        }},
-        {0, 0}
-    };
-}
-
 std::array<std::array<gls::point, 3>, 3> computeCalibrationCoordinates(const gls::rectangle& r) {
     return {{
         {{{ r.x + inset, r.y + inset },            { r.x + r.width / 2, r.y + inset },               { r.x + r.width - inset, r.y + inset }}},
@@ -132,6 +78,46 @@ gls::rgb_pixel_16 lookup(const std::array<gls::rgb_pixel_16, 256>& lut, const gl
     return result;
 }
 
+const constexpr gls::size calibration_grid = {3, 3};
+typedef std::array<std::array<monitor_response, calibration_grid.width>, calibration_grid.height> monitor_calibration;
+
+// Efficiently apply inverse transfer function to captured data to recover the original color values
+
+void applyCalibration(gls::image<gls::rgb_pixel_16>* inputImage,
+                      const std::array<monitor_calibration, 9>& calibration_data,
+                      const std::array<std::array<std::array<std::array<gls::rgb_pixel_16, 256>, 3>, 3>, 9>& inv_lut_grid) {
+    for (int m = 0; m < calibration_data.size(); m++) {
+        // Iterate over monitors
+        for (int cg_y = 0; cg_y < calibration_grid.height - 1; cg_y++) {
+            for (int cg_x = 0; cg_x < calibration_grid.width - 1; cg_x++) {
+                // Iterate over calibration grid coordinates
+                const gls::rectangle quadrant(calibration_data[m][cg_y][cg_x].coordinates,
+                                              calibration_data[m][cg_y+1][cg_x+1].coordinates);
+
+                // LUTs at the corners of this quad
+                const auto& lut00 = inv_lut_grid[m][cg_y][cg_x];
+                const auto& lut01 = inv_lut_grid[m][cg_y][cg_x + 1];
+                const auto& lut10 = inv_lut_grid[m][cg_y + 1][cg_x];
+                const auto& lut11 = inv_lut_grid[m][cg_y + 1][cg_x + 1];
+
+                // Apply inverse LUT to the sub-image identified by this quadrant
+                gls::image<gls::rgb_pixel_16>(inputImage, quadrant).apply([&quadrant, &lut00, &lut01, &lut10, &lut11](gls::rgb_pixel_16* p, int x, int y) {
+                    float wx = x / (float) quadrant.width;
+                    float wy = y / (float) quadrant.height;
+
+                    const auto& p00 = lookup(lut00, *p);
+                    const auto& p10 = lookup(lut01, *p);
+                    const auto& p01 = lookup(lut10, *p);
+                    const auto& p11 = lookup(lut11, *p);
+
+                    *p = lerp(lerp(p00, p10, wx),
+                              lerp(p01, p11, wx), wy);
+                });
+            }
+        }
+    }
+}
+
 int main(int argc, const char * argv[]) {
     auto input_path = std::filesystem::path(argv[1]);
 
@@ -141,8 +127,6 @@ int main(int argc, const char * argv[]) {
 
     const auto monitor_calibration_file = input_dir / "MonitorCalibration.dat";
 
-    const constexpr gls::size calibration_grid = {3, 3};
-    typedef std::array<std::array<monitor_response, calibration_grid.width>, calibration_grid.height> monitor_calibration;
     std::array<monitor_calibration, 9> calibration_data;
 
     if (!exists(status(monitor_calibration_file))) {
@@ -180,7 +164,7 @@ int main(int argc, const char * argv[]) {
 
                 const auto inputImage = gls::image<gls::rgb_pixel_16>::read_png_file(input_path.string());
 
-                for (int m = 0; m < 9; m++) {
+                for (int m = 0; m < monitorCordinates.size(); m++) {
                     const auto calibration_coordinates = computeCalibrationCoordinates(monitorCordinates[m]);
 
                     for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
@@ -203,7 +187,7 @@ int main(int argc, const char * argv[]) {
         }
 
         // Make sure lookup table data is monotonic
-        for (int m = 0; m < 9; m++) {
+        for (int m = 0; m < calibration_data.size(); m++) {
             for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
                 for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
                     auto& lut = calibration_data[m][cg_y][cg_x].data;
@@ -225,7 +209,7 @@ int main(int argc, const char * argv[]) {
         std::fstream monitor_calibration { monitor_calibration_file, monitor_calibration.out };
 
         // monitor_calibration << monitor_grid.width << " " << monitor_grid.height << std::endl;
-        for (int m = 0; m < 9; m++) {
+        for (int m = 0; m < calibration_data.size(); m++) {
             monitor_calibration << m << std::endl;
 
             // monitor_calibration << calibration_grid.width << " " << calibration_grid.height << std::endl;
@@ -243,7 +227,7 @@ int main(int argc, const char * argv[]) {
     } else {
         std::ifstream monitor_calibration { monitor_calibration_file, std::ios::in };
 
-        for (int m = 0; m < 9; m++) {
+        for (int m = 0; m < calibration_data.size(); m++) {
             int monitor;
             monitor_calibration >> monitor;
             if (monitor != m ) {
@@ -288,7 +272,7 @@ int main(int argc, const char * argv[]) {
     std::array<std::array<std::array<std::array<gls::rgb_pixel_16, 256>, 3>, 3>, 9> inv_lut_grid;
     std::memset(inv_lut_grid.data(), 0, sizeof(inv_lut_grid));
 
-    for (int m = 0; m < 9; m++) {
+    for (int m = 0; m < calibration_data.size(); m++) {
         for (int cg_y = 0; cg_y < calibration_grid.height; cg_y++) {
             for (int cg_x = 0; cg_x < calibration_grid.width; cg_x++) {
                 std::cout << "Computing inverse LUT at " << cg_x << ", " << cg_y << std::endl;
@@ -352,37 +336,7 @@ int main(int argc, const char * argv[]) {
 
     auto inputImage = gls::image<gls::rgb_pixel_16>::read_png_file(input);
 
-    // Efficiently apply inverse transfer function to captured data to recover the original color values
-    for (int m = 0; m < 9; m++) {
-        // Iterate over monitors
-        for (int cg_y = 0; cg_y < calibration_grid.height - 1; cg_y++) {
-            for (int cg_x = 0; cg_x < calibration_grid.width - 1; cg_x++) {
-                // Iterate over calibration grid coordinates
-                const gls::rectangle quadrant(calibration_data[m][cg_y][cg_x].coordinates,
-                                              calibration_data[m][cg_y+1][cg_x+1].coordinates);
-
-                // LUTs at the corners of this quad
-                const auto& lut00 = inv_lut_grid[m][cg_y][cg_x];
-                const auto& lut01 = inv_lut_grid[m][cg_y][cg_x + 1];
-                const auto& lut10 = inv_lut_grid[m][cg_y + 1][cg_x];
-                const auto& lut11 = inv_lut_grid[m][cg_y + 1][cg_x + 1];
-
-                // Apply inverse LUT to the sub-image identified by this quadrant
-                gls::image<gls::rgb_pixel_16>(inputImage.get(), quadrant).apply([&quadrant, &lut00, &lut01, &lut10, &lut11](gls::rgb_pixel_16* p, int x, int y) {
-                    float wx = x / (float) quadrant.width;
-                    float wy = y / (float) quadrant.height;
-
-                    const auto& p00 = lookup(lut00, *p);
-                    const auto& p10 = lookup(lut01, *p);
-                    const auto& p01 = lookup(lut10, *p);
-                    const auto& p11 = lookup(lut11, *p);
-
-                    *p = lerp(lerp(p00, p10, wx),
-                              lerp(p01, p11, wx), wy);
-                });
-            }
-        }
-    }
+    applyCalibration(inputImage.get(), calibration_data, inv_lut_grid);
 
     // Write out transformed image
 
