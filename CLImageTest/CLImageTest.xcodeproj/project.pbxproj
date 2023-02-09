@@ -280,10 +280,6 @@
 		E5653EB7296CED960072E554 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../CLImage/app/src/main/assets; sourceTree = "<group>"; };
 		E5653EC7298202D50072E554 /* MonitorCalibration */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MonitorCalibration; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5653EC9298202D50072E554 /* monitorCalibration.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = monitorCalibration.cpp; sourceTree = "<group>"; };
-		E595B0FE2982FCFA00B6D854 /* libpng.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpng.dylib; path = CLImageTest/libs/arm_64/libpng.dylib; sourceTree = "<group>"; };
-		E595B0FF2982FCFA00B6D854 /* libjpeg.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjpeg.dylib; path = CLImageTest/libs/arm_64/libjpeg.dylib; sourceTree = "<group>"; };
-		E595B1002982FCFA00B6D854 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = CLImageTest/libs/arm_64/libz.dylib; sourceTree = "<group>"; };
-		E595B1012982FCFA00B6D854 /* libtiff.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libtiff.dylib; path = CLImageTest/libs/arm_64/libtiff.dylib; sourceTree = "<group>"; };
 		E5A5B64D284E785000C1A4BD /* CanonEOSRPCalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CanonEOSRPCalibration.cpp; path = ../../CLImage/app/src/main/cpp/CanonEOSRPCalibration.cpp; sourceTree = "<group>"; };
 		E5A5B64F284EFD6C00C1A4BD /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
 		E5A5B651284F038600C1A4BD /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
@@ -508,10 +504,6 @@
 		E5AD624627616C8B0055F712 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				E595B0FF2982FCFA00B6D854 /* libjpeg.dylib */,
-				E595B0FE2982FCFA00B6D854 /* libpng.dylib */,
-				E595B1012982FCFA00B6D854 /* libtiff.dylib */,
-				E595B1002982FCFA00B6D854 /* libz.dylib */,
 				E5AD628C276178580055F712 /* OpenCL.framework */,
 				E5AD624B27616D7E0055F712 /* libjpeg.dylib */,
 				E5AD624927616D7E0055F712 /* libpng.dylib */,
@@ -585,6 +577,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E5470DB12900C017003C0B18 /* Build configuration list for PBXNativeTarget "PyramidFusion" */;
 			buildPhases = (
+				E55D1A302995A0A500B3AC6F /* ShellScript */,
 				E5470DA92900C016003C0B18 /* Sources */,
 				E5470DAA2900C016003C0B18 /* Frameworks */,
 				E5470DAB2900C016003C0B18 /* CopyFiles */,
@@ -602,6 +595,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E556BE4329146B83009FA1E9 /* Build configuration list for PBXNativeTarget "ToupCamReprocess" */;
 			buildPhases = (
+				E55D1A312995A0C800B3AC6F /* ShellScript */,
 				E556BE3B29146B83009FA1E9 /* Sources */,
 				E556BE3D29146B83009FA1E9 /* CopyFiles */,
 				E56BB497296C9BBC0062F618 /* ShellScript */,
@@ -620,6 +614,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E5653ECB298202D50072E554 /* Build configuration list for PBXNativeTarget "MonitorCalibration" */;
 			buildPhases = (
+				E55D1A322995A0E700B3AC6F /* ShellScript */,
 				E5653EC3298202D50072E554 /* Sources */,
 				E5653EC4298202D50072E554 /* Frameworks */,
 				E5653EC5298202D50072E554 /* CopyFiles */,
@@ -656,6 +651,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E5E9EA9228B8D86E0079A5C0 /* Build configuration list for PBXNativeTarget "ImageRegistration" */;
 			buildPhases = (
+				E55D1A2F2995A07700B3AC6F /* ShellScript */,
 				E5E9EA8A28B8D86E0079A5C0 /* Sources */,
 				E5E9EA8B28B8D86E0079A5C0 /* Frameworks */,
 				E5E9EA8C28B8D86E0079A5C0 /* CopyFiles */,
@@ -734,7 +730,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "UNAME=`uname -m`\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    cp CLImageTest/libs/arm_64/*.dylib CLImageTest/libs\n    chmod a+rwx CLImageTest/libs/*.dylib\nelse\n    cp CLImageTest/libs/x86_64/*.dylib CLImageTest/libs\n    chmod a+rwx CLImageTest/libs/*.dylib\nfi\n";
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
 		};
 		E52374ED29663CD700DDF811 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -752,6 +748,74 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "cd \"${BUILT_PRODUCTS_DIR}\"\nmkdir OpenCLBinaries\ncd OpenCL\n/System/Library/Frameworks/OpenCL.framework/Libraries/Openclc -Werror -cl-fast-relaxed-math -cl-single-precision-constant -v -c -arch gpu_64 -emit-llvm *.cl\nmv *.o ../OpenCLBinaries\n";
+		};
+		E55D1A2F2995A07700B3AC6F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
+		};
+		E55D1A302995A0A500B3AC6F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
+		};
+		E55D1A312995A0C800B3AC6F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
+		};
+		E55D1A322995A0E700B3AC6F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
 		};
 		E56BB497296C9BBC0062F618 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -785,7 +849,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "UNAME=`uname -m`\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    cp CLImageTest/libs/arm_64/*.dylib CLImageTest/libs\n    chmod a+rwx CLImageTest/libs/*.dylib\nelse\n    cp CLImageTest/libs/x86_64/*.dylib CLImageTest/libs\n    chmod a+rwx CLImageTest/libs/*.dylib\nfi\n";
+			shellScript = "UNAME=`uname -m`\n\nBREW_PATH=\"\"\n\nif [[ \"$UNAME\" == \"arm64\" ]]; then\n    BREW_PATH=\"/opt/homebrew\"\nelse\n    BREW_PATH=\"/usr/local\"\nfi\n\nln -sf $BREW_PATH/lib/libjpeg.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libpng.dylib CLImageTest/libs\nln -sf $BREW_PATH/lib/libtiff.dylib CLImageTest/libs\nln -sf $BREW_PATH/opt/zlib/lib/libz.dylib CLImageTest/libs\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
