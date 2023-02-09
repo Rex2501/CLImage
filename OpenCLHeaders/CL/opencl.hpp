@@ -1601,13 +1601,24 @@ CL_HPP_DECLARE_PARAM_TRAITS_(cl_device_info, CL_DEVICE_SCHEDULING_CONTROLS_CAPAB
 #ifdef CL_DEVICE_SUPPORTED_REGISTER_ALLOCATIONS_ARM
 CL_HPP_DECLARE_PARAM_TRAITS_(cl_device_info, CL_DEVICE_SUPPORTED_REGISTER_ALLOCATIONS_ARM, vector<cl_uint>)
 #endif
+#ifdef CL_DEVICE_MAX_WARP_COUNT_ARM
+CL_HPP_DECLARE_PARAM_TRAITS_(cl_device_info, CL_DEVICE_MAX_WARP_COUNT_ARM, cl_uint)
+#endif
+#ifdef CL_KERNEL_MAX_WARP_COUNT_ARM
+CL_HPP_DECLARE_PARAM_TRAITS_(cl_kernel_info, CL_KERNEL_MAX_WARP_COUNT_ARM, cl_uint)
+#endif
 #ifdef CL_KERNEL_EXEC_INFO_WORKGROUP_BATCH_SIZE_ARM
 CL_HPP_DECLARE_PARAM_TRAITS_(cl_kernel_exec_info, CL_KERNEL_EXEC_INFO_WORKGROUP_BATCH_SIZE_ARM, cl_uint)
 #endif
 #ifdef CL_KERNEL_EXEC_INFO_WORKGROUP_BATCH_SIZE_MODIFIER_ARM
 CL_HPP_DECLARE_PARAM_TRAITS_(cl_kernel_exec_info, CL_KERNEL_EXEC_INFO_WORKGROUP_BATCH_SIZE_MODIFIER_ARM, cl_int)
 #endif
-
+#ifdef CL_KERNEL_EXEC_INFO_WARP_COUNT_LIMIT_ARM
+CL_HPP_DECLARE_PARAM_TRAITS_(cl_kernel_exec_info, CL_KERNEL_EXEC_INFO_WARP_COUNT_LIMIT_ARM, cl_uint)
+#endif
+#ifdef CL_KERNEL_EXEC_INFO_COMPUTE_UNIT_MAX_QUEUED_BATCHES_ARM
+CL_HPP_DECLARE_PARAM_TRAITS_(cl_kernel_exec_info, CL_KERNEL_EXEC_INFO_COMPUTE_UNIT_MAX_QUEUED_BATCHES_ARM, cl_uint)
+#endif
 #ifdef CL_DEVICE_COMPUTE_CAPABILITY_MAJOR_NV
 CL_HPP_DECLARE_PARAM_TRAITS_(cl_device_info, CL_DEVICE_COMPUTE_CAPABILITY_MAJOR_NV, cl_uint)
 #endif
@@ -2098,53 +2109,6 @@ inline bool operator!=(const Wrapper<T> &lhs, const Wrapper<T> &rhs)
 //! \endcond
 
 
-using BuildLogType = vector<std::pair<cl::Device, typename detail::param_traits<detail::cl_program_build_info, CL_PROGRAM_BUILD_LOG>::param_type>>;
-#if defined(CL_HPP_ENABLE_EXCEPTIONS)
-/**
-* Exception class for build errors to carry build info
-*/
-class BuildError : public Error
-{
-private:
-    BuildLogType buildLogs;
-public:
-    BuildError(cl_int err, const char * errStr, const BuildLogType &vec) : Error(err, errStr), buildLogs(vec)
-    {
-    }
-
-    BuildLogType getBuildLog() const
-    {
-        return buildLogs;
-    }
-};
-namespace detail {
-    static inline cl_int buildErrHandler(
-        cl_int err,
-        const char * errStr,
-        const BuildLogType &buildLogs)
-    {
-        if (err != CL_SUCCESS) {
-            throw BuildError(err, errStr, buildLogs);
-        }
-        return err;
-    }
-} // namespace detail
-
-#else
-namespace detail {
-    static inline cl_int buildErrHandler(
-        cl_int err,
-        const char * errStr,
-        const BuildLogType &buildLogs)
-    {
-        (void)buildLogs; // suppress unused variable warning
-        (void)errStr;
-        return err;
-    }
-} // namespace detail
-#endif // #if defined(CL_HPP_ENABLE_EXCEPTIONS)
-
-
 /*! \stuct ImageFormat
  *  \brief Adds constructors and member functions for cl_image_format.
  *
@@ -2451,6 +2415,52 @@ public:
     }
 #endif // defined(CL_HPP_USE_CL_DEVICE_FISSION)
 };
+
+using BuildLogType = vector<std::pair<cl::Device, typename detail::param_traits<detail::cl_program_build_info, CL_PROGRAM_BUILD_LOG>::param_type>>;
+ #if defined(CL_HPP_ENABLE_EXCEPTIONS)
+ /**
+ * Exception class for build errors to carry build info
+ */
+ class BuildError : public Error
+ {
+ private:
+     BuildLogType buildLogs;
+ public:
+     BuildError(cl_int err, const char * errStr, const BuildLogType &vec) : Error(err, errStr), buildLogs(vec)
+     {
+     }
+
+     BuildLogType getBuildLog() const
+     {
+         return buildLogs;
+     }
+ };
+ namespace detail {
+     static inline cl_int buildErrHandler(
+         cl_int err,
+         const char * errStr,
+         const BuildLogType &buildLogs)
+     {
+         if (err != CL_SUCCESS) {
+             throw BuildError(err, errStr, buildLogs);
+         }
+         return err;
+     }
+ } // namespace detail
+
+ #else
+ namespace detail {
+     static inline cl_int buildErrHandler(
+         cl_int err,
+         const char * errStr,
+         const BuildLogType &buildLogs)
+     {
+         (void)buildLogs; // suppress unused variable warning
+         (void)errStr;
+         return err;
+     }
+ } // namespace detail
+ #endif // #if defined(CL_HPP_ENABLE_EXCEPTIONS)
 
 CL_HPP_DEFINE_STATIC_MEMBER_ std::once_flag Device::default_initialized_;
 CL_HPP_DEFINE_STATIC_MEMBER_ Device Device::default_;
@@ -3882,7 +3892,7 @@ cl::pointer<T, detail::Deleter<Alloc>> allocate_pointer(const Alloc &alloc_, Arg
 
         return cl::pointer<T, detail::Deleter<Alloc>>(tmp, detail::Deleter<Alloc>{alloc, copies});
     }
-    catch (std::bad_alloc& b)
+    catch (std::bad_alloc&)
     {
         std::allocator_traits<Alloc>::deallocate(alloc, tmp, copies);
         throw;
@@ -4017,7 +4027,7 @@ public:
         Context context = Context::getDefault(err);
 
         if( useHostPtr ) {
-            object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, static_cast<DataType*>(&*startIterator), &error);
+            object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, const_cast<DataType*>(&*startIterator), &error);
         } else {
             object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, 0, &error);
         }
@@ -6742,7 +6752,7 @@ public:
             notifyFptr,
             data);
 
-        BuildLogType buildLog(1);
+        BuildLogType buildLog(0);
         buildLog.push_back(std::make_pair(device, getBuildInfo<CL_PROGRAM_BUILD_LOG>(device)));
         return detail::buildErrHandler(buildError, __BUILD_PROGRAM_ERR, buildLog);
     }
@@ -9180,7 +9190,7 @@ Buffer::Buffer(
     size_type size = sizeof(DataType)*(endIterator - startIterator);
 
     if( useHostPtr ) {
-        object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, static_cast<DataType*>(&*startIterator), &error);
+        object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, const_cast<DataType*>(&*startIterator), &error);
     } else {
         object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, 0, &error);
     }
@@ -9233,7 +9243,7 @@ Buffer::Buffer(
     Context context = queue.getInfo<CL_QUEUE_CONTEXT>();
 
     if (useHostPtr) {
-        object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, static_cast<DataType*>(&*startIterator), &error);
+        object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, const_cast<DataType*>(&*startIterator), &error);
     }
     else {
         object_ = CL_WRAPPER_NS::clCreateBuffer(context(), flags, size, 0, &error);
