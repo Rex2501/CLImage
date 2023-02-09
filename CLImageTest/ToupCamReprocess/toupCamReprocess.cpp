@@ -19,13 +19,29 @@
 #include "gls_tiff_metadata.hpp"
 
 void flipHorizontal(gls::image<gls::luma_pixel_16>* inputImage) {
-    for (int y = 0; y < inputImage->height; y++) {
-        for (int x = 0; x < inputImage->width / 2; x++) {
-            const auto t = (*inputImage)[y][x];
-            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
-            (*inputImage)[y][inputImage->width - 1 - x] = t;
-        }
-    }
+//    for (int y = 0; y < inputImage->height; y++) {
+//         for (int x = 0; x < inputImage->width / 2; x++) {
+//             const auto t = (*inputImage)[y][x];
+//             (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
+//             (*inputImage)[y][inputImage->width - 1 - x] = t;
+//         }
+//     }
+//
+//     for (int x = 0; x < inputImage->width; x++) {
+//         for (int y = 0; y < inputImage->height / 2; y++) {
+//             const auto t = (*inputImage)[y][x];
+//             (*inputImage)[y][x] = (*inputImage)[inputImage->height - 1 - y][x];
+//             (*inputImage)[inputImage->height - 1 - y][x] = t;
+//         }
+//     }
+
+//    for (int y = 0; y < inputImage->height; y++) {
+//        for (int x = 0; x < inputImage->width / 2; x++) {
+//            const auto t = (*inputImage)[y][x];
+//            (*inputImage)[y][x] = (*inputImage)[y][inputImage->width - 1 - x];
+//            (*inputImage)[y][inputImage->width - 1 - x] = t;
+//        }
+//    }
 }
 
 std::tuple<std::string, float, uint32_t> parse_filename(const std::string& filename) {
@@ -46,7 +62,7 @@ std::tuple<std::string, float, uint32_t> parse_filename(const std::string& filen
     throw std::domain_error("Can't parse filename.");
 }
 
-void raw_png_to_dng(const std::filesystem::path& input_path, const std::filesystem::path& output_path) {
+void raw_png_to_dng(const std::filesystem::path& input_path, const gls::rectangle& gmb_position, const std::filesystem::path& output_path) {
     const std::string filename = input_path.filename().stem();
     std::cout << "Processing file: " << filename << std::endl;
 
@@ -70,7 +86,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path, const std::filesyst
     // const auto gmb_position = gls::rectangle { 2538, 314, 868, 485 };
 
     // const auto gmb_position = gls::rectangle { 2602, 1806, 1270, 698 };
-    const auto gmb_position = gls::rectangle { 2230, 1325, 1451, 734 };
+    // const auto gmb_position = gls::rectangle { 2230, 1325, 1451, 734 };
 
     gls::Vector<3> pre_mul;
     gls::Matrix<3, 3> cam_xyz;
@@ -105,7 +121,7 @@ void raw_png_to_dng(const std::filesystem::path& input_path, const std::filesyst
 
     dng_metadata.insert({ TIFFTAG_CFAREPEATPATTERNDIM, std::vector<uint16_t>{ 2, 2 } });
     dng_metadata.insert({ TIFFTAG_CFAPATTERN, std::vector<uint8_t>{ 2, 1, 1, 0 } });
-    dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 0 } });
+    dng_metadata.insert({ TIFFTAG_BLACKLEVEL, std::vector<float>{ 64 * 64 } });
     dng_metadata.insert({ TIFFTAG_WHITELEVEL, std::vector<uint32_t>{ 0xffff } });
 
     // Basic EXIF metadata
@@ -132,9 +148,13 @@ gls::image<gls::rgb_pixel_16>::unique_ptr demosaic_raw_data(RawConverter* rawCon
 //    std::vector<float> color_matrix = { -0.0464, 0.1647, 0.4386, -0.1981, 1.0289, 0.1692, 1.6550, -0.7677, -0.1457 };
 //    std::vector<float> as_shot_neutral = { 0.5836, 1.0000, 0.6310 };
 
-    // Gretag Macbeth Display Image
+    // Gretag Macbeth Display Image -- latest glass camera capture
     std::vector<float> color_matrix = { -0.0948, 0.2733, 0.4269, -0.3695, 1.2338, 0.1358, 0.8290, 0.0158, -0.0703 };
     std::vector<float> as_shot_neutral = { 0.6290, 1.0000, 0.7058 };
+
+    // Gretag Macbeth Display Image -- ASUS phone
+//    std::vector<float> color_matrix = { 0.6607, -0.0256, 0.0198, -0.0743, 0.9371, 0.1372, 0.1405, 0.1732, 0.4269 };
+//    std::vector<float> as_shot_neutral = { 0.6143, 1.0000, 0.7595 };
 
     gls::tiff_metadata dng_metadata, exif_metadata;
 
@@ -228,6 +248,10 @@ int main(int argc, const char * argv[]) {
     }
     const auto input_path = std::filesystem::path(argv[1]);
     const auto output_path = std::filesystem::path(argv[2]);
+
+//    const auto gmb_position = gls::rectangle { 3654, 2782, 884, 530 };
+//    const std::string gmb_filename = "11_calibration_MacbethSingle.png.5.png";
+//    raw_png_to_dng(input_path / gmb_filename, gmb_position, output_path / (gmb_filename + ".dng"));
 
     processDirectory(input_path, output_path);
 

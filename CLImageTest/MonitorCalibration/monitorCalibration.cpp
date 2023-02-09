@@ -73,18 +73,35 @@ struct MonitorResponse {
     }
 };
 
+//// Glass Camera Last capture
+//const constexpr int monitors = 9;
+//static const std::array<gls::rectangle, monitors> monitorCordinates = {
+//    {
+//        { 113,  187,    1637,   716 },
+//        { 2160, 194,    1566,   704 },
+//        { 4128, 165,    1634,   701 },
+//        { 114,  1326,   1635,   726 },
+//        { 2164, 1329,   1556,   711 },
+//        { 4116, 1314,   1637,   722 },
+//        { 116,  2505,   1626,   706 },
+//        { 2163, 2494,   1540,   706 },
+//        { 4123, 2507,   1617,   713 }
+//    }
+//};
+
+// Asus Calibration
 const constexpr int monitors = 9;
 static const std::array<gls::rectangle, monitors> monitorCordinates = {
     {
-        { 113,  187,    1637,   716 },
-        { 2160, 194,    1566,   704 },
-        { 4128, 165,    1634,   701 },
-        { 114,  1326,   1635,   726 },
-        { 2164, 1329,   1556,   711 },
-        { 4116, 1314,   1637,   722 },
-        { 116,  2505,   1626,   706 },
-        { 2163, 2494,   1540,   706 },
-        { 4123, 2507,   1617,   713 }
+        { 2427, 1936, 951, 534 },
+        { 3624, 1945, 948, 531 },
+        { 4807, 1938, 948, 534 },
+        { 2433, 2781, 945, 525 },
+        { 3624, 2789, 935, 517 },
+        { 4795, 2785, 943, 525 },
+        { 2441, 3623, 933, 516 },
+        { 3619, 3626, 928, 518 },
+        { 4792, 3642, 927, 518 }
     }
 };
 
@@ -322,7 +339,8 @@ int main(int argc, const char * argv[]) {
 
     // const std::string input = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/2023-01-13_greyscale_calibration_captures/3/107976_calibration_greyscale_128.3_rgb.png";
     // const std::string input = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/2023-01-13_macbeth_calibration_captures/3/107976_calibration_MacbethSingle.3_rgb.png";
-    const std::string input = "/Users/fabio/work/2023-01-30_Calibration/rgb_data/3/1_calibration_MacbethSingle.png.3_rgb.png";
+    // const std::string input = "/Users/fabio/work/2023-01-30_Calibration/rgb_data/3/1_calibration_MacbethSingle.png.3_rgb.png";
+    const std::string input = "/Users/fabio/work/asus_calibration_data/20230202_DF2KLAION_ASUS_Standard_tiled/rgb_data/5/11_calibration_MacbethSingle.png.5_rgb.png";
 
     auto inputImage = gls::image<gls::rgb_pixel_16>::read_png_file(input);
 
@@ -331,7 +349,7 @@ int main(int argc, const char * argv[]) {
     // Write out transformed image
 
     // inputImage->write_png_file("/Users/fabio/work/2023-01-13_Calibration/rgb_data/2023-01-13_greyscale_calibration_captures/3/107976_calibration_greyscale_128.3_linrearized.png");
-    inputImage->write_png_file("/Users/fabio/Desktop/1_calibration_MacbethSingle.3_linrearized.png");
+    inputImage->write_png_file("/Users/fabio/Desktop/11_calibration_MacbethSingle_linearized.5_rgb");
 
     return 0;
 }

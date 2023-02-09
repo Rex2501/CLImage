@@ -56,11 +56,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/2023-01-13_Calibration/raw_data/"
+            argument = "/Users/fabio/work/NafNetTraining/raw/"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/"
+            argument = "/Users/fabio/work/NafNetTraining/rgb/"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

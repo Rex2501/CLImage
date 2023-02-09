@@ -53,7 +53,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/fabio/work/2023-01-13_Calibration/rgb_data/2023-01-13_greyscale_calibration_captures/3"
+            argument = "/Users/fabio/work/asus_calibration_data/20230202_DF2KLAION_ASUS_Standard_tiled/rgb_data/5/calibration_greyscale"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>
