@@ -17,6 +17,7 @@
 
 #include <numeric>
 #include <iomanip>
+#include <cstring>
 
 #include "gls_color_science.hpp"
 #include "gls_image.hpp"

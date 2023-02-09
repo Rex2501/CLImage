@@ -128,10 +128,10 @@ void dumpGradientImage(const gls::cl_image_2d<gls::luma_alpha_pixel_float>& imag
 
         // float direction = (1 + atan2(ip.y, ip.x) / M_PI) / 2;
         // float direction = atan2(abs(ip.y), ip.x) / M_PI;
-        float direction = atan2(abs(ip.y), abs(ip.x)) / M_PI_2;
-        float magnitude = sqrt((float) (ip.x * ip.x + ip.y * ip.y));
+        float direction = std::atan2(std::abs(ip.y), std::abs(ip.x)) / M_PI_2;
+        float magnitude = std::sqrt((float) (ip.x * ip.x + ip.y * ip.y));
 
-        uint8_t val = std::clamp(255 * sqrt(magnitude), 0.0f, 255.0f);
+        uint8_t val = std::clamp(255 * std::sqrt(magnitude), 0.0f, 255.0f);
 
         *p = gls::rgb_pixel {
             (uint8_t) (val * std::lerp(1.0f, 0.0f, direction)),
