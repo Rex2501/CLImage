@@ -359,6 +359,12 @@ static const TIFFFieldInfo xtiffFieldInfo[] = {
     { TIFFTAG_RATINGPERCENT, 1, 1, TIFF_SHORT, FIELD_CUSTOM, 1, 0, (char *) "RatingPercent" },
     { TIFFTAG_TIFFEPSTANDARDID, -1, -1, TIFF_BYTE, FIELD_CUSTOM, 1, 1, (char *) "TIFF-EP Standard ID" },
 
+    { TIFFTAG_ISO, -1, -1, TIFF_SHORT, FIELD_CUSTOM, 1, 1, (char *) "ISO" },
+    { TIFFTAG_FNUMBER, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 1, (char *) "FNumber" },
+    { TIFFTAG_EXPOSURETIME, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 1, (char *) "ExposureTime" },
+    { TIFFTAG_FOCALLENGHT, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 1, (char *) "FocalLength" },
+    { TIFFTAG_DATETIMEORIGINAL, -1, -1, TIFF_ASCII, FIELD_CUSTOM, 1, 0, (char *) "DateTimeOriginal" },
+
     { TIFFTAG_PROFILETONECURVE, -1, -1, TIFF_FLOAT, FIELD_CUSTOM, 1, 1, (char *) "ProfileToneCurve" },
     { TIFFTAG_PROFILEEMBEDPOLICY, 1, 1, TIFF_LONG, FIELD_CUSTOM, 1, 0, (char *) "ProfileEmbedPolicy" },
     { TIFFTAG_ORIGINALDEFAULTFINALSIZE, 2, 2, TIFF_LONG, FIELD_CUSTOM, 1, 0, (char *) "OriginalDefaultFinalSize" },

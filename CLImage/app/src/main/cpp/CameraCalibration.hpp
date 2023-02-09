@@ -67,10 +67,13 @@ public:
         unpackDNGMetadata(inputImage, dng_metadata, demosaicParameters.get(), /*auto_white_balance=*/ false, /* &gmb_position */ nullptr, /*rotate_180=*/ false);
 
         uint32_t iso = 0;
-        if (getValue(*exif_metadata, EXIFTAG_RECOMMENDEDEXPOSUREINDEX, &iso)) {
+        std::vector<uint16_t> iso_16;
+        if (!(iso_16 = getVector<uint16_t>(*dng_metadata, TIFFTAG_ISO)).empty()) {
+            iso = iso_16[0];
+        } else if (!(iso_16 = getVector<uint16_t>(*exif_metadata, EXIFTAG_ISOSPEEDRATINGS)).empty()) {
+            iso = iso_16[0];
+        } else if (getValue(*exif_metadata, EXIFTAG_RECOMMENDEDEXPOSUREINDEX, &iso)) {
             iso = iso;
-        } else {
-            iso = getVector<uint16_t>(*exif_metadata, EXIFTAG_ISOSPEEDRATINGS)[0];
         }
 
         std::cout << "EXIF ISO: " << iso << std::endl;
