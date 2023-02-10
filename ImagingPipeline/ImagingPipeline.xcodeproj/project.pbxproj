@@ -1,0 +1,589 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E5EE241E299702B8009FD0D4 /* raw_pipeline.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE240D299702B8009FD0D4 /* raw_pipeline.cpp */; };
+		E5EE242829970386009FD0D4 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5EE242729970386009FD0D4 /* OpenCL.framework */; };
+		E5EE24292997038E009FD0D4 /* libCLImageLib.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5EE240429970195009FD0D4 /* libCLImageLib.dylib */; };
+		E5EE242B299703D9009FD0D4 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5EE242A299703D9009FD0D4 /* OpenCL */; };
+		E5EE242E29970493009FD0D4 /* assets in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5EE242D29970493009FD0D4 /* assets */; };
+		E5EE2443299705E2009FD0D4 /* raw_converter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2432299705E2009FD0D4 /* raw_converter.cpp */; };
+		E5EE2444299705E2009FD0D4 /* pyramid_processor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2434299705E2009FD0D4 /* pyramid_processor.cpp */; };
+		E5EE2445299705E2009FD0D4 /* iPhone11Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2435299705E2009FD0D4 /* iPhone11Calibration.cpp */; };
+		E5EE2446299705E2009FD0D4 /* LeicaQ2Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2436299705E2009FD0D4 /* LeicaQ2Calibration.cpp */; };
+		E5EE2447299705E2009FD0D4 /* RicohGRIIICalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2438299705E2009FD0D4 /* RicohGRIIICalibration.cpp */; };
+		E5EE2448299705E2009FD0D4 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2439299705E2009FD0D4 /* ThreadPool.cpp */; };
+		E5EE2449299705E2009FD0D4 /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE243A299705E2009FD0D4 /* Sonya6400Calibration.cpp */; };
+		E5EE244A299705E2009FD0D4 /* demosaic_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE243B299705E2009FD0D4 /* demosaic_cl.cpp */; };
+		E5EE244B299705E2009FD0D4 /* demosaic_cpu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE243F299705E2009FD0D4 /* demosaic_cpu.cpp */; };
+		E5EE244C299705E2009FD0D4 /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2440299705E2009FD0D4 /* IMX571Calibration.cpp */; };
+		E5EE244D299705E2009FD0D4 /* demosaic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2441299705E2009FD0D4 /* demosaic.cpp */; };
+		E5EE244E299705E2009FD0D4 /* demosaic_utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2442299705E2009FD0D4 /* demosaic_utils.cpp */; };
+		E5EE245729970758009FD0D4 /* pyramidFusion.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE245629970758009FD0D4 /* pyramidFusion.cpp */; };
+		E5EE2460299707DA009FD0D4 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE245D299707DA009FD0D4 /* SURF.cpp */; };
+		E5EE2461299707DA009FD0D4 /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE245E299707DA009FD0D4 /* RANSAC.cpp */; };
+		E5EE246429970813009FD0D4 /* homography.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE246229970813009FD0D4 /* homography.cpp */; };
+		E5EE24652997084F009FD0D4 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5EE242729970386009FD0D4 /* OpenCL.framework */; };
+		E5EE246629970853009FD0D4 /* libCLImageLib.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E5EE240429970195009FD0D4 /* libCLImageLib.dylib */; };
+		E5EE246729970981009FD0D4 /* demosaic_cl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE243B299705E2009FD0D4 /* demosaic_cl.cpp */; };
+		E5EE246829970986009FD0D4 /* demosaic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2441299705E2009FD0D4 /* demosaic.cpp */; };
+		E5EE24692997098A009FD0D4 /* IMX571Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2440299705E2009FD0D4 /* IMX571Calibration.cpp */; };
+		E5EE246A2997098E009FD0D4 /* iPhone11Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2435299705E2009FD0D4 /* iPhone11Calibration.cpp */; };
+		E5EE246B29970990009FD0D4 /* LeicaQ2Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2436299705E2009FD0D4 /* LeicaQ2Calibration.cpp */; };
+		E5EE246C29970995009FD0D4 /* pyramid_processor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2434299705E2009FD0D4 /* pyramid_processor.cpp */; };
+		E5EE246D29970999009FD0D4 /* raw_converter.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2432299705E2009FD0D4 /* raw_converter.cpp */; };
+		E5EE246E2997099D009FD0D4 /* RicohGRIIICalibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2438299705E2009FD0D4 /* RicohGRIIICalibration.cpp */; };
+		E5EE246F299709A1009FD0D4 /* Sonya6400Calibration.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE243A299705E2009FD0D4 /* Sonya6400Calibration.cpp */; };
+		E5EE2470299709A6009FD0D4 /* ThreadPool.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2439299705E2009FD0D4 /* ThreadPool.cpp */; };
+		E5EE2471299709AA009FD0D4 /* homography.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE246229970813009FD0D4 /* homography.cpp */; };
+		E5EE2472299709AF009FD0D4 /* RANSAC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE245E299707DA009FD0D4 /* RANSAC.cpp */; };
+		E5EE2473299709B2009FD0D4 /* SURF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE245D299707DA009FD0D4 /* SURF.cpp */; };
+		E5EE247529970A0E009FD0D4 /* demosaic_utils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE2442299705E2009FD0D4 /* demosaic_utils.cpp */; };
+		E5EE247729970A7B009FD0D4 /* assets in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5EE242D29970493009FD0D4 /* assets */; };
+		E5EE247829970A81009FD0D4 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5EE242A299703D9009FD0D4 /* OpenCL */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E5EE240329970195009FD0D4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E5EE23FF29970195009FD0D4 /* CLImageLib.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E5753FCE2995D01200A523D0;
+			remoteInfo = CLImageLib;
+		};
+		E5EE2405299701A2009FD0D4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E5EE23FF29970195009FD0D4 /* CLImageLib.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = E5753FCD2995D01200A523D0;
+			remoteInfo = CLImageLib;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E5EE23F32997007B009FD0D4 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				E5EE242E29970493009FD0D4 /* assets in CopyFiles */,
+				E5EE242B299703D9009FD0D4 /* OpenCL in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5EE245229970758009FD0D4 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				E5EE247829970A81009FD0D4 /* OpenCL in CopyFiles */,
+				E5EE247729970A7B009FD0D4 /* assets in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		E5EE23F52997007B009FD0D4 /* ImagingPipeline */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ImagingPipeline; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5EE23FF29970195009FD0D4 /* CLImageLib.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = CLImageLib.xcodeproj; path = ../CLImageLib/CLImageLib.xcodeproj; sourceTree = "<group>"; };
+		E5EE240D299702B8009FD0D4 /* raw_pipeline.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = raw_pipeline.cpp; path = ../../CLImage/app/src/main/cpp/raw_pipeline.cpp; sourceTree = "<group>"; };
+		E5EE242729970386009FD0D4 /* OpenCL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenCL.framework; path = System/Library/Frameworks/OpenCL.framework; sourceTree = SDKROOT; };
+		E5EE242A299703D9009FD0D4 /* OpenCL */ = {isa = PBXFileReference; lastKnownFileType = folder; name = OpenCL; path = ../CLImage/app/src/main/cpp/OpenCL; sourceTree = "<group>"; };
+		E5EE242C29970452009FD0D4 /* ImagingPipeline.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ImagingPipeline.entitlements; sourceTree = "<group>"; };
+		E5EE242D29970493009FD0D4 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../CLImage/app/src/main/assets; sourceTree = "<group>"; };
+		E5EE2432299705E2009FD0D4 /* raw_converter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = raw_converter.cpp; path = ../CLImage/app/src/main/cpp/raw_converter.cpp; sourceTree = "<group>"; };
+		E5EE2433299705E2009FD0D4 /* demosaic_cl.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = demosaic_cl.hpp; path = ../CLImage/app/src/main/cpp/demosaic_cl.hpp; sourceTree = "<group>"; };
+		E5EE2434299705E2009FD0D4 /* pyramid_processor.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = pyramid_processor.cpp; path = ../CLImage/app/src/main/cpp/pyramid_processor.cpp; sourceTree = "<group>"; };
+		E5EE2435299705E2009FD0D4 /* iPhone11Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = iPhone11Calibration.cpp; path = ../CLImage/app/src/main/cpp/iPhone11Calibration.cpp; sourceTree = "<group>"; };
+		E5EE2436299705E2009FD0D4 /* LeicaQ2Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = LeicaQ2Calibration.cpp; path = ../CLImage/app/src/main/cpp/LeicaQ2Calibration.cpp; sourceTree = "<group>"; };
+		E5EE2437299705E2009FD0D4 /* raw_converter.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = raw_converter.hpp; path = ../CLImage/app/src/main/cpp/raw_converter.hpp; sourceTree = "<group>"; };
+		E5EE2438299705E2009FD0D4 /* RicohGRIIICalibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RicohGRIIICalibration.cpp; path = ../CLImage/app/src/main/cpp/RicohGRIIICalibration.cpp; sourceTree = "<group>"; };
+		E5EE2439299705E2009FD0D4 /* ThreadPool.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ThreadPool.cpp; path = ../CLImage/app/src/main/cpp/ThreadPool.cpp; sourceTree = "<group>"; };
+		E5EE243A299705E2009FD0D4 /* Sonya6400Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Sonya6400Calibration.cpp; path = ../CLImage/app/src/main/cpp/Sonya6400Calibration.cpp; sourceTree = "<group>"; };
+		E5EE243B299705E2009FD0D4 /* demosaic_cl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = demosaic_cl.cpp; path = ../CLImage/app/src/main/cpp/demosaic_cl.cpp; sourceTree = "<group>"; };
+		E5EE243C299705E2009FD0D4 /* pyramid_processor.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = pyramid_processor.hpp; path = ../CLImage/app/src/main/cpp/pyramid_processor.hpp; sourceTree = "<group>"; };
+		E5EE243D299705E2009FD0D4 /* ThreadPool.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = ThreadPool.hpp; path = ../CLImage/app/src/main/cpp/ThreadPool.hpp; sourceTree = "<group>"; };
+		E5EE243E299705E2009FD0D4 /* demosaic.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = demosaic.hpp; path = ../CLImage/app/src/main/cpp/demosaic.hpp; sourceTree = "<group>"; };
+		E5EE243F299705E2009FD0D4 /* demosaic_cpu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = demosaic_cpu.cpp; path = ../CLImage/app/src/main/cpp/demosaic_cpu.cpp; sourceTree = "<group>"; };
+		E5EE2440299705E2009FD0D4 /* IMX571Calibration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = IMX571Calibration.cpp; path = ../CLImage/app/src/main/cpp/IMX571Calibration.cpp; sourceTree = "<group>"; };
+		E5EE2441299705E2009FD0D4 /* demosaic.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = demosaic.cpp; path = ../CLImage/app/src/main/cpp/demosaic.cpp; sourceTree = "<group>"; };
+		E5EE2442299705E2009FD0D4 /* demosaic_utils.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = demosaic_utils.cpp; path = ../CLImage/app/src/main/cpp/demosaic_utils.cpp; sourceTree = "<group>"; };
+		E5EE244F29970708009FD0D4 /* rtl */ = {isa = PBXFileReference; lastKnownFileType = folder; name = rtl; path = ../CLImage/app/src/main/cpp/rtl; sourceTree = "<group>"; };
+		E5EE245429970758009FD0D4 /* PyramidFusion */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = PyramidFusion; sourceTree = BUILT_PRODUCTS_DIR; };
+		E5EE245629970758009FD0D4 /* pyramidFusion.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = pyramidFusion.cpp; sourceTree = "<group>"; };
+		E5EE245B2997079D009FD0D4 /* CameraCalibration.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = CameraCalibration.hpp; path = ../CLImage/app/src/main/cpp/CameraCalibration.hpp; sourceTree = "<group>"; };
+		E5EE245C299707DA009FD0D4 /* RANSAC.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = RANSAC.hpp; path = ../CLImage/app/src/main/cpp/RANSAC.hpp; sourceTree = "<group>"; };
+		E5EE245D299707DA009FD0D4 /* SURF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SURF.cpp; path = ../CLImage/app/src/main/cpp/SURF.cpp; sourceTree = "<group>"; };
+		E5EE245E299707DA009FD0D4 /* RANSAC.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RANSAC.cpp; path = ../CLImage/app/src/main/cpp/RANSAC.cpp; sourceTree = "<group>"; };
+		E5EE245F299707DA009FD0D4 /* SURF.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = SURF.hpp; path = ../CLImage/app/src/main/cpp/SURF.hpp; sourceTree = "<group>"; };
+		E5EE246229970813009FD0D4 /* homography.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = homography.cpp; path = ../CLImage/app/src/main/cpp/homography.cpp; sourceTree = "<group>"; };
+		E5EE246329970813009FD0D4 /* homography.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = homography.hpp; path = ../CLImage/app/src/main/cpp/homography.hpp; sourceTree = "<group>"; };
+		E5EE247629970A36009FD0D4 /* PyramidFusion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PyramidFusion.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E5EE23F22997007B009FD0D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5EE24292997038E009FD0D4 /* libCLImageLib.dylib in Frameworks */,
+				E5EE242829970386009FD0D4 /* OpenCL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5EE245129970758009FD0D4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5EE246629970853009FD0D4 /* libCLImageLib.dylib in Frameworks */,
+				E5EE24652997084F009FD0D4 /* OpenCL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E5EE23EC2997007B009FD0D4 = {
+			isa = PBXGroup;
+			children = (
+				E5EE23FF29970195009FD0D4 /* CLImageLib.xcodeproj */,
+				E5EE243129970541009FD0D4 /* ImageProcessing */,
+				E5EE242D29970493009FD0D4 /* assets */,
+				E5EE242A299703D9009FD0D4 /* OpenCL */,
+				E5EE23F72997007B009FD0D4 /* ImagingPipeline */,
+				E5EE245529970758009FD0D4 /* PyramidFusion */,
+				E5EE23F62997007B009FD0D4 /* Products */,
+				E5EE242629970386009FD0D4 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		E5EE23F62997007B009FD0D4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE23F52997007B009FD0D4 /* ImagingPipeline */,
+				E5EE245429970758009FD0D4 /* PyramidFusion */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E5EE23F72997007B009FD0D4 /* ImagingPipeline */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE242C29970452009FD0D4 /* ImagingPipeline.entitlements */,
+				E5EE240D299702B8009FD0D4 /* raw_pipeline.cpp */,
+			);
+			path = ImagingPipeline;
+			sourceTree = "<group>";
+		};
+		E5EE240029970195009FD0D4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE240429970195009FD0D4 /* libCLImageLib.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E5EE242629970386009FD0D4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE242729970386009FD0D4 /* OpenCL.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E5EE243129970541009FD0D4 /* ImageProcessing */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE244F29970708009FD0D4 /* rtl */,
+				E5EE2433299705E2009FD0D4 /* demosaic_cl.hpp */,
+				E5EE243B299705E2009FD0D4 /* demosaic_cl.cpp */,
+				E5EE243F299705E2009FD0D4 /* demosaic_cpu.cpp */,
+				E5EE2442299705E2009FD0D4 /* demosaic_utils.cpp */,
+				E5EE243E299705E2009FD0D4 /* demosaic.hpp */,
+				E5EE2441299705E2009FD0D4 /* demosaic.cpp */,
+				E5EE2440299705E2009FD0D4 /* IMX571Calibration.cpp */,
+				E5EE2435299705E2009FD0D4 /* iPhone11Calibration.cpp */,
+				E5EE2436299705E2009FD0D4 /* LeicaQ2Calibration.cpp */,
+				E5EE2434299705E2009FD0D4 /* pyramid_processor.cpp */,
+				E5EE243C299705E2009FD0D4 /* pyramid_processor.hpp */,
+				E5EE2437299705E2009FD0D4 /* raw_converter.hpp */,
+				E5EE2432299705E2009FD0D4 /* raw_converter.cpp */,
+				E5EE245B2997079D009FD0D4 /* CameraCalibration.hpp */,
+				E5EE2438299705E2009FD0D4 /* RicohGRIIICalibration.cpp */,
+				E5EE243A299705E2009FD0D4 /* Sonya6400Calibration.cpp */,
+				E5EE243D299705E2009FD0D4 /* ThreadPool.hpp */,
+				E5EE2439299705E2009FD0D4 /* ThreadPool.cpp */,
+				E5EE246229970813009FD0D4 /* homography.cpp */,
+				E5EE246329970813009FD0D4 /* homography.hpp */,
+				E5EE245E299707DA009FD0D4 /* RANSAC.cpp */,
+				E5EE245C299707DA009FD0D4 /* RANSAC.hpp */,
+				E5EE245D299707DA009FD0D4 /* SURF.cpp */,
+				E5EE245F299707DA009FD0D4 /* SURF.hpp */,
+			);
+			name = ImageProcessing;
+			sourceTree = "<group>";
+		};
+		E5EE245529970758009FD0D4 /* PyramidFusion */ = {
+			isa = PBXGroup;
+			children = (
+				E5EE247629970A36009FD0D4 /* PyramidFusion.entitlements */,
+				E5EE245629970758009FD0D4 /* pyramidFusion.cpp */,
+			);
+			path = PyramidFusion;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E5EE23F42997007B009FD0D4 /* ImagingPipeline */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5EE23FC2997007B009FD0D4 /* Build configuration list for PBXNativeTarget "ImagingPipeline" */;
+			buildPhases = (
+				E5EE23F12997007B009FD0D4 /* Sources */,
+				E5EE23F22997007B009FD0D4 /* Frameworks */,
+				E5EE23F32997007B009FD0D4 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E5EE2406299701A2009FD0D4 /* PBXTargetDependency */,
+			);
+			name = ImagingPipeline;
+			productName = ImagingPipeline;
+			productReference = E5EE23F52997007B009FD0D4 /* ImagingPipeline */;
+			productType = "com.apple.product-type.tool";
+		};
+		E5EE245329970758009FD0D4 /* PyramidFusion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E5EE245829970758009FD0D4 /* Build configuration list for PBXNativeTarget "PyramidFusion" */;
+			buildPhases = (
+				E5EE245029970758009FD0D4 /* Sources */,
+				E5EE245129970758009FD0D4 /* Frameworks */,
+				E5EE245229970758009FD0D4 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PyramidFusion;
+			productName = PyramidFusion;
+			productReference = E5EE245429970758009FD0D4 /* PyramidFusion */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E5EE23ED2997007B009FD0D4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1420;
+				TargetAttributes = {
+					E5EE23F42997007B009FD0D4 = {
+						CreatedOnToolsVersion = 14.2;
+					};
+					E5EE245329970758009FD0D4 = {
+						CreatedOnToolsVersion = 14.2;
+					};
+				};
+			};
+			buildConfigurationList = E5EE23F02997007B009FD0D4 /* Build configuration list for PBXProject "ImagingPipeline" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E5EE23EC2997007B009FD0D4;
+			productRefGroup = E5EE23F62997007B009FD0D4 /* Products */;
+			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = E5EE240029970195009FD0D4 /* Products */;
+					ProjectRef = E5EE23FF29970195009FD0D4 /* CLImageLib.xcodeproj */;
+				},
+			);
+			projectRoot = "";
+			targets = (
+				E5EE23F42997007B009FD0D4 /* ImagingPipeline */,
+				E5EE245329970758009FD0D4 /* PyramidFusion */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXReferenceProxy section */
+		E5EE240429970195009FD0D4 /* libCLImageLib.dylib */ = {
+			isa = PBXReferenceProxy;
+			fileType = "compiled.mach-o.dylib";
+			path = libCLImageLib.dylib;
+			remoteRef = E5EE240329970195009FD0D4 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+/* End PBXReferenceProxy section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E5EE23F12997007B009FD0D4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5EE241E299702B8009FD0D4 /* raw_pipeline.cpp in Sources */,
+				E5EE2447299705E2009FD0D4 /* RicohGRIIICalibration.cpp in Sources */,
+				E5EE244D299705E2009FD0D4 /* demosaic.cpp in Sources */,
+				E5EE244E299705E2009FD0D4 /* demosaic_utils.cpp in Sources */,
+				E5EE2445299705E2009FD0D4 /* iPhone11Calibration.cpp in Sources */,
+				E5EE2460299707DA009FD0D4 /* SURF.cpp in Sources */,
+				E5EE2443299705E2009FD0D4 /* raw_converter.cpp in Sources */,
+				E5EE244C299705E2009FD0D4 /* IMX571Calibration.cpp in Sources */,
+				E5EE2448299705E2009FD0D4 /* ThreadPool.cpp in Sources */,
+				E5EE2461299707DA009FD0D4 /* RANSAC.cpp in Sources */,
+				E5EE2449299705E2009FD0D4 /* Sonya6400Calibration.cpp in Sources */,
+				E5EE2444299705E2009FD0D4 /* pyramid_processor.cpp in Sources */,
+				E5EE244B299705E2009FD0D4 /* demosaic_cpu.cpp in Sources */,
+				E5EE246429970813009FD0D4 /* homography.cpp in Sources */,
+				E5EE2446299705E2009FD0D4 /* LeicaQ2Calibration.cpp in Sources */,
+				E5EE244A299705E2009FD0D4 /* demosaic_cl.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E5EE245029970758009FD0D4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E5EE24692997098A009FD0D4 /* IMX571Calibration.cpp in Sources */,
+				E5EE245729970758009FD0D4 /* pyramidFusion.cpp in Sources */,
+				E5EE246729970981009FD0D4 /* demosaic_cl.cpp in Sources */,
+				E5EE246829970986009FD0D4 /* demosaic.cpp in Sources */,
+				E5EE247529970A0E009FD0D4 /* demosaic_utils.cpp in Sources */,
+				E5EE246B29970990009FD0D4 /* LeicaQ2Calibration.cpp in Sources */,
+				E5EE246A2997098E009FD0D4 /* iPhone11Calibration.cpp in Sources */,
+				E5EE246C29970995009FD0D4 /* pyramid_processor.cpp in Sources */,
+				E5EE246D29970999009FD0D4 /* raw_converter.cpp in Sources */,
+				E5EE246E2997099D009FD0D4 /* RicohGRIIICalibration.cpp in Sources */,
+				E5EE246F299709A1009FD0D4 /* Sonya6400Calibration.cpp in Sources */,
+				E5EE2470299709A6009FD0D4 /* ThreadPool.cpp in Sources */,
+				E5EE2471299709AA009FD0D4 /* homography.cpp in Sources */,
+				E5EE2472299709AF009FD0D4 /* RANSAC.cpp in Sources */,
+				E5EE2473299709B2009FD0D4 /* SURF.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E5EE2406299701A2009FD0D4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = CLImageLib;
+			targetProxy = E5EE2405299701A2009FD0D4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		E5EE23FA2997007B009FD0D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"\"$(SRCROOT)/../src\"",
+					"\"$(SRCROOT)/../OpenCLHeaders\"",
+					/usr/local/include,
+					/opt/homebrew/include,
+				);
+			};
+			name = Debug;
+		};
+		E5EE23FB2997007B009FD0D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"\"$(SRCROOT)/../src\"",
+					"\"$(SRCROOT)/../OpenCLHeaders\"",
+					/usr/local/include,
+					/opt/homebrew/include,
+				);
+			};
+			name = Release;
+		};
+		E5EE23FD2997007B009FD0D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ImagingPipeline/ImagingPipeline.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		E5EE23FE2997007B009FD0D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ImagingPipeline/ImagingPipeline.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		E5EE245929970758009FD0D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PyramidFusion/PyramidFusion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		E5EE245A29970758009FD0D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PyramidFusion/PyramidFusion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 4A4DGXV9V7;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E5EE23F02997007B009FD0D4 /* Build configuration list for PBXProject "ImagingPipeline" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5EE23FA2997007B009FD0D4 /* Debug */,
+				E5EE23FB2997007B009FD0D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5EE23FC2997007B009FD0D4 /* Build configuration list for PBXNativeTarget "ImagingPipeline" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5EE23FD2997007B009FD0D4 /* Debug */,
+				E5EE23FE2997007B009FD0D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E5EE245829970758009FD0D4 /* Build configuration list for PBXNativeTarget "PyramidFusion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E5EE245929970758009FD0D4 /* Debug */,
+				E5EE245A29970758009FD0D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E5EE23ED2997007B009FD0D4 /* Project object */;
+}

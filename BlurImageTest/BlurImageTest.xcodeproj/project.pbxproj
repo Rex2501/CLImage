@@ -11,7 +11,6 @@
 		E575405B2996C13A00A523D0 /* libCLImageLib.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E57540552996C0D700A523D0 /* libCLImageLib.dylib */; };
 		E5EE23592996C50A009FD0D4 /* cl_pipeline.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5EE23572996C50A009FD0D4 /* cl_pipeline.cpp */; };
 		E5EE23692996C7AA009FD0D4 /* OpenCL in CopyFiles */ = {isa = PBXBuildFile; fileRef = E5EE23682996C7AA009FD0D4 /* OpenCL */; };
-		E5EE236E2996CFB8009FD0D4 /* libCLImageLib.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = E57540552996C0D700A523D0 /* libCLImageLib.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E5EE23702996CFC5009FD0D4 /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5EE235A2996C547009FD0D4 /* OpenCL.framework */; };
 /* End PBXBuildFile section */
 
@@ -47,9 +46,8 @@
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
-			dstSubfolderSpec = 10;
+			dstSubfolderSpec = 16;
 			files = (
-				E5EE236E2996CFB8009FD0D4 /* libCLImageLib.dylib in Embed Libraries */,
 			);
 			name = "Embed Libraries";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -343,7 +341,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4A4DGXV9V7;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -356,7 +354,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 4A4DGXV9V7;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
