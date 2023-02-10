@@ -13,7 +13,6 @@
 		E5753FF62995D03100A523D0 /* gls_color_science.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E5753FDF2995D03100A523D0 /* gls_color_science.hpp */; };
 		E5753FF72995D03100A523D0 /* gls_image_png.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FE02995D03100A523D0 /* gls_image_png.cpp */; };
 		E5753FF82995D03100A523D0 /* gls_image_jpeg.h in Headers */ = {isa = PBXBuildFile; fileRef = E5753FE12995D03100A523D0 /* gls_image_jpeg.h */; };
-		E5753FF92995D03100A523D0 /* gls_icd_wrapper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FE22995D03100A523D0 /* gls_icd_wrapper.cpp */; };
 		E5753FFA2995D03100A523D0 /* gls_dng_lossless_jpeg.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E5753FE32995D03100A523D0 /* gls_dng_lossless_jpeg.hpp */; };
 		E5753FFB2995D03100A523D0 /* gls_image_tiff.h in Headers */ = {isa = PBXBuildFile; fileRef = E5753FE42995D03100A523D0 /* gls_image_tiff.h */; };
 		E5753FFC2995D03100A523D0 /* gls_logging.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FE52995D03100A523D0 /* gls_logging.cpp */; };
@@ -26,7 +25,6 @@
 		E57540032995D03100A523D0 /* gls_image_tiff.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FEC2995D03100A523D0 /* gls_image_tiff.cpp */; };
 		E57540042995D03100A523D0 /* gls_cl_error.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FED2995D03100A523D0 /* gls_cl_error.cpp */; };
 		E57540052995D03100A523D0 /* gls_color_science.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E5753FEE2995D03100A523D0 /* gls_color_science.cpp */; };
-		E57540062995D03100A523D0 /* gls_icd_wrapper.h in Headers */ = {isa = PBXBuildFile; fileRef = E5753FEF2995D03100A523D0 /* gls_icd_wrapper.h */; };
 		E57540072995D03100A523D0 /* gls_image.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E5753FF02995D03100A523D0 /* gls_image.hpp */; };
 		E57540082995D03100A523D0 /* gls_linalg.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E5753FF12995D03100A523D0 /* gls_linalg.hpp */; };
 		E57540092995D03100A523D0 /* gls_image_png.h in Headers */ = {isa = PBXBuildFile; fileRef = E5753FF22995D03100A523D0 /* gls_image_png.h */; };
@@ -45,7 +43,6 @@
 		E5753FDF2995D03100A523D0 /* gls_color_science.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = gls_color_science.hpp; path = ../../src/gls_color_science.hpp; sourceTree = "<group>"; };
 		E5753FE02995D03100A523D0 /* gls_image_png.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_png.cpp; path = ../../src/gls_image_png.cpp; sourceTree = "<group>"; };
 		E5753FE12995D03100A523D0 /* gls_image_jpeg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gls_image_jpeg.h; path = ../../src/gls_image_jpeg.h; sourceTree = "<group>"; };
-		E5753FE22995D03100A523D0 /* gls_icd_wrapper.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_icd_wrapper.cpp; path = ../../src/gls_icd_wrapper.cpp; sourceTree = "<group>"; };
 		E5753FE32995D03100A523D0 /* gls_dng_lossless_jpeg.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = gls_dng_lossless_jpeg.hpp; path = ../../src/gls_dng_lossless_jpeg.hpp; sourceTree = "<group>"; };
 		E5753FE42995D03100A523D0 /* gls_image_tiff.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gls_image_tiff.h; path = ../../src/gls_image_tiff.h; sourceTree = "<group>"; };
 		E5753FE52995D03100A523D0 /* gls_logging.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_logging.cpp; path = ../../src/gls_logging.cpp; sourceTree = "<group>"; };
@@ -58,7 +55,6 @@
 		E5753FEC2995D03100A523D0 /* gls_image_tiff.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_image_tiff.cpp; path = ../../src/gls_image_tiff.cpp; sourceTree = "<group>"; };
 		E5753FED2995D03100A523D0 /* gls_cl_error.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_cl_error.cpp; path = ../../src/gls_cl_error.cpp; sourceTree = "<group>"; };
 		E5753FEE2995D03100A523D0 /* gls_color_science.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = gls_color_science.cpp; path = ../../src/gls_color_science.cpp; sourceTree = "<group>"; };
-		E5753FEF2995D03100A523D0 /* gls_icd_wrapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gls_icd_wrapper.h; path = ../../src/gls_icd_wrapper.h; sourceTree = "<group>"; };
 		E5753FF02995D03100A523D0 /* gls_image.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = gls_image.hpp; path = ../../src/gls_image.hpp; sourceTree = "<group>"; };
 		E5753FF12995D03100A523D0 /* gls_linalg.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = gls_linalg.hpp; path = ../../src/gls_linalg.hpp; sourceTree = "<group>"; };
 		E5753FF22995D03100A523D0 /* gls_image_png.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gls_image_png.h; path = ../../src/gls_image_png.h; sourceTree = "<group>"; };
@@ -114,8 +110,6 @@
 				E5753FE92995D03100A523D0 /* gls_dng_lossless_jpeg.cpp */,
 				E5753FE32995D03100A523D0 /* gls_dng_lossless_jpeg.hpp */,
 				E5753FDD2995D03100A523D0 /* gls_geometry.hpp */,
-				E5753FE22995D03100A523D0 /* gls_icd_wrapper.cpp */,
-				E5753FEF2995D03100A523D0 /* gls_icd_wrapper.h */,
 				E5753FEA2995D03100A523D0 /* gls_image_jpeg.cpp */,
 				E5753FE12995D03100A523D0 /* gls_image_jpeg.h */,
 				E5753FE02995D03100A523D0 /* gls_image_png.cpp */,
@@ -162,7 +156,6 @@
 				E57540092995D03100A523D0 /* gls_image_png.h in Headers */,
 				E5753FFA2995D03100A523D0 /* gls_dng_lossless_jpeg.hpp in Headers */,
 				E5753FF82995D03100A523D0 /* gls_image_jpeg.h in Headers */,
-				E57540062995D03100A523D0 /* gls_icd_wrapper.h in Headers */,
 				E5753FFE2995D03100A523D0 /* gls_logging.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -250,7 +243,6 @@
 				E57540042995D03100A523D0 /* gls_cl_error.cpp in Sources */,
 				E5753FFC2995D03100A523D0 /* gls_logging.cpp in Sources */,
 				E57540052995D03100A523D0 /* gls_color_science.cpp in Sources */,
-				E5753FF92995D03100A523D0 /* gls_icd_wrapper.cpp in Sources */,
 				E57540032995D03100A523D0 /* gls_image_tiff.cpp in Sources */,
 				E5753FF72995D03100A523D0 /* gls_image_png.cpp in Sources */,
 				E57540002995D03100A523D0 /* gls_dng_lossless_jpeg.cpp in Sources */,
